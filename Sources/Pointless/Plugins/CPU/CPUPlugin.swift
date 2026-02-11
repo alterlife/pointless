@@ -1,0 +1,142 @@
+import Foundation
+import SwiftUI
+import Combine
+
+/// CPU monitoring plugin - autonomous and self-contained
+class CPUPlugin: ObservableObject, Plugin {
+  let id = "pointless.cpu"
+  let name = "CPU"
+
+  @Published var menuBarText: String = "CPU --"
+
+  private var refreshInterval: TimeInterval = 2.0
+  private var timer: Timer?
+  private var cpuUsage: Double = 0.0
+
+  var settings: PluginSettings {
+    PluginSettings(definitions: [
+      .slider(key: "refreshInterval", label: "Refresh Interval (seconds)",
+              range: 1.0...10.0, defaultValue: 2.0)
+    ])
+  }
+
+  func configure(_ values: [String: Any]) {
+    if let interval = values["refreshInterval"] as? Double {
+      refreshInterval = interval
+
+      // Restart timer with new interval if already running
+      if timer != nil {
+        stop()
+        start()
+      }
+    }
+  }
+
+  func start() {
+    timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+      self?.update()
+    }
+    update()  // Immediate first update
+  }
+
+  func stop() {
+    timer?.invalidate()
+    timer = nil
+  }
+
+  func menuBarView() -> NSView? {
+    let view = NSHostingView(rootView:
+      HStack(spacing: 4) {
+        // Color-coded status indicator
+        Circle()
+          .fill(statusColor)
+          .frame(width: 6, height: 6)
+
+        // CPU icon
+        Image(systemName: "cpu")
+          .font(.system(size: 11))
+          .foregroundColor(.primary)
+
+        // Percentage
+        Text(String(format: "%.0f%%", cpuUsage * 100))
+          .font(.system(size: 12, weight: .medium, design: .monospaced))
+          .foregroundColor(.primary)
+      }
+      .padding(.horizontal, 4)
+      .padding(.vertical, 2)
+    )
+    view.frame = NSRect(x: 0, y: 0, width: 70, height: 22)
+    return view
+  }
+
+  private var statusColor: Color {
+    switch cpuUsage {
+    case 0..<0.5:
+      return .green
+    case 0.5..<0.8:
+      return .yellow
+    default:
+      return .red
+    }
+  }
+
+  func detailView() -> AnyView {
+    AnyView(
+      VStack(alignment: .leading, spacing: 8) {
+        HStack {
+          Image(systemName: "cpu")
+          Text(name)
+            .font(.headline)
+        }
+        Text(String(format: "%.1f%%", cpuUsage * 100))
+          .font(.system(.title, design: .monospaced))
+        Text("Updates every \(String(format: "%.1f", refreshInterval))s")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
+      .padding()
+    )
+  }
+
+  private func update() {
+    cpuUsage = getCPUUsage()
+    menuBarText = String(format: "CPU %.0f%%", cpuUsage * 100)
+  }
+
+  // MARK: - CPU Usage
+
+  private func getCPUUsage() -> Double {
+    var totalUsageOfCPU: Double = 0.0
+    var threadsList: thread_act_array_t?
+    var threadsCount = mach_msg_type_number_t(0)
+    let threadsResult = task_threads(mach_task_self_, &threadsList, &threadsCount)
+
+    if threadsResult == KERN_SUCCESS, let threadsList = threadsList {
+      for index in 0..<threadsCount {
+        var threadInfo = thread_basic_info()
+        var threadInfoCount = mach_msg_type_number_t(THREAD_INFO_MAX)
+        let infoResult = withUnsafeMutablePointer(to: &threadInfo) {
+          $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+            thread_info(
+              threadsList[Int(index)], thread_flavor_t(THREAD_BASIC_INFO), $0, &threadInfoCount)
+          }
+        }
+
+        guard infoResult == KERN_SUCCESS else {
+          continue
+        }
+
+        let threadBasicInfo = threadInfo as thread_basic_info
+        if threadBasicInfo.flags & TH_FLAGS_IDLE == 0 {
+          totalUsageOfCPU += (Double(threadBasicInfo.cpu_usage) / Double(TH_USAGE_SCALE))
+        }
+      }
+
+      vm_deallocate(
+        mach_task_self_, vm_address_t(UInt(bitPattern: threadsList)),
+        vm_size_t(Int(threadsCount) * MemoryLayout<thread_t>.stride))
+    }
+
+    return totalUsageOfCPU
+  }
+}

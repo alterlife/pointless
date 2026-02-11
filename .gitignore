@@ -1,0 +1,23 @@
+# Swift Package Manager
+.build/
+*.xcodeproj
+*.xcworkspace
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Xcode
+DerivedData/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+
+# Build artifacts
+*.app
+*.dSYM.zip
+*.dSYM

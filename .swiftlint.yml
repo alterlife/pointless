@@ -1,0 +1,49 @@
+# SwiftLint Configuration for Pointless
+
+# Paths to include/exclude
+included:
+  - Sources
+
+excluded:
+  - .build
+  - Package.swift
+
+# Disabled rules (too strict for this project)
+disabled_rules:
+  - todo # Allow TODO comments
+  - trailing_whitespace # Editor handles this
+  - identifier_name # Allow short names like 'id'
+
+# Enabled opt-in rules
+opt_in_rules:
+  - empty_count # Use isEmpty instead of count == 0
+  - explicit_init # Avoid explicit .init() calls
+  - redundant_nil_coalescing
+  - unused_import
+
+# Rule configurations
+line_length:
+  warning: 120
+  error: 150
+
+file_length:
+  warning: 400
+  error: 500
+
+type_body_length:
+  warning: 300
+  error: 400
+
+function_body_length:
+  warning: 60
+  error: 80
+
+# Naming conventions
+type_name:
+  min_length: 3
+  max_length: 50
+
+force_unwrapping: error
+force_cast: error
+
+reporter: "xcode" # Xcode-style output
