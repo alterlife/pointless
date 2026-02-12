@@ -34,14 +34,27 @@ class MenuBarCombinedView: NSView {
 
     // Update when plugins change
     PluginRegistry.shared.$plugins
-      .sink { [weak self] _ in
+      .sink { [weak self] plugins in
         self?.updateContent()
+        // Subscribe to each plugin's changes
+        self?.subscribeToPlugins(plugins)
       }
       .store(in: &cancellables)
 
-    // Also update periodically (plugin data changes)
-    Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-      self?.updateContent()
+    // Subscribe to initial plugins
+    subscribeToPlugins(PluginRegistry.shared.plugins)
+  }
+
+  private func subscribeToPlugins(_ plugins: [AnyPlugin]) {
+    // Subscribe to each plugin's objectWillChange
+    for plugin in plugins {
+      plugin.objectWillChange
+        .sink { [weak self] _ in
+          Task { @MainActor in
+            self?.updateContent()
+          }
+        }
+        .store(in: &cancellables)
     }
   }
 

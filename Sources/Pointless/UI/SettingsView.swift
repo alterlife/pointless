@@ -1,11 +1,13 @@
 import SwiftUI
 
 /// Auto-generated settings UI from plugin definitions
-struct SettingsView: View {
+public struct SettingsView: View {
+  public init() {}
+
   @ObservedObject var registry = PluginRegistry.shared
   @State private var values: [String: [String: Any]] = [:]
 
-  var body: some View {
+  public var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
         Text("Settings")

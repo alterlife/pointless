@@ -15,9 +15,14 @@ swift build
 # Run the app
 swift run
 
+# Run tests (simple test runner without XCTest)
+swift Tests/run-tests.swift
+
 # Lint code (SwiftLint must be installed)
 swiftlint
 ```
+
+**Note on Testing**: Due to Swift 6.2 + Command Line Tools limitations, XCTest is not available. A standalone test runner (`Tests/run-tests.swift`) is provided that works without XCTest. For full XCTest support, install Xcode.
 
 ## Architecture
 

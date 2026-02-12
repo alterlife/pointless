@@ -33,10 +33,19 @@ class CPUPlugin: ObservableObject, Plugin {
   }
 
   func start() {
+    // Schedule timer on main run loop to ensure UI updates
     timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
-      self?.update()
+      Task { @MainActor in
+        self?.update()
+      }
     }
-    update()  // Immediate first update
+    // Add to main run loop
+    RunLoop.main.add(timer!, forMode: .common)
+
+    // Immediate first update
+    Task { @MainActor in
+      update()
+    }
   }
 
   func stop() {

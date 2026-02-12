@@ -1,8 +1,8 @@
 import Cocoa
 import SwiftUI
 
-class AppDelegate: NSObject, NSApplicationDelegate {
-  func applicationDidFinishLaunching(_ notification: Notification) {
+public class AppDelegate: NSObject, NSApplicationDelegate {
+  public func applicationDidFinishLaunching(_ notification: Notification) {
     Task { @MainActor in
       // Register built-in plugins
       let plugins: [any Plugin] = [

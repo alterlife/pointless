@@ -43,7 +43,17 @@ struct PopoverView: View {
   }
 
   private func openSettings() {
-    // Open the Settings window (defined in PointlessApp.swift)
-    NSApp.sendAction(Selector("showSettingsWindow:"), to: nil, from: nil)
+    // Create and show settings window
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+      styleMask: [.titled, .closable, .resizable],
+      backing: .buffered,
+      defer: false
+    )
+    window.title = "Pointless Settings"
+    window.contentView = NSHostingView(rootView: SettingsView())
+    window.center()
+    window.makeKeyAndOrderFront(nil)
+    NSApp.activate(ignoringOtherApps: true)
   }
 }

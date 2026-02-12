@@ -21,3 +21,7 @@ xcuserdata/
 *.app
 *.dSYM.zip
 *.dSYM
+
+# Test artifacts
+test-runner
+*.test

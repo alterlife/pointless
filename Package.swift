@@ -9,13 +9,27 @@ let package = Package(
     products: [
         .executable(
             name: "Pointless",
-            targets: ["Pointless"]
+            targets: ["PointlessApp"]
+        ),
+        .library(
+            name: "PointlessCore",
+            targets: ["PointlessCore"]
         )
     ],
     targets: [
-        .executableTarget(
-            name: "Pointless",
+        .target(
+            name: "PointlessCore",
             path: "Sources/Pointless"
+        ),
+        .executableTarget(
+            name: "PointlessApp",
+            dependencies: ["PointlessCore"],
+            path: "Sources/PointlessApp"
+        ),
+        .testTarget(
+            name: "PointlessTests",
+            dependencies: ["PointlessCore"],
+            path: "Tests/PointlessTests"
         )
     ]
 )
