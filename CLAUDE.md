@@ -6,6 +6,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Pointless is a minimal, plugin-driven macOS menu bar app for system monitoring. The core philosophy is "everything is a plugin" — even built-in metrics like CPU are implemented as plugins that the app shell loads and displays.
 
+## Design Philosophy
+
+### High-Quality Code & Consistent Design
+
+1. **Follow Your Own Rules**
+   - SwiftLint errors (`force_unwrapping`, `force_cast`) are non-negotiable — fix violations immediately
+   - If a rule exists, the code must comply. No exceptions without documented justification.
+
+2. **Swift Naming Conventions**
+   - Avoid vague suffixes: `Manager`, `Helper`, `Utility`, `Handler`
+   - Be specific about what something IS, not what it DOES
+   - Follow Apple's patterns: `URLSession` not `URLSessionManager`
+   - Type erasure wrappers use `Any` prefix: `AnyPlugin`, `AnyView`
+
+3. **Trust the Framework**
+   - SwiftUI `@Published` + `@ObservedObject` handles reactivity — don't fight it with manual updates
+   - Combine subscriptions must be properly managed (stored and cancelled)
+   - Let the type system work for you — avoid unnecessary casts
+
+4. **No Duplication**
+   - DRY principle: same logic should only exist once
+   - Consolidate similar code paths before they diverge
+   - Shared behavior goes into protocol extensions or helpers
+
+5. **Memory Safety**
+   - All Combine subscriptions must be stored in `cancellables` and properly cleaned up
+   - Weak references (`[weak self]`) in closures that outlive their owner
+   - Timer invalidation in `stop()` or `deinit`
+
+6. **Declarative Over Imperative**
+   - Settings, UI, and plugin definitions should be data, not code
+   - Let the system generate behavior from declarations
+   - Reduce manual wiring and state synchronization
+
 ## Build & Run
 
 ```bash
