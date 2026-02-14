@@ -1,6 +1,6 @@
 import Cocoa
-import SwiftUI
 import OSLog
+import SwiftUI
 
 public class AppDelegate: NSObject, NSApplicationDelegate {
   public func applicationDidFinishLaunching(_ notification: Notification) {

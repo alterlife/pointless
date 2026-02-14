@@ -51,11 +51,11 @@ struct MenuBarContentView: View {
         }
 
         // Use custom view if provided, otherwise fall back to text
-        ObservablePluginView(plugin: plugin) { p in
-          if let customView = p.menuBarView() {
+        ObservablePluginView(plugin: plugin) { observedPlugin in
+          if let customView = observedPlugin.menuBarView() {
             return AnyView(MenuBarPluginViewWrapper(view: customView))
           } else {
-            return AnyView(Text(p.menuBarText).font(.system(size: 12)))
+            return AnyView(Text(observedPlugin.menuBarText).font(.system(size: 12)))
           }
         }
       }

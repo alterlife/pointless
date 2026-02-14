@@ -13,6 +13,7 @@ Pointless is a minimal, plugin-driven macOS menu bar app for system monitoring. 
 1. **Follow Your Own Rules**
    - SwiftLint errors (`force_unwrapping`, `force_cast`) are non-negotiable — fix violations immediately
    - If a rule exists, the code must comply. No exceptions without documented justification.
+   - **Always run `swiftlint` before committing code** — 0 violations required
 
 2. **Swift Naming Conventions**
    - Avoid vague suffixes: `Manager`, `Helper`, `Utility`, `Handler`
@@ -52,9 +53,14 @@ swift run
 # Run tests (simple test runner without XCTest)
 swift Tests/run-tests.swift
 
-# Lint code (SwiftLint must be installed)
+# Lint code (requires SwiftLint: brew install swiftlint)
 swiftlint
+
+# Auto-fix fixable issues
+swiftlint --fix
 ```
+
+**IMPORTANT:** Always run `swiftlint` before committing. The project must have **0 violations**.
 
 **Note on Testing**: Due to Swift 6.2 + Command Line Tools limitations, XCTest is not available. A standalone test runner (`Tests/run-tests.swift`) is provided that works without XCTest. For full XCTest support, install Xcode.
 
@@ -323,11 +329,19 @@ class MyPlugin: ObservableObject, Plugin {
 
 ## Code Style
 
-- SwiftLint enforced (see `.swiftlint.yml`)
-- Line length: 120 chars (warning), 150 (error)
-- No force unwrapping or force casting (error level)
+SwiftLint is enforced (see `.swiftlint.yml`). Key rules to follow:
+
+**Strictly Enforced (errors):**
+- **No force unwrapping** (`!`) - use optional binding or nil coalescing
+- **No force casting** (`as!`) - use conditional casting (`as?`)
+- **Line length:** 120 chars (warning), 150 chars (error)
+
+**Best Practices (warnings):**
 - Use `isEmpty` instead of `count == 0`
 - Prefer type inference over explicit `.init()`
+- No tuples with more than 2 members - use a struct instead
+- Remove unused imports
+- No duplicate imports
 
 ## Design Documents
 

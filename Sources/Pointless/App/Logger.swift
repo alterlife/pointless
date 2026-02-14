@@ -68,7 +68,7 @@ enum Logger {
   static let app = os.Logger(subsystem: subsystem, category: "app")
 
   /// Logger for UI-related events
-  static let ui = os.Logger(subsystem: subsystem, category: "ui")
+  static let userInterface = os.Logger(subsystem: subsystem, category: "ui")
 
   // MARK: - Convenience Methods
 

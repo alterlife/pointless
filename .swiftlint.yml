@@ -8,19 +8,36 @@ excluded:
   - .build
   - Package.swift
 
-# Disabled rules (too strict for this project)
-disabled_rules:
-  - todo # Allow TODO comments
-  - trailing_whitespace # Editor handles this
-  - identifier_name # Allow short names like 'id'
-
 # Enabled opt-in rules
 opt_in_rules:
+  # Basic best practices
   - empty_count # Use isEmpty instead of count == 0
+  - empty_string # Use isEmpty instead of == ""
   - explicit_init # Avoid explicit .init() calls
   - redundant_nil_coalescing
+  - redundant_type_annotation # Don't specify type when inferred
   - force_unwrapping # Treat force unwrapping as error
   - force_cast # Treat force cast as error
+
+  # Performance & idioms
+  - contains_over_first_not_nil # Use contains instead of filter().first != nil
+  - first_where # Use first(where:) instead of filter().first
+  - last_where # Use last(where:) instead of filter().last
+  - toggle_bool # Use toggle() instead of value = !value
+
+  # Code organization
+  - sorted_imports # Keep imports alphabetically sorted
+  - vertical_whitespace_closing_braces # No empty line before }
+  - vertical_whitespace_opening_braces # No empty line after {
+  - modifier_order # Consistent modifier order
+
+  # Readability
+  - closure_spacing # Proper spacing in closures
+  - yoda_condition # Avoid backwards conditions
+  - unneeded_parentheses_in_closure_argument # Remove extra parens
+
+  # Type safety
+  - discouraged_optional_boolean # Avoid Bool?, use Bool with default
 
 # Analyzer rules (require swiftlint analyze)
 analyzer_rules:

@@ -1,6 +1,6 @@
 import Cocoa
-import SwiftUI
 import Combine
+import SwiftUI
 
 /// Menu bar manager - displays plugin data and handles menu
 @MainActor
@@ -45,8 +45,8 @@ class MenuBar {
       let menuItem = NSMenuItem()
 
       // Create SwiftUI content view
-      let contentView = ObservablePluginView(plugin: plugin) { p in
-        p.detailView()
+      let contentView = ObservablePluginView(plugin: plugin) { observedPlugin in
+        observedPlugin.detailView()
       }
       .frame(width: 360)
       .fixedSize(horizontal: false, vertical: true)
@@ -91,5 +91,4 @@ class MenuBar {
   @objc private func quitApp() {
     NSApplication.shared.terminate(nil)
   }
-
 }

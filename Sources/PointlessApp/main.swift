@@ -1,5 +1,5 @@
-import SwiftUI
 import PointlessCore
+import SwiftUI
 
 @main
 struct PointlessApp: App {

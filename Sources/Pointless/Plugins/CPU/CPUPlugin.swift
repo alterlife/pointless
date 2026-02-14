@@ -1,7 +1,7 @@
-import Foundation
-import SwiftUI
 import Combine
+import Foundation
 import OSLog
+import SwiftUI
 
 /// CPU monitoring plugin - autonomous and self-contained
 class CPUPlugin: ObservableObject, Plugin {
