@@ -12,8 +12,18 @@ class PluginRegistry: ObservableObject {
 
   /// Register a plugin
   func register<P: Plugin>(_ plugin: P) {
-    let wrapped = AnyPlugin(plugin)
+    registerWrapped(AnyPlugin(plugin))
+  }
 
+  /// Register multiple plugins
+  func register(_ plugins: [any Plugin]) {
+    for plugin in plugins {
+      registerWrapped(AnyPlugin(plugin))
+    }
+  }
+
+  /// Internal registration logic - accepts pre-wrapped plugin
+  private func registerWrapped(_ wrapped: AnyPlugin) {
     // Check for duplicate IDs
     if plugins.contains(where: { $0.id == wrapped.id }) {
       print("⚠️ Plugin with ID '\(wrapped.id)' already registered. Skipping.")
@@ -21,26 +31,6 @@ class PluginRegistry: ObservableObject {
     }
 
     plugins.append(wrapped)
-    print("✅ Registered plugin: \(wrapped.name) (\(wrapped.id))")
-  }
-
-  /// Register multiple plugins
-  func register(_ plugins: [any Plugin]) {
-    for plugin in plugins {
-      // Type erasure workaround - call the generic version
-      registerDynamic(plugin)
-    }
-  }
-
-  private func registerDynamic(_ plugin: any Plugin) {
-    let wrapped = AnyPlugin(plugin)
-
-    if self.plugins.contains(where: { $0.id == wrapped.id }) {
-      print("⚠️ Plugin with ID '\(wrapped.id)' already registered. Skipping.")
-      return
-    }
-
-    self.plugins.append(wrapped)
     print("✅ Registered plugin: \(wrapped.name) (\(wrapped.id))")
   }
 
@@ -89,6 +79,6 @@ class PluginRegistry: ObservableObject {
       return
     }
 
-    registerDynamic(plugin)
+    registerWrapped(AnyPlugin(plugin))
   }
 }

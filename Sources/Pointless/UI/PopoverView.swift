@@ -30,10 +30,12 @@ struct PopoverView: View {
       ScrollView {
         VStack(spacing: 12) {
           ForEach(registry.plugins, id: \.id) { plugin in
-            plugin.detailView()
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .background(Color(NSColor.controlBackgroundColor))
-              .cornerRadius(8)
+            ObservablePluginView(plugin: plugin) { p in
+              p.detailView()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
           }
         }
         .padding()
@@ -42,6 +44,7 @@ struct PopoverView: View {
     .frame(width: 360, height: 400)
   }
 
+  @MainActor
   private func openSettings() {
     SettingsWindowManager.shared.showSettings()
   }

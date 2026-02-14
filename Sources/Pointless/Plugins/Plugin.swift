@@ -71,11 +71,20 @@ class AnyPlugin: ObservableObject {
     self._configure = { plugin.configure($0) }
     self._start = { plugin.start() }
     self._stop = { plugin.stop() }
-    self._objectWillChange = { plugin.objectWillChange as! ObservableObjectPublisher }
+
+    // Type-erased publisher - conditional cast with clear error
+    let publisher = plugin.objectWillChange
+    self._objectWillChange = {
+      guard let typedPublisher = publisher as? ObservableObjectPublisher else {
+        fatalError("Plugin \(plugin.id) does not use ObservableObjectPublisher")
+      }
+      return typedPublisher
+    }
 
     // Forward objectWillChange from wrapped plugin to this wrapper
     plugin.objectWillChange.sink { [weak self] _ in
-      self?.objectWillChange.send()
+      guard let self = self else { return }
+      self.objectWillChange.send()
     }
     .store(in: &cancellables)
   }
@@ -104,3 +113,14 @@ class AnyPlugin: ObservableObject {
 }
 
 import Combine
+import SwiftUI
+
+/// SwiftUI wrapper that observes a plugin and re-renders when it changes
+struct ObservablePluginView: View {
+  @ObservedObject var plugin: AnyPlugin
+  let content: (AnyPlugin) -> AnyView
+
+  var body: some View {
+    content(plugin)
+  }
+}

@@ -105,6 +105,33 @@ protocol Plugin: ObservableObject {
 - Plugins are wrapped in `AnyPlugin` for type erasure
 - Each plugin manages its own `Timer` for updates
 
+### CRITICAL: Plugin Observation in SwiftUI
+
+**Problem:** SwiftUI's `@ObservedObject` does NOT automatically observe objects inside arrays/collections.
+
+**Wrong approach (will not update):**
+```swift
+ForEach(registry.plugins, id: \.id) { plugin in
+  plugin.detailView()  // ❌ No observation binding - UI freezes!
+}
+```
+
+**Correct approach (updates work):**
+```swift
+ForEach(registry.plugins, id: \.id) { plugin in
+  ObservablePluginView(plugin: plugin) { p in  // ✅ Creates @ObservedObject binding
+    p.detailView()
+  }
+}
+```
+
+**Why this matters:**
+- When a plugin updates (e.g., CPU percentage changes), it fires `objectWillChange`
+- WITHOUT `ObservablePluginView`: SwiftUI never receives the notification → UI stays frozen
+- WITH `ObservablePluginView`: SwiftUI receives the notification → UI updates automatically
+
+**Rule:** Any SwiftUI view that displays plugin data MUST wrap it in `ObservablePluginView`.
+
 ### Plugin Views
 
 **Menu Bar:**

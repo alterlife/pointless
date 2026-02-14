@@ -16,7 +16,7 @@ class CPUPlugin: ObservableObject, Plugin {
   var settings: PluginSettings {
     PluginSettings(definitions: [
       .slider(key: "refreshInterval", label: "Refresh Interval (seconds)",
-              range: 1.0...10.0, defaultValue: 2.0)
+              range: 1.0...60.0, defaultValue: 2.0)
     ])
   }
 
@@ -34,13 +34,14 @@ class CPUPlugin: ObservableObject, Plugin {
 
   func start() {
     // Schedule timer on main run loop to ensure UI updates
-    timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+    let newTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
       Task { @MainActor in
         self?.update()
       }
     }
+    timer = newTimer
     // Add to main run loop
-    RunLoop.main.add(timer!, forMode: .common)
+    RunLoop.main.add(newTimer, forMode: .common)
 
     // Immediate first update
     Task { @MainActor in
