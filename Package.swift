@@ -16,9 +16,11 @@ let package = Package(
             targets: ["PointlessCore"]
         )
     ],
+    dependencies: [],
     targets: [
         .target(
             name: "PointlessCore",
+            dependencies: [],
             path: "Sources/Pointless"
         ),
         .executableTarget(

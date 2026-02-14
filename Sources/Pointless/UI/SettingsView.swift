@@ -33,12 +33,12 @@ public struct SettingsView: View {
       Text(plugin.name)
         .font(.headline)
 
-      if plugin.settings.definitions.isEmpty {
+      if plugin.settings().definitions.isEmpty {
         Text("No settings available")
           .font(.caption)
           .foregroundColor(.secondary)
       } else {
-        ForEach(plugin.settings.definitions) { definition in
+        ForEach(plugin.settings().definitions) { definition in
           settingView(for: definition, plugin: plugin)
         }
       }
@@ -139,7 +139,7 @@ public struct SettingsView: View {
       } else {
         // Initialize with defaults
         var defaults: [String: Any] = [:]
-        for definition in plugin.settings.definitions {
+        for definition in plugin.settings().definitions {
           defaults[definition.key] = definition.defaultValue
         }
         values[plugin.id] = defaults

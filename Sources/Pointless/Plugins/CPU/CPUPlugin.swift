@@ -3,56 +3,40 @@ import Foundation
 import OSLog
 import SwiftUI
 
-/// CPU monitoring plugin - autonomous and self-contained
-class CPUPlugin: ObservableObject, Plugin {
+/// CPU monitoring plugin - using protocol extension helpers
+class CPUPlugin: NSObject, ObservableObject, Plugin {
   let id = "pointless.cpu"
   let name = "CPU"
 
   @Published var menuBarText: String = "CPU --"
+  @Published var updateInterval: TimeInterval = 2.0
 
-  private var refreshInterval: TimeInterval = 2.0
-  private var timer: Timer?
   private var cpuUsage: Double = 0.0
 
-  var settings: PluginSettings {
-    PluginSettings(definitions: [
-      .slider(key: "refreshInterval", label: "Refresh Interval (seconds)",
-              range: 1.0...60.0, defaultValue: 2.0)
+  override init() {
+    super.init()
+    initialize()
+  }
+
+  func initialize() {
+    settings([
+      .slider(
+        key: "updateInterval",
+        label: "Update Interval (seconds)",
+        range: 1.0...60.0,
+        defaultValue: 2.0
+      )
     ])
-  }
 
-  func configure(_ values: [String: Any]) {
-    if let interval = values["refreshInterval"] as? Double {
-      refreshInterval = interval
-
-      // Restart timer with new interval if already running
-      if timer != nil {
-        stop()
-        start()
-      }
+    periodicUpdate(interval: \.updateInterval) { [weak self] in
+      self?.update()
     }
   }
 
-  func start() {
-    // Schedule timer on main run loop to ensure UI updates
-    let newTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
-      Task { @MainActor in
-        self?.update()
-      }
-    }
-    timer = newTimer
-    // Add to main run loop
-    RunLoop.main.add(newTimer, forMode: .common)
-
-    // Immediate first update
-    Task { @MainActor in
-      update()
-    }
-  }
-
-  func stop() {
-    timer?.invalidate()
-    timer = nil
+  private func update() {
+    cpuUsage = getCPUUsage()
+    menuBarText = String(format: "CPU %.0f%%", cpuUsage * 100)
+    Logger.debug("CPU updated: \(String(format: "%.1f%%", cpuUsage * 100))")
   }
 
   func detailView() -> AnyView {
@@ -65,18 +49,12 @@ class CPUPlugin: ObservableObject, Plugin {
         }
         Text(String(format: "%.1f%%", cpuUsage * 100))
           .font(.system(.title, design: .monospaced))
-        Text("Updates every \(String(format: "%.1f", refreshInterval))s")
+        Text("Updates every \(String(format: "%.1f", updateInterval))s")
           .font(.caption)
           .foregroundColor(.secondary)
       }
       .padding()
     )
-  }
-
-  private func update() {
-    cpuUsage = getCPUUsage()
-    menuBarText = String(format: "CPU %.0f%%", cpuUsage * 100)
-    Logger.debug("CPU updated: \(String(format: "%.1f%%", cpuUsage * 100))")
   }
 
   // MARK: - CPU Usage

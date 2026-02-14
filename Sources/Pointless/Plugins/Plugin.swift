@@ -13,8 +13,11 @@ protocol Plugin: ObservableObject {
   /// Text displayed in menu bar (fallback if menuBarView returns nil)
   var menuBarText: String { get }
 
+  /// Initialize plugin (setup settings, timers, etc.)
+  func initialize()
+
   /// Settings definitions for this plugin
-  var settings: PluginSettings { get }
+  func settings() -> PluginSettings
 
   /// Custom view for menu bar display (optional - full rendering control)
   /// Return nil to use menuBarText instead
@@ -33,11 +36,20 @@ protocol Plugin: ObservableObject {
   func stop()
 }
 
-// Default implementation - plugins can opt-in to custom views
+// Default implementation for menuBarView - plugins can opt-in to custom views
 extension Plugin {
+  /// Default: use menuBarText instead of custom view
   func menuBarView() -> NSView? {
-    return nil  // Default: use menuBarText
+    nil
   }
+
+  /// Default: simple text view with plugin name
+  func detailView() -> AnyView {
+    AnyView(Text(name))
+  }
+
+  /// Default: no initialization needed
+  func initialize() { }
 }
 
 // Type-erased wrapper for Plugin to use in arrays
@@ -58,7 +70,7 @@ class AnyPlugin: ObservableObject {
     _menuBarText()
   }
 
-  var settings: PluginSettings {
+  func settings() -> PluginSettings {
     _settings()
   }
 
@@ -68,7 +80,7 @@ class AnyPlugin: ObservableObject {
     self._menuBarText = { plugin.menuBarText }
     self._menuBarView = { plugin.menuBarView() }
     self._detailView = { plugin.detailView() }
-    self._settings = { plugin.settings }
+    self._settings = { plugin.settings() }
     self._configure = { plugin.configure($0) }
     self._start = { plugin.start() }
     self._stop = { plugin.stop() }
