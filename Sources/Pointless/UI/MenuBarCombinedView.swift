@@ -30,6 +30,11 @@ class MenuBarCombinedView: NSView {
       ])
     }
   }
+
+  override var intrinsicContentSize: NSSize {
+    // Forward the hosting view's intrinsic size so the status item sizes correctly
+    return hostingView?.intrinsicContentSize ?? NSSize(width: 80, height: 22)
+  }
 }
 
 /// SwiftUI view that renders all plugin views

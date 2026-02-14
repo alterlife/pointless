@@ -139,6 +139,22 @@ ForEach(registry.plugins, id: \.id) { plugin in
 - Views are hosted in `NSHostingView` and displayed in the status bar button
 - `MenuBarCombinedView` horizontally combines all plugin views with separators
 
+**CRITICAL: Menu Bar Sizing**
+
+NSStatusItem with `variableLength` relies on `intrinsicContentSize` to determine width. SwiftUI views inside `NSHostingView` don't automatically propagate their size to the parent NSView hierarchy.
+
+**Problem:** Without proper sizing, the menu bar text gets truncated (shows "C" instead of "CPU 15%")
+
+**Solution:** Override `intrinsicContentSize` in `MenuBarCombinedView`:
+```swift
+override var intrinsicContentSize: NSSize {
+  // Forward the hosting view's intrinsic size
+  return hostingView?.intrinsicContentSize ?? NSSize(width: 80, height: 22)
+}
+```
+
+This tells NSStatusItem how wide the view needs to be, allowing it to auto-size correctly.
+
 **Popover:**
 - Each plugin provides a SwiftUI `detailView()` shown in the popover
 - Popover displays all active plugins as cards

@@ -55,6 +55,10 @@ class CPUPlugin: ObservableObject, Plugin {
   }
 
   func menuBarView() -> NSView? {
+    // Temporarily return nil to test text fallback
+    return nil
+
+    /* Custom view disabled for debugging
     let view = NSHostingView(rootView:
       HStack(spacing: 4) {
         // Color-coded status indicator
@@ -77,6 +81,7 @@ class CPUPlugin: ObservableObject, Plugin {
     )
     view.frame = NSRect(x: 0, y: 0, width: 70, height: 22)
     return view
+    */
   }
 
   private var statusColor: Color {
