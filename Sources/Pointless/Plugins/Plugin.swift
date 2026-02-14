@@ -20,7 +20,7 @@ protocol Plugin: ObservableObject {
   /// Return nil to use menuBarText instead
   func menuBarView() -> NSView?
 
-  /// Detailed view shown in popover
+  /// Detailed view shown in menu
   func detailView() -> AnyView
 
   /// Configure plugin with saved settings values

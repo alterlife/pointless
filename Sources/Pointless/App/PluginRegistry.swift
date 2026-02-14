@@ -47,7 +47,6 @@ class PluginRegistry: ObservableObject {
     // Create directory if it doesn't exist
     try? fileManager.createDirectory(at: pluginsDir, withIntermediateDirectories: true)
 
-    // Scan for .bundle files
     guard let bundles = try? fileManager.contentsOfDirectory(at: pluginsDir, includingPropertiesForKeys: nil)
       .filter({ $0.pathExtension == "bundle" })
     else {

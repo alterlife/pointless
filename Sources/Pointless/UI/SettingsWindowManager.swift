@@ -11,14 +11,12 @@ public class SettingsWindowManager {
   private init() {}
 
   public func showSettings() {
-    // If window already exists and is visible, just bring it to front
     if let window = settingsWindow, window.isVisible {
       window.makeKeyAndOrderFront(nil)
       NSApp.activate(ignoringOtherApps: true)
       return
     }
 
-    // Create new window
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
       styleMask: [.titled, .closable, .resizable],
@@ -41,7 +39,6 @@ public class SettingsWindowManager {
   }
 }
 
-// Window delegate to handle close events
 private class WindowDelegate: NSObject, NSWindowDelegate {
   func windowWillClose(_ notification: Notification) {
     // Window will close but reference will remain for reuse

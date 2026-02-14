@@ -55,47 +55,6 @@ class CPUPlugin: ObservableObject, Plugin {
     timer = nil
   }
 
-  func menuBarView() -> NSView? {
-    // Temporarily return nil to test text fallback
-    return nil
-
-    /* Custom view disabled for debugging
-    let view = NSHostingView(rootView:
-      HStack(spacing: 4) {
-        // Color-coded status indicator
-        Circle()
-          .fill(statusColor)
-          .frame(width: 6, height: 6)
-
-        // CPU icon
-        Image(systemName: "cpu")
-          .font(.system(size: 11))
-          .foregroundColor(.primary)
-
-        // Percentage
-        Text(String(format: "%.0f%%", cpuUsage * 100))
-          .font(.system(size: 12, weight: .medium, design: .monospaced))
-          .foregroundColor(.primary)
-      }
-      .padding(.horizontal, 4)
-      .padding(.vertical, 2)
-    )
-    view.frame = NSRect(x: 0, y: 0, width: 70, height: 22)
-    return view
-    */
-  }
-
-  private var statusColor: Color {
-    switch cpuUsage {
-    case 0..<0.5:
-      return .green
-    case 0.5..<0.8:
-      return .yellow
-    default:
-      return .red
-    }
-  }
-
   func detailView() -> AnyView {
     AnyView(
       VStack(alignment: .leading, spacing: 8) {

@@ -123,10 +123,8 @@ public struct SettingsView: View {
     }
     values[pluginID]?[key] = value
 
-    // Save to UserDefaults
     saveSettings(for: pluginID)
 
-    // Configure plugin with new values
     if let plugin = registry.plugins.first(where: { $0.id == pluginID }) {
       plugin.configure(values[pluginID] ?? [:])
     }

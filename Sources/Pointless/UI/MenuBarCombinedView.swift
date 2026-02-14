@@ -73,6 +73,5 @@ struct MenuBarPluginViewWrapper: NSViewRepresentable {
   }
 
   func updateNSView(_ nsView: NSView, context: Context) {
-    // View updates handled by plugin
   }
 }

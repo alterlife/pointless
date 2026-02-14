@@ -13,12 +13,9 @@ class MenuBar {
   private init() {}
 
   func setup() {
-    // Create status item with variable length (auto-sizing)
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-    // Set up click action
     if let button = statusItem?.button {
-      // Add custom view as subview
       let combinedView = MenuBarCombinedView()
       combinedView.translatesAutoresizingMaskIntoConstraints = false
       button.addSubview(combinedView)
@@ -44,14 +41,12 @@ class MenuBar {
     for plugin in PluginRegistry.shared.plugins {
       let menuItem = NSMenuItem()
 
-      // Create SwiftUI content view
       let contentView = ObservablePluginView(plugin: plugin) { observedPlugin in
         observedPlugin.detailView()
       }
       .frame(width: 360)
       .fixedSize(horizontal: false, vertical: true)
 
-      // Wrap in NSHostingView and size it
       let hostingView = NSHostingView(rootView: contentView)
       hostingView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -65,20 +60,16 @@ class MenuBar {
       menu.addItem(menuItem)
     }
 
-    // Add separator
     menu.addItem(NSMenuItem.separator())
 
-    // Add Settings menu item
     let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
     settingsItem.target = self
     menu.addItem(settingsItem)
 
-    // Add Quit menu item
     let quitItem = NSMenuItem(title: "Quit Pointless", action: #selector(quitApp), keyEquivalent: "q")
     quitItem.target = self
     menu.addItem(quitItem)
 
-    // Display the menu
     statusItem?.menu = menu
     button.performClick(nil)
     statusItem?.menu = nil
