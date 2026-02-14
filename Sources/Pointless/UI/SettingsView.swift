@@ -59,7 +59,10 @@ public struct SettingsView: View {
             value: binding(for: plugin.id, key: key, default: defaultValue),
             in: range
           )
-          Text(String(format: "%.1f", getValue(for: plugin.id, key: key, default: defaultValue) as? Double ?? defaultValue))
+          Text(String(
+            format: "%.1f",
+            getValue(for: plugin.id, key: key, default: defaultValue) as? Double ?? defaultValue
+          ))
             .font(.caption)
             .foregroundColor(.secondary)
             .frame(width: 40)

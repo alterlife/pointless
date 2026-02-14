@@ -17,35 +17,44 @@ enum SettingDefinition: Identifiable {
   case text(key: String, label: String, defaultValue: String)
   case dropdown(key: String, label: String, options: [String], defaultValue: String)
 
-  /// Extract common components (key, label, defaultValue) from any case
-  private var components: (key: String, label: String, defaultValue: Any) {
-    switch self {
-    case .slider(let key, let label, _, let defaultValue):
-      return (key, label, defaultValue)
-    case .toggle(let key, let label, let defaultValue):
-      return (key, label, defaultValue)
-    case .hotkey(let key, let label, let defaultValue):
-      return (key, label, defaultValue)
-    case .text(let key, let label, let defaultValue):
-      return (key, label, defaultValue)
-    case .dropdown(let key, let label, _, let defaultValue):
-      return (key, label, defaultValue)
-    }
-  }
-
   var id: String {
-    components.key
+    key
   }
 
   var key: String {
-    components.key
+    switch self {
+    case .slider(let key, _, _, _),
+         .toggle(let key, _, _),
+         .hotkey(let key, _, _),
+         .text(let key, _, _),
+         .dropdown(let key, _, _, _):
+      return key
+    }
   }
 
   var label: String {
-    components.label
+    switch self {
+    case .slider(_, let label, _, _),
+         .toggle(_, let label, _),
+         .hotkey(_, let label, _),
+         .text(_, let label, _),
+         .dropdown(_, let label, _, _):
+      return label
+    }
   }
 
   var defaultValue: Any {
-    components.defaultValue
+    switch self {
+    case .slider(_, _, _, let defaultValue):
+      return defaultValue
+    case .toggle(_, _, let defaultValue):
+      return defaultValue
+    case .hotkey(_, _, let defaultValue):
+      return defaultValue
+    case .text(_, _, let defaultValue):
+      return defaultValue
+    case .dropdown(_, _, _, let defaultValue):
+      return defaultValue
+    }
   }
 }

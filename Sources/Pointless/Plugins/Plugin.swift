@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// Protocol for autonomous plugins
@@ -111,9 +112,6 @@ class AnyPlugin: ObservableObject {
     _stop()
   }
 }
-
-import Combine
-import SwiftUI
 
 /// SwiftUI wrapper that observes a plugin and re-renders when it changes
 struct ObservablePluginView: View {
