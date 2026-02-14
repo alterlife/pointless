@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import OSLog
 
 /// Simple registry that holds all registered plugins
 @MainActor
@@ -26,12 +27,12 @@ class PluginRegistry: ObservableObject {
   private func registerWrapped(_ wrapped: AnyPlugin) {
     // Check for duplicate IDs
     if plugins.contains(where: { $0.id == wrapped.id }) {
-      print("⚠️ Plugin with ID '\(wrapped.id)' already registered. Skipping.")
+      Logger.warning("Plugin with ID '\(wrapped.id)' already registered. Skipping.")
       return
     }
 
     plugins.append(wrapped)
-    print("✅ Registered plugin: \(wrapped.name) (\(wrapped.id))")
+    Logger.info("Registered plugin: \(wrapped.name) (\(wrapped.id))", logger: Logger.pluginRegistry)
   }
 
   /// Load external plugins from bundles
@@ -60,22 +61,22 @@ class PluginRegistry: ObservableObject {
 
   private func loadBundle(at url: URL) {
     guard let bundle = Bundle(url: url) else {
-      print("⚠️ Failed to create bundle from: \(url.path)")
+      Logger.error("Failed to create bundle from: \(url.path)")
       return
     }
 
     guard bundle.load() else {
-      print("⚠️ Failed to load bundle: \(url.lastPathComponent)")
+      Logger.error("Failed to load bundle: \(url.lastPathComponent)")
       return
     }
 
     guard let principalClass = bundle.principalClass as? NSObject.Type else {
-      print("⚠️ Bundle principal class is not NSObject: \(url.lastPathComponent)")
+      Logger.error("Bundle principal class is not NSObject: \(url.lastPathComponent)")
       return
     }
 
     guard let plugin = principalClass.init() as? any Plugin else {
-      print("⚠️ Bundle principal class does not conform to Plugin: \(url.lastPathComponent)")
+      Logger.error("Bundle principal class does not conform to Plugin: \(url.lastPathComponent)")
       return
     }
 

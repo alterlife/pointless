@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import OSLog
 
 /// CPU monitoring plugin - autonomous and self-contained
 class CPUPlugin: ObservableObject, Plugin {
@@ -116,6 +117,7 @@ class CPUPlugin: ObservableObject, Plugin {
   private func update() {
     cpuUsage = getCPUUsage()
     menuBarText = String(format: "CPU %.0f%%", cpuUsage * 100)
+    Logger.debug("CPU updated: \(String(format: "%.1f%%", cpuUsage * 100))")
   }
 
   // MARK: - CPU Usage

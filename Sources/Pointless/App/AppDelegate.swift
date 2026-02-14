@@ -1,9 +1,12 @@
 import Cocoa
 import SwiftUI
+import OSLog
 
 public class AppDelegate: NSObject, NSApplicationDelegate {
   public func applicationDidFinishLaunching(_ notification: Notification) {
     Task { @MainActor in
+      Logger.info("Pointless starting up")
+
       // Register built-in plugins
       let plugins: [any Plugin] = [
         CPUPlugin()
@@ -16,6 +19,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
       // Load external plugins from bundles
       PluginRegistry.shared.loadExternalPlugins()
+
+      Logger.info("Starting \(PluginRegistry.shared.plugins.count) plugin(s)")
 
       // Load saved settings and configure plugins
       for plugin in PluginRegistry.shared.plugins {
@@ -30,6 +35,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
       // Setup menu bar UI
       MenuBar.shared.setup()
+
+      Logger.info("Pointless ready")
     }
   }
 }

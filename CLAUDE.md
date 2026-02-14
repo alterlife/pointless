@@ -58,6 +58,80 @@ swiftlint
 
 **Note on Testing**: Due to Swift 6.2 + Command Line Tools limitations, XCTest is not available. A standalone test runner (`Tests/run-tests.swift`) is provided that works without XCTest. For full XCTest support, install Xcode.
 
+## Logging
+
+Pointless uses Apple's unified logging system (`os.Logger`) for all diagnostic output. Logs are sent to the system logging daemon and can be viewed in Console.app or via command-line tools.
+
+### Log Levels
+
+The logging system supports four levels (from most to least verbose):
+
+- **debug**: Verbose diagnostic information (plugin updates, internal state changes)
+- **info**: Normal operational messages (plugin registration, app startup)
+- **warning**: Recoverable issues (duplicate plugin IDs, configuration problems)
+- **error**: Failure conditions (bundle load failures, missing resources)
+
+### Environment Variable Control
+
+Set `POINTLESS_LOG_LEVEL` to control which logs are shown:
+
+```bash
+# Show all logs including debug messages
+POINTLESS_LOG_LEVEL=debug swift run
+
+# Default: info and above (info, warning, error)
+swift run
+
+# Only warnings and errors
+POINTLESS_LOG_LEVEL=warning swift run
+
+# Only errors
+POINTLESS_LOG_LEVEL=error swift run
+```
+
+### Viewing Logs
+
+**Console.app (GUI):**
+1. Open `/Applications/Utilities/Console.app`
+2. In the search bar, filter by subsystem: `com.alterlife.pointless`
+3. Adjust log level filter in the toolbar (Action → Include Info Messages, Include Debug Messages)
+
+**Command line (real-time streaming):**
+```bash
+# Stream all logs from Pointless
+log stream --predicate 'subsystem == "com.alterlife.pointless"' --level debug
+
+# Stream only errors
+log stream --predicate 'subsystem == "com.alterlife.pointless"' --level error
+
+# Show recent logs (last 5 minutes)
+log show --predicate 'subsystem == "com.alterlife.pointless"' --last 5m
+```
+
+### Usage in Code
+
+```swift
+import OSLog
+
+// Use default loggers
+Logger.info("App started")              // ✅ Info with emoji
+Logger.warning("Config issue")          // ⚠️ Warning
+Logger.error("Failed to load plugin")   // ❌ Error
+Logger.debug("CPU value: 42%")          // 🔍 Debug (only if enabled)
+
+// Use specific subsystem loggers
+Logger.info("Plugin registered", logger: Logger.pluginRegistry)
+Logger.debug("Update triggered", logger: Logger.pluginLifecycle)
+```
+
+**Available subsystem loggers:**
+- `Logger.app` - App-level events (startup, shutdown)
+- `Logger.pluginRegistry` - Plugin registration and loading
+- `Logger.pluginLifecycle` - Plugin lifecycle events (start, stop, updates)
+- `Logger.ui` - UI-related events
+
+**Important:** Test output in `Tests/run-tests.swift` uses `print()` directly, not the logging system. This keeps test output simple and independent of log level configuration.
+
 ## Architecture
 
 ### Core Design Pattern: Autonomous Plugins
