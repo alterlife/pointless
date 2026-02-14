@@ -138,7 +138,7 @@ Logger.debug("Update triggered", logger: Logger.pluginLifecycle)
 
 Plugins are **fully autonomous** — they manage their own timers, data fetching, and state. The app shell only provides:
 1. **Registration** via `PluginRegistry`
-2. **Display infrastructure** (menu bar + popover)
+2. **Display infrastructure** (menu bar + menu)
 3. **Settings persistence** (UserDefaults)
 
 ### Plugin Lifecycle
@@ -166,7 +166,7 @@ protocol Plugin: ObservableObject {
   var settings: PluginSettings { get }
 
   func menuBarView() -> NSView?       // Custom menu bar view (optional)
-  func detailView() -> AnyView        // SwiftUI view for popover
+  func detailView() -> AnyView        // SwiftUI view for menu display
   func configure(_ values: [String: Any])
   func start()                        // Start plugin's update timer
   func stop()
@@ -229,9 +229,21 @@ override var intrinsicContentSize: NSSize {
 
 This tells NSStatusItem how wide the view needs to be, allowing it to auto-size correctly.
 
-**Popover:**
-- Each plugin provides a SwiftUI `detailView()` shown in the popover
-- Popover displays all active plugins as cards
+**Menu Display (NSMenu - REQUIRED PATTERN):**
+- **CRITICAL:** Use `NSMenu` for plugin details, NOT `NSPopover`
+- **Why:** Apple's HIG specifies NSMenu for menu bar extras (standard macOS pattern)
+- **Reference apps:** iStat Menus, Stats use NSMenu with embedded SwiftUI views
+- Each plugin's `detailView()` is embedded in NSMenuItem via NSHostingView
+- **All graphics preserved:** Icons, colors, charts, custom layouts work perfectly in menu items
+- Standard menu structure:
+  ```
+  [Plugin Details - custom views]
+  ─────────────────────
+  Settings...      ⌘,
+  ─────────────────────
+  Quit Pointless   ⌘Q
+  ```
+- **Never use:** NSPopover for main UI, right-click menus, icon-based quit buttons
 
 ### Plugin Settings
 
@@ -268,9 +280,8 @@ Sources/Pointless/
 │   └── CPU/
 │       └── CPUPlugin.swift      # Built-in CPU monitor
 └── UI/
-    ├── MenuBar.swift            # NSStatusItem management
+    ├── MenuBar.swift            # NSStatusItem + NSMenu management
     ├── MenuBarCombinedView.swift # Combines plugin menu bar views
-    ├── PopoverView.swift        # Popover content
     └── SettingsView.swift       # App settings window
 ```
 

@@ -75,24 +75,32 @@ enum Logger {
   /// Log debug-level message (only shown if POINTLESS_LOG_LEVEL=debug)
   static func debug(_ message: String, logger: os.Logger = pluginLifecycle) {
     guard minimumLevel <= .debug else { return }
-    logger.debug("🔍 \(message, privacy: .public)")
+    let formatted = "🔍 \(message)"
+    logger.debug("\(formatted, privacy: .public)")
+    print(formatted)  // Debug mode always prints to console
   }
 
   /// Log informational message (normal operation)
   static func info(_ message: String, logger: os.Logger = app) {
     guard minimumLevel <= .info else { return }
-    logger.info("✅ \(message, privacy: .public)")
+    let formatted = "✅ \(message)"
+    logger.info("\(formatted, privacy: .public)")
+    if minimumLevel == .debug { print(formatted) }
   }
 
   /// Log warning message (recoverable issue)
   static func warning(_ message: String, logger: os.Logger = pluginRegistry) {
     guard minimumLevel <= .warning else { return }
-    logger.warning("⚠️ \(message, privacy: .public)")
+    let formatted = "⚠️ \(message)"
+    logger.warning("\(formatted, privacy: .public)")
+    if minimumLevel == .debug { print(formatted) }
   }
 
   /// Log error message (failure condition)
   static func error(_ message: String, logger: os.Logger = pluginRegistry) {
     guard minimumLevel <= .error else { return }
-    logger.error("❌ \(message, privacy: .public)")
+    let formatted = "❌ \(message)"
+    logger.error("\(formatted, privacy: .public)")
+    if minimumLevel == .debug { print(formatted) }
   }
 }
