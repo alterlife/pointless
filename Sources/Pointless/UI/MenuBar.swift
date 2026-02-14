@@ -2,13 +2,12 @@ import Cocoa
 import SwiftUI
 import Combine
 
-/// Menu bar manager - displays plugin data and handles popover
+/// Menu bar manager - displays plugin data and handles menu
 @MainActor
 class MenuBar {
   static let shared = MenuBar()
 
   private var statusItem: NSStatusItem?
-  private var popover: NSPopover?
   private var cancellables = Set<AnyCancellable>()
 
   private init() {}
@@ -31,25 +30,66 @@ class MenuBar {
         combinedView.heightAnchor.constraint(equalToConstant: 22)
       ])
 
-      button.action = #selector(togglePopover)
+      button.action = #selector(showMenu)
       button.target = self
     }
-
-    // Create popover
-    popover = NSPopover()
-    popover?.contentSize = NSSize(width: 360, height: 400)
-    popover?.behavior = .transient
-    popover?.contentViewController = NSHostingController(rootView: PopoverView())
   }
 
-  @objc private func togglePopover() {
+  @objc private func showMenu() {
     guard let button = statusItem?.button else { return }
 
-    if popover?.isShown == true {
-      popover?.performClose(nil)
-    } else {
-      popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    let menu = NSMenu()
+
+    // Add plugin detail views
+    for plugin in PluginRegistry.shared.plugins {
+      let menuItem = NSMenuItem()
+
+      // Create SwiftUI content view
+      let contentView = ObservablePluginView(plugin: plugin) { p in
+        p.detailView()
+      }
+      .frame(width: 360)
+      .fixedSize(horizontal: false, vertical: true)
+
+      // Wrap in NSHostingView and size it
+      let hostingView = NSHostingView(rootView: contentView)
+      hostingView.translatesAutoresizingMaskIntoConstraints = false
+
+      // Force layout to get proper size
+      hostingView.layoutSubtreeIfNeeded()
+      let intrinsicSize = hostingView.intrinsicContentSize
+      let viewHeight = intrinsicSize.height > 0 ? intrinsicSize.height : 100
+      hostingView.frame = NSRect(x: 0, y: 0, width: 360, height: viewHeight)
+
+      menuItem.view = hostingView
+      menu.addItem(menuItem)
     }
+
+    // Add separator
+    menu.addItem(NSMenuItem.separator())
+
+    // Add Settings menu item
+    let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+    settingsItem.target = self
+    menu.addItem(settingsItem)
+
+    // Add Quit menu item
+    let quitItem = NSMenuItem(title: "Quit Pointless", action: #selector(quitApp), keyEquivalent: "q")
+    quitItem.target = self
+    menu.addItem(quitItem)
+
+    // Display the menu
+    statusItem?.menu = menu
+    button.performClick(nil)
+    statusItem?.menu = nil
+  }
+
+  @objc private func openSettings() {
+    SettingsWindowManager.shared.showSettings()
+  }
+
+  @objc private func quitApp() {
+    NSApplication.shared.terminate(nil)
   }
 
 }

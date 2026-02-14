@@ -19,6 +19,11 @@ opt_in_rules:
   - empty_count # Use isEmpty instead of count == 0
   - explicit_init # Avoid explicit .init() calls
   - redundant_nil_coalescing
+  - force_unwrapping # Treat force unwrapping as error
+  - force_cast # Treat force cast as error
+
+# Analyzer rules (require swiftlint analyze)
+analyzer_rules:
   - unused_import
 
 # Rule configurations
@@ -43,7 +48,11 @@ type_name:
   min_length: 3
   max_length: 50
 
-force_unwrapping: error
-force_cast: error
+# Force unwrapping and casting severity set via opt_in_rules
+force_unwrapping:
+  severity: error
+
+force_cast:
+  severity: error
 
 reporter: "xcode" # Xcode-style output
