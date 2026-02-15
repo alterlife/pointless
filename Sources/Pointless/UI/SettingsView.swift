@@ -4,19 +4,28 @@ import SwiftUI
 public struct SettingsView: View {
   public init() {}
 
-  @ObservedObject var registry = PluginRegistry.shared
+  @ObservedObject var pluginRegistry = PluginRegistry.shared
+  @ObservedObject var widgetRegistry = WidgetRegistry.shared
   @State private var values: [String: [String: Any]] = [:]
-  @State private var selectedTab: String = "general"
+  @State private var selectedTab: String = "menubar"
+  @State private var draggedMenuBarWidgetId: String?
+  @State private var draggedMenuWidgetId: String?
 
   public var body: some View {
     TabView(selection: $selectedTab) {
-      generalSettingsTab()
+      menuBarTab()
         .tabItem {
-          Label("General", systemImage: "gearshape")
+          Label("Menu Bar", systemImage: "macwindow")
         }
-        .tag("general")
+        .tag("menubar")
 
-      ForEach(registry.plugins, id: \.id) { plugin in
+      menuDetailTab()
+        .tabItem {
+          Label("Menu Detail", systemImage: "list.bullet")
+        }
+        .tag("menudetail")
+
+      ForEach(pluginRegistry.plugins, id: \.id) { plugin in
         pluginSettingsTab(for: plugin)
           .tabItem {
             Label(plugin.name, systemImage: "puzzlepiece")
@@ -24,44 +33,272 @@ public struct SettingsView: View {
           .tag(plugin.id)
       }
     }
-    .frame(minWidth: 600, minHeight: 500)
+    .frame(minWidth: 800, minHeight: 600)
     .onAppear {
       loadSettings()
     }
   }
 
+  // MARK: - Menu Bar Tab
+
   @ViewBuilder
-  private func generalSettingsTab() -> some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        Text("General Settings")
-          .font(.title)
-          .fontWeight(.bold)
-          .padding(.bottom, 8)
-
-        Text("Framework version: 1.0.0")
-          .font(.caption)
-          .foregroundColor(.secondary)
-
-        Divider()
-
-        Text("About Pointless")
-          .font(.headline)
-
-        Text("A minimal, plugin-driven macOS menu bar app. Add any functionality you want through plugins.")
-          .font(.body)
-          .foregroundColor(.secondary)
-      }
-      .padding()
+  private func menuBarTab() -> some View {
+    HStack(spacing: 0) {
+      menuBarActiveSection()
+      Divider()
+      menuBarLibrarySection()
     }
   }
+
+  @ViewBuilder
+  private func menuBarActiveSection() -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Active Widgets")
+        .font(.headline)
+        .padding(.horizontal)
+        .padding(.top)
+
+      Text("Drag to reorder • Drag to library to remove")
+        .font(.caption)
+        .foregroundColor(.secondary)
+        .padding(.horizontal)
+
+      // WYSIWYG Preview
+      HStack(spacing: 0) {
+        ForEach(Array(widgetRegistry.orderedMenuBarWidgets.enumerated()), id: \.element.id) { index, widget in
+          HStack(spacing: 4) {
+            Image(systemName: "line.3.horizontal")
+              .font(.caption2)
+              .foregroundColor(.secondary)
+
+            if index > 0 {
+              Text(" | ")
+                .foregroundColor(.secondary)
+                .font(.system(size: 12))
+            }
+
+            ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
+              widget.viewBuilder()
+            }
+          }
+          .padding(4)
+          .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+          .cornerRadius(4)
+          .onDrag {
+            draggedMenuBarWidgetId = widget.id
+            return NSItemProvider(object: widget.id as NSString)
+          }
+          .onDrop(of: [.text], delegate: MenuBarActiveDropDelegate(
+            targetWidgetId: widget.id,
+            draggedWidgetId: $draggedMenuBarWidgetId,
+            widgetRegistry: widgetRegistry
+          ))
+        }
+
+        Spacer()
+      }
+      .padding()
+      .frame(maxWidth: .infinity, minHeight: 200)
+      .background(Color(NSColor.controlBackgroundColor))
+      .cornerRadius(8)
+      .padding(.horizontal)
+
+      Spacer()
+    }
+    .frame(maxWidth: .infinity)
+  }
+
+  @ViewBuilder
+  private func menuBarLibrarySection() -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Library")
+        .font(.headline)
+        .padding(.horizontal)
+        .padding(.top)
+
+      Text("Drag widgets to add them")
+        .font(.caption)
+        .foregroundColor(.secondary)
+        .padding(.horizontal)
+
+      VStack(spacing: 8) {
+        ForEach(getInactiveMenuBarWidgets(), id: \.id) { widget in
+          HStack(spacing: 4) {
+            Image(systemName: "line.3.horizontal")
+              .font(.caption2)
+              .foregroundColor(.secondary)
+
+            ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
+              widget.viewBuilder()
+            }
+          }
+          .padding(8)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(Color(NSColor.controlBackgroundColor))
+          .cornerRadius(6)
+          .opacity(0.7)
+          .onDrag {
+            draggedMenuBarWidgetId = widget.id
+            widgetRegistry.setMenuBarVisibility(widgetId: widget.id, isVisible: true)
+            return NSItemProvider(object: widget.id as NSString)
+          }
+        }
+
+        if getInactiveMenuBarWidgets().isEmpty {
+          Text("All widgets active")
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding()
+        }
+      }
+      .padding()
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+      .cornerRadius(8)
+      .padding(.horizontal)
+      .onDrop(of: [.text], delegate: MenuBarRemoveDropDelegate(
+        draggedWidgetId: $draggedMenuBarWidgetId,
+        widgetRegistry: widgetRegistry
+      ))
+
+      Spacer()
+    }
+    .frame(width: 250)
+  }
+
+  // MARK: - Menu Detail Tab
+
+  @ViewBuilder
+  private func menuDetailTab() -> some View {
+    HStack(spacing: 0) {
+      menuDetailActiveSection()
+      Divider()
+      menuDetailLibrarySection()
+    }
+  }
+
+  @ViewBuilder
+  private func menuDetailActiveSection() -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Active Widgets")
+        .font(.headline)
+        .padding(.horizontal)
+        .padding(.top)
+
+      Text("Drag to reorder • Drag to library to remove")
+        .font(.caption)
+        .foregroundColor(.secondary)
+        .padding(.horizontal)
+
+      // WYSIWYG Preview
+      ScrollView {
+        VStack(spacing: 0) {
+          ForEach(widgetRegistry.orderedMenuWidgets, id: \.id) { widget in
+            VStack(spacing: 0) {
+              HStack(spacing: 4) {
+                Image(systemName: "line.3.horizontal")
+                  .font(.caption2)
+                  .foregroundColor(.secondary)
+
+                ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
+                  AnyView(widget.viewBuilder().frame(width: 320))
+                }
+              }
+              .padding(.vertical, 8)
+
+              if widget.id != widgetRegistry.orderedMenuWidgets.last?.id {
+                Divider()
+              }
+            }
+            .onDrag {
+              draggedMenuWidgetId = widget.id
+              return NSItemProvider(object: widget.id as NSString)
+            }
+            .onDrop(of: [.text], delegate: MenuActiveDropDelegate(
+              targetWidgetId: widget.id,
+              draggedWidgetId: $draggedMenuWidgetId,
+              widgetRegistry: widgetRegistry
+            ))
+          }
+        }
+      }
+      .frame(maxHeight: .infinity)
+      .background(Color(NSColor.controlBackgroundColor))
+      .cornerRadius(8)
+      .padding(.horizontal)
+
+      Spacer()
+    }
+    .frame(maxWidth: .infinity)
+  }
+
+  @ViewBuilder
+  private func menuDetailLibrarySection() -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Library")
+        .font(.headline)
+        .padding(.horizontal)
+        .padding(.top)
+
+      Text("Drag widgets to add them")
+        .font(.caption)
+        .foregroundColor(.secondary)
+        .padding(.horizontal)
+
+      VStack(spacing: 8) {
+        ForEach(getInactiveMenuWidgets(), id: \.id) { widget in
+          HStack(spacing: 4) {
+            Image(systemName: "line.3.horizontal")
+              .font(.caption2)
+              .foregroundColor(.secondary)
+
+            ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
+              AnyView(widget.viewBuilder())
+            }
+          }
+          .padding(8)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(Color(NSColor.controlBackgroundColor))
+          .cornerRadius(6)
+          .opacity(0.7)
+          .onDrag {
+            draggedMenuWidgetId = widget.id
+            widgetRegistry.setMenuVisibility(widgetId: widget.id, isVisible: true)
+            return NSItemProvider(object: widget.id as NSString)
+          }
+        }
+
+        if getInactiveMenuWidgets().isEmpty {
+          Text("All widgets active")
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding()
+        }
+      }
+      .padding()
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+      .cornerRadius(8)
+      .padding(.horizontal)
+      .onDrop(of: [.text], delegate: MenuRemoveDropDelegate(
+        draggedWidgetId: $draggedMenuWidgetId,
+        widgetRegistry: widgetRegistry
+      ))
+
+      Spacer()
+    }
+    .frame(width: 250)
+  }
+
+  // MARK: - Plugin Settings Tab
 
   @ViewBuilder
   private func pluginSettingsTab(for plugin: AnyPlugin) -> some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        previewBox(for: plugin)
-          .frame(maxWidth: .infinity, alignment: .trailing)
+        Text("\(plugin.name) Settings")
+          .font(.title)
+          .fontWeight(.bold)
 
         Divider()
 
@@ -76,26 +313,6 @@ public struct SettingsView: View {
         }
       }
       .padding()
-    }
-  }
-
-  @ViewBuilder
-  private func previewBox(for plugin: AnyPlugin) -> some View {
-    VStack {
-      Text("Preview")
-        .font(.caption)
-        .foregroundColor(.secondary)
-
-      ObservablePluginView(plugin: plugin) { observedPlugin in
-        observedPlugin.detailView()
-      }
-      .frame(width: 360)
-      .background(Color(NSColor.controlBackgroundColor))
-      .cornerRadius(8)
-      .overlay(
-        RoundedRectangle(cornerRadius: 8)
-          .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-      )
     }
   }
 
@@ -203,7 +420,7 @@ public struct SettingsView: View {
 
     saveSettings(for: pluginID)
 
-    if let plugin = registry.plugins.first(where: { $0.id == pluginID }) {
+    if let plugin = pluginRegistry.plugins.first(where: { $0.id == pluginID }) {
       plugin.configure(values[pluginID] ?? [:])
     }
   }
@@ -211,7 +428,7 @@ public struct SettingsView: View {
   // MARK: - Persistence
 
   private func loadSettings() {
-    for plugin in registry.plugins {
+    for plugin in pluginRegistry.plugins {
       if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(plugin.id)") {
         values[plugin.id] = saved
       } else {
@@ -228,32 +445,5 @@ public struct SettingsView: View {
     if let pluginValues = values[pluginID] {
       UserDefaults.standard.set(pluginValues, forKey: "plugin.\(pluginID)")
     }
-  }
-}
-
-// MARK: - Color Extension
-
-extension Color {
-  init?(hex: String) {
-    var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-    hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
-
-    var rgb: UInt64 = 0
-
-    guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
-
-    let red = Double((rgb & 0xFF0000) >> 16) / 255.0
-    let green = Double((rgb & 0x00FF00) >> 8) / 255.0
-    let blue = Double(rgb & 0x0000FF) / 255.0
-
-    self.init(red: red, green: green, blue: blue)
-  }
-
-  func toHex() -> String {
-    guard let components = NSColor(self).cgColor.components else { return "#007AFF" }
-    let red = Int(components[0] * 255.0)
-    let green = Int(components[1] * 255.0)
-    let blue = Int(components[2] * 255.0)
-    return String(format: "#%02X%02X%02X", red, green, blue)
   }
 }

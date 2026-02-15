@@ -148,6 +148,63 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
     saveSettings(values)
   }
 
+  // MARK: - Widget System
+
+  func menuBarWidgets() -> [MenuBarWidget] {
+    [
+      MenuBarWidget(
+        id: "\(id).menubar",
+        pluginId: id,
+        name: "CPU Status",
+        priority: 10
+      ) {
+        HStack(spacing: 4) {
+          if self.showIcon {
+            Image(systemName: "cpu")
+              .font(.system(size: 11))
+              .foregroundColor(self.primaryColor())
+          }
+          Text(String(format: "%.0f%%", self.totalUsage * 100))
+            .font(.system(size: 12))
+        }
+      }
+    ]
+  }
+
+  func menuWidgets() -> [MenuWidget] {
+    [
+      MenuWidget(
+        id: "\(id).detail",
+        pluginId: id,
+        name: "CPU Details",
+        priority: 10
+      ) {
+        VStack(alignment: .leading, spacing: 12) {
+          if self.showIcon {
+            Image(systemName: "cpu")
+              .font(.title2)
+              .foregroundColor(self.primaryColor())
+          }
+
+          if self.showCores && !self.coreUsages.isEmpty {
+            self.coreViews()
+          } else {
+            self.totalViews()
+          }
+
+          if self.showUpdateText {
+            Text("Updates every \(String(format: "%.0f", self.updateInterval))s")
+              .font(.caption)
+              .foregroundColor(.secondary)
+          }
+        }
+        .padding()
+      }
+    ]
+  }
+
+  // MARK: - Legacy Views
+
   func detailView() -> AnyView {
     AnyView(
       VStack(alignment: .leading, spacing: 12) {

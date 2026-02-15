@@ -8,6 +8,7 @@ class PluginRegistry: ObservableObject {
   static let shared = PluginRegistry()
 
   @Published private(set) var plugins: [AnyPlugin] = []
+  private var cancellables = Set<AnyCancellable>()
 
   private init() {}
 
@@ -30,6 +31,12 @@ class PluginRegistry: ObservableObject {
       Logger.warning("Plugin with ID '\(wrapped.id)' already registered. Skipping.")
       return
     }
+
+    // Observe plugin changes and forward to this registry
+    wrapped.objectWillChange.sink { [weak self] _ in
+      self?.objectWillChange.send()
+    }
+    .store(in: &cancellables)
 
     plugins.append(wrapped)
     Logger.info("Registered plugin: \(wrapped.name) (\(wrapped.id))", logger: Logger.pluginRegistry)

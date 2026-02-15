@@ -37,6 +37,12 @@ protocol Plugin: ObservableObject {
 
   /// Stop the plugin
   func stop()
+
+  /// Menu bar widgets provided by this plugin
+  func menuBarWidgets() -> [MenuBarWidget]
+
+  /// Menu widgets provided by this plugin
+  func menuWidgets() -> [MenuWidget]
 }
 
 // Default implementation for menuBarView - plugins can opt-in to custom views
@@ -53,6 +59,16 @@ extension Plugin {
 
   /// Default: no initialization needed
   func initialize() { }
+
+  /// Default: no menu bar widgets
+  func menuBarWidgets() -> [MenuBarWidget] {
+    []
+  }
+
+  /// Default: no menu widgets
+  func menuWidgets() -> [MenuWidget] {
+    []
+  }
 }
 
 // Type-erased wrapper for Plugin to use in arrays
@@ -69,6 +85,8 @@ class AnyPlugin: ObservableObject {
   private let _start: () -> Void
   private let _stop: () -> Void
   private let _objectWillChange: () -> ObservableObjectPublisher
+  private let _menuBarWidgets: () -> [MenuBarWidget]
+  private let _menuWidgets: () -> [MenuWidget]
 
   var menuBarText: String {
     _menuBarText()
@@ -93,6 +111,8 @@ class AnyPlugin: ObservableObject {
     self._configure = { plugin.configure($0) }
     self._start = { plugin.start() }
     self._stop = { plugin.stop() }
+    self._menuBarWidgets = { plugin.menuBarWidgets() }
+    self._menuWidgets = { plugin.menuWidgets() }
 
     // Type-erased publisher - conditional cast with clear error
     let publisher = plugin.objectWillChange
@@ -131,6 +151,14 @@ class AnyPlugin: ObservableObject {
 
   func stop() {
     _stop()
+  }
+
+  func menuBarWidgets() -> [MenuBarWidget] {
+    _menuBarWidgets()
+  }
+
+  func menuWidgets() -> [MenuWidget] {
+    _menuWidgets()
   }
 }
 

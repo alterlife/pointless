@@ -37,39 +37,27 @@ class MenuBarCombinedView: NSView {
   }
 }
 
-/// SwiftUI view that renders all plugin views
+/// SwiftUI view that renders all widget views
 struct MenuBarContentView: View {
-  @ObservedObject var registry = PluginRegistry.shared
+  @ObservedObject var widgetRegistry = WidgetRegistry.shared
 
   var body: some View {
-    let enabledPlugins = registry.plugins.filter { $0.isEnabled }
-
     HStack(spacing: 0) {
-      if enabledPlugins.isEmpty {
+      if widgetRegistry.orderedMenuBarWidgets.isEmpty {
         Image(systemName: "circle.grid.2x2")
           .foregroundColor(.secondary)
           .font(.system(size: 12))
       } else {
-        ForEach(Array(registry.plugins.enumerated()), id: \.element.id) { index, plugin in
-          ObservablePluginView(plugin: plugin) { observedPlugin in
-            if observedPlugin.isEnabled {
-              AnyView(
-                HStack(spacing: 0) {
-                  if index > 0 && registry.plugins.prefix(index).contains(where: { $0.isEnabled }) {
-                    Text(" | ")
-                      .foregroundColor(.secondary)
-                      .font(.system(size: 12))
-                  }
+        ForEach(Array(widgetRegistry.orderedMenuBarWidgets.enumerated()), id: \.element.id) { index, widget in
+          HStack(spacing: 0) {
+            if index > 0 {
+              Text(" | ")
+                .foregroundColor(.secondary)
+                .font(.system(size: 12))
+            }
 
-                  if let customView = observedPlugin.menuBarView() {
-                    AnyView(MenuBarPluginViewWrapper(view: customView))
-                  } else {
-                    AnyView(Text(observedPlugin.menuBarText).font(.system(size: 12)))
-                  }
-                }
-              )
-            } else {
-              AnyView(EmptyView())
+            ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
+              widget.viewBuilder()
             }
           }
         }
@@ -79,14 +67,4 @@ struct MenuBarContentView: View {
   }
 }
 
-/// Wrapper to embed NSView in SwiftUI
-struct MenuBarPluginViewWrapper: NSViewRepresentable {
-  let view: NSView
 
-  func makeNSView(context: Context) -> NSView {
-    return view
-  }
-
-  func updateNSView(_ nsView: NSView, context: Context) {
-  }
-}

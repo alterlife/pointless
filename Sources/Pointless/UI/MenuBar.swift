@@ -37,14 +37,12 @@ class MenuBar {
 
     let menu = NSMenu()
 
-    // Add plugin detail views (only enabled plugins)
-    let enabledPlugins = PluginRegistry.shared.plugins.filter { $0.isEnabled }
-
-    for plugin in enabledPlugins {
+    // Add widget detail views from WidgetRegistry
+    for widget in WidgetRegistry.shared.orderedMenuWidgets {
       let menuItem = NSMenuItem()
 
-      let contentView = ObservablePluginView(plugin: plugin) { observedPlugin in
-        observedPlugin.detailView()
+      let contentView = ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
+        widget.viewBuilder()
       }
       .frame(width: 360)
       .fixedSize(horizontal: false, vertical: true)
