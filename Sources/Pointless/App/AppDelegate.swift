@@ -22,11 +22,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
       Logger.info("Starting \(PluginRegistry.shared.plugins.count) plugin(s)")
 
       for plugin in PluginRegistry.shared.plugins {
-        let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(plugin.id)") ?? [:]
-        plugin.configure(saved)
-      }
-
-      for plugin in PluginRegistry.shared.plugins {
         plugin.start()
       }
 

@@ -90,13 +90,28 @@ final class PluginSettingsTests: XCTestCase {
     XCTAssertEqual(slider.label, "Test")
   }
 
+  func testColorSetting() {
+    let settings = PluginSettings(definitions: [
+      .color(key: "customColor", label: "Custom Color", defaultValue: "#007AFF")
+    ])
+
+    if case .color(let key, let label, let defaultValue) = settings.definitions.first! {
+      XCTAssertEqual(key, "customColor")
+      XCTAssertEqual(label, "Custom Color")
+      XCTAssertEqual(defaultValue, "#007AFF")
+    } else {
+      XCTFail("Expected color definition")
+    }
+  }
+
   func testMultipleSettings() {
     let settings = PluginSettings(definitions: [
       .slider(key: "interval", label: "Refresh Interval", range: 1.0...10.0, defaultValue: 5.0),
       .toggle(key: "enabled", label: "Enabled", defaultValue: true),
-      .dropdown(key: "color", label: "Color", options: ["Red", "Green", "Blue"], defaultValue: "Red")
+      .dropdown(key: "color", label: "Color", options: ["Red", "Green", "Blue"], defaultValue: "Red"),
+      .color(key: "customColor", label: "Custom Color", defaultValue: "#FF0000")
     ])
 
-    XCTAssertEqual(settings.definitions.count, 3)
+    XCTAssertEqual(settings.definitions.count, 4)
   }
 }

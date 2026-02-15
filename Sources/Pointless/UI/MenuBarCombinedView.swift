@@ -42,20 +42,35 @@ struct MenuBarContentView: View {
   @ObservedObject var registry = PluginRegistry.shared
 
   var body: some View {
-    HStack(spacing: 0) {
-      ForEach(Array(registry.plugins.enumerated()), id: \.element.id) { index, plugin in
-        if index > 0 {
-          Text(" | ")
-            .foregroundColor(.secondary)
-            .font(.system(size: 12))
-        }
+    let enabledPlugins = registry.plugins.filter { $0.isEnabled }
 
-        // Use custom view if provided, otherwise fall back to text
-        ObservablePluginView(plugin: plugin) { observedPlugin in
-          if let customView = observedPlugin.menuBarView() {
-            return AnyView(MenuBarPluginViewWrapper(view: customView))
-          } else {
-            return AnyView(Text(observedPlugin.menuBarText).font(.system(size: 12)))
+    HStack(spacing: 0) {
+      if enabledPlugins.isEmpty {
+        Image(systemName: "circle.grid.2x2")
+          .foregroundColor(.secondary)
+          .font(.system(size: 12))
+      } else {
+        ForEach(Array(registry.plugins.enumerated()), id: \.element.id) { index, plugin in
+          ObservablePluginView(plugin: plugin) { observedPlugin in
+            if observedPlugin.isEnabled {
+              AnyView(
+                HStack(spacing: 0) {
+                  if index > 0 && registry.plugins.prefix(index).contains(where: { $0.isEnabled }) {
+                    Text(" | ")
+                      .foregroundColor(.secondary)
+                      .font(.system(size: 12))
+                  }
+
+                  if let customView = observedPlugin.menuBarView() {
+                    AnyView(MenuBarPluginViewWrapper(view: customView))
+                  } else {
+                    AnyView(Text(observedPlugin.menuBarText).font(.system(size: 12)))
+                  }
+                }
+              )
+            } else {
+              AnyView(EmptyView())
+            }
           }
         }
       }

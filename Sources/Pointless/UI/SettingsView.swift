@@ -6,63 +6,115 @@ public struct SettingsView: View {
 
   @ObservedObject var registry = PluginRegistry.shared
   @State private var values: [String: [String: Any]] = [:]
+  @State private var selectedTab: String = "general"
 
   public var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        Text("Settings")
-          .font(.title)
-          .fontWeight(.bold)
-          .padding(.bottom, 8)
-
-        ForEach(registry.plugins, id: \.id) { plugin in
-          pluginSection(for: plugin)
+    TabView(selection: $selectedTab) {
+      generalSettingsTab()
+        .tabItem {
+          Label("General", systemImage: "gearshape")
         }
+        .tag("general")
+
+      ForEach(registry.plugins, id: \.id) { plugin in
+        pluginSettingsTab(for: plugin)
+          .tabItem {
+            Label(plugin.name, systemImage: "puzzlepiece")
+          }
+          .tag(plugin.id)
       }
-      .padding()
     }
-    .frame(minWidth: 400, minHeight: 300)
+    .frame(minWidth: 600, minHeight: 500)
     .onAppear {
       loadSettings()
     }
   }
 
   @ViewBuilder
-  private func pluginSection(for plugin: AnyPlugin) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text(plugin.name)
-        .font(.headline)
+  private func generalSettingsTab() -> some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        Text("General Settings")
+          .font(.title)
+          .fontWeight(.bold)
+          .padding(.bottom, 8)
 
-      if plugin.settings().definitions.isEmpty {
-        Text("No settings available")
+        Text("Framework version: 1.0.0")
           .font(.caption)
           .foregroundColor(.secondary)
-      } else {
-        ForEach(plugin.settings().definitions) { definition in
-          settingView(for: definition, plugin: plugin)
+
+        Divider()
+
+        Text("About Pointless")
+          .font(.headline)
+
+        Text("A minimal, plugin-driven macOS menu bar app. Add any functionality you want through plugins.")
+          .font(.body)
+          .foregroundColor(.secondary)
+      }
+      .padding()
+    }
+  }
+
+  @ViewBuilder
+  private func pluginSettingsTab(for plugin: AnyPlugin) -> some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        previewBox(for: plugin)
+          .frame(maxWidth: .infinity, alignment: .trailing)
+
+        Divider()
+
+        if plugin.settings().definitions.isEmpty {
+          Text("No settings available")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        } else {
+          ForEach(plugin.settings().definitions) { definition in
+            settingView(for: definition, plugin: plugin)
+          }
         }
       }
+      .padding()
+    }
+  }
 
-      Divider()
+  @ViewBuilder
+  private func previewBox(for plugin: AnyPlugin) -> some View {
+    VStack {
+      Text("Preview")
+        .font(.caption)
+        .foregroundColor(.secondary)
+
+      ObservablePluginView(plugin: plugin) { observedPlugin in
+        observedPlugin.detailView()
+      }
+      .frame(width: 360)
+      .background(Color(NSColor.controlBackgroundColor))
+      .cornerRadius(8)
+      .overlay(
+        RoundedRectangle(cornerRadius: 8)
+          .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+      )
     }
   }
 
   @ViewBuilder
   private func settingView(for definition: SettingDefinition, plugin: AnyPlugin) -> some View {
     switch definition {
-    case .slider(let key, let label, let range, let defaultValue):
+    case .slider(let key, let label, let range, let defaultValue, let step):
       VStack(alignment: .leading) {
         Text(label)
           .font(.subheadline)
         HStack {
           Slider(
             value: binding(for: plugin.id, key: key, default: defaultValue),
-            in: range
+            in: range,
+            step: step
           )
-          Text(String(
-            format: "%.1f",
-            getValue(for: plugin.id, key: key, default: defaultValue) as? Double ?? defaultValue
-          ))
+          let currentValue = getValue(for: plugin.id, key: key, default: defaultValue) as? Double ?? defaultValue
+          let format = step >= 1.0 ? "%.0f" : "%.1f"
+          Text(String(format: format, currentValue))
             .font(.caption)
             .foregroundColor(.secondary)
             .frame(width: 40)
@@ -99,7 +151,33 @@ public struct SettingsView: View {
         TextField("Press shortcut...", text: binding(for: plugin.id, key: key, default: defaultValue))
           .textFieldStyle(.roundedBorder)
       }
+
+    case .color(let key, let label, let defaultValue):
+      let colorMode = getValue(for: plugin.id, key: "colorMode", default: "dynamic") as? String ?? "dynamic"
+      if colorMode == "custom" {
+        VStack(alignment: .leading) {
+          Text(label)
+            .font(.subheadline)
+          ColorPicker(
+            "",
+            selection: colorBinding(for: plugin.id, key: key, default: defaultValue),
+            supportsOpacity: false
+          )
+        }
+      }
     }
+  }
+
+  private func colorBinding(for pluginID: String, key: String, default defaultValue: String) -> Binding<Color> {
+    Binding(
+      get: {
+        let hexString = getValue(for: pluginID, key: key, default: defaultValue) as? String ?? defaultValue
+        return Color(hex: hexString) ?? Color.blue
+      },
+      set: { newColor in
+        setValue(newColor.toHex(), for: pluginID, key: key)
+      }
+    )
   }
 
   // MARK: - Bindings
@@ -137,7 +215,6 @@ public struct SettingsView: View {
       if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(plugin.id)") {
         values[plugin.id] = saved
       } else {
-        // Initialize with defaults
         var defaults: [String: Any] = [:]
         for definition in plugin.settings().definitions {
           defaults[definition.key] = definition.defaultValue
@@ -151,5 +228,32 @@ public struct SettingsView: View {
     if let pluginValues = values[pluginID] {
       UserDefaults.standard.set(pluginValues, forKey: "plugin.\(pluginID)")
     }
+  }
+}
+
+// MARK: - Color Extension
+
+extension Color {
+  init?(hex: String) {
+    var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+    hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+
+    var rgb: UInt64 = 0
+
+    guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
+
+    let red = Double((rgb & 0xFF0000) >> 16) / 255.0
+    let green = Double((rgb & 0x00FF00) >> 8) / 255.0
+    let blue = Double(rgb & 0x0000FF) / 255.0
+
+    self.init(red: red, green: green, blue: blue)
+  }
+
+  func toHex() -> String {
+    guard let components = NSColor(self).cgColor.components else { return "#007AFF" }
+    let red = Int(components[0] * 255.0)
+    let green = Int(components[1] * 255.0)
+    let blue = Int(components[2] * 255.0)
+    return String(format: "#%02X%02X%02X", red, green, blue)
   }
 }

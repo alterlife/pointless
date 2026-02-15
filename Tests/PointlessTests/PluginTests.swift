@@ -9,6 +9,9 @@ class MockPlugin: ObservableObject, Plugin {
   let name: String
 
   @Published var menuBarText = "MOCK"
+  @Published var isEnabled = true
+  @Published var updateInterval: TimeInterval = 5.0
+
   var startCalled = false
   var stopCalled = false
   var configuredValues: [String: Any] = [:]
@@ -18,14 +21,21 @@ class MockPlugin: ObservableObject, Plugin {
     self.name = name
   }
 
-  var settings: PluginSettings {
-    PluginSettings(definitions: [
-      .slider(key: "interval", label: "Interval", range: 1.0...10.0, defaultValue: 5.0)
+  func initialize() {
+    declareSettings([
+      .slider(key: "interval", label: "Interval", range: 1.0...10.0, defaultValue: 5.0, step: 1.0),
+      .toggle(key: "enabled", label: "Enabled", defaultValue: true)
     ])
   }
 
   func configure(_ values: [String: Any]) {
     configuredValues = values
+    if let interval = values["interval"] as? TimeInterval {
+      updateInterval = interval
+    }
+    if let enabled = values["enabled"] as? Bool {
+      isEnabled = enabled
+    }
   }
 
   func start() {
@@ -154,5 +164,54 @@ final class PluginRegistryTests: XCTestCase {
     registry.register(plugins)
 
     XCTAssertEqual(registry.plugins.count, 2)
+  }
+}
+
+final class PluginHelpersTests: XCTestCase {
+  func testDeclareSettings() {
+    let plugin = MockPlugin()
+    plugin.initialize()
+
+    let settings = plugin.settings()
+    XCTAssertEqual(settings.definitions.count, 2)
+    XCTAssertEqual(settings.definitions[0].key, "interval")
+    XCTAssertEqual(settings.definitions[1].key, "enabled")
+  }
+
+  func testPluginEnableDisable() {
+    let plugin = MockPlugin()
+    XCTAssertTrue(plugin.isEnabled)
+
+    plugin.configure(["enabled": false])
+    XCTAssertFalse(plugin.isEnabled)
+
+    plugin.configure(["enabled": true])
+    XCTAssertTrue(plugin.isEnabled)
+  }
+
+  func testUpdateInterval() {
+    let plugin = MockPlugin()
+    XCTAssertEqual(plugin.updateInterval, 5.0)
+
+    plugin.configure(["interval": 10.0])
+    XCTAssertEqual(plugin.updateInterval, 10.0)
+  }
+
+  func testSettingsPersistence() {
+    let plugin = MockPlugin()
+    let testKey = "plugin.\(plugin.id)"
+
+    // Save settings
+    let testValues: [String: Any] = ["interval": 7.0, "enabled": false]
+    plugin.saveSettings(testValues)
+
+    // Load settings
+    let loaded = UserDefaults.standard.dictionary(forKey: testKey)
+    XCTAssertNotNil(loaded)
+    XCTAssertEqual(loaded?["interval"] as? Double, 7.0)
+    XCTAssertEqual(loaded?["enabled"] as? Bool, false)
+
+    // Cleanup
+    UserDefaults.standard.removeObject(forKey: testKey)
   }
 }

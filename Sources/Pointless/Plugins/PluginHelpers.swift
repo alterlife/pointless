@@ -2,170 +2,167 @@ import Combine
 import Foundation
 import OSLog
 
-// MARK: - Plugin State Storage
+// MARK: - Plugin Runtime State
 
-/// Internal storage for plugin runtime state
-private var pluginState: [ObjectIdentifier: PluginState] = [:]
+private var runtimeState: [ObjectIdentifier: RuntimeState] = [:]
 
-/// Runtime state for a plugin instance
-class PluginState {
-  var settingDefinitions: [SettingDefinition] = []
+class RuntimeState {
+  var definitions: [SettingDefinition] = []
   var timer: Timer?
-  var timerAction: (() -> Void)?
-  var timerInterval: TimeInterval = 2.0
-  var cancellables: Set<AnyCancellable> = []
+  var updateAction: (() -> Void)?
+  var updateInterval: TimeInterval = 2.0
+  var subscriptions: Set<AnyCancellable> = []
 }
 
 // MARK: - Plugin Extension Helpers
 
 extension Plugin {
-  /// Access internal state for this plugin instance
-  fileprivate var state: PluginState {
+  fileprivate var runtime: RuntimeState {
     let key = ObjectIdentifier(self)
-    if pluginState[key] == nil {
-      pluginState[key] = PluginState()
+
+    if let existing = runtimeState[key] {
+      return existing
     }
-    guard let state = pluginState[key] else {
-      fatalError("Failed to create plugin state for \(id)")
-    }
-    return state
+
+    let newState = RuntimeState()
+    runtimeState[key] = newState
+    return newState
   }
 
-  // MARK: Helper Methods (called by plugins in initialize())
+  // MARK: Helper Methods
 
   /// Declare settings for this plugin
-  /// - Parameter definitions: Array of setting definitions
   ///
   /// Example:
   /// ```
-  /// settings([
-  ///   .slider("updateInterval", label: "Update Interval", range: 1.0...60.0, default: 2.0)
+  /// declareSettings([
+  ///   .slider(key: "updateInterval", label: "Update Interval",
+  ///           range: 1.0...60.0, defaultValue: 2.0)
   /// ])
   /// ```
-  func settings(_ definitions: [SettingDefinition]) {
-    state.settingDefinitions = definitions
-
-    for def in definitions {
-      if let saved = UserDefaults.standard.object(forKey: "plugin.\(id).\(def.key)") {
-        configure([def.key: saved])
-      }
-    }
+  func declareSettings(_ definitions: [SettingDefinition]) {
+    runtime.definitions = definitions
   }
 
-  /// Setup periodic timer with dynamic interval
-  /// - Parameters:
-  ///   - interval: KeyPath to the interval property
-  ///   - action: Closure to execute on each timer tick
+  /// Setup periodic updates with dynamic interval
+  ///
+  /// The timer automatically reconfigures when the interval property changes.
   ///
   /// Example:
   /// ```
-  /// periodicUpdate(interval: \.updateInterval) { [weak self] in
-  ///   self?.update()
+  /// setupPeriodicUpdate(interval: \.updateInterval) { [weak self] in
+  ///   self?.refresh()
   /// }
   /// ```
-  func periodicUpdate(interval: KeyPath<Self, TimeInterval>, action: @escaping () -> Void) {
-    state.timerAction = action
-    state.timerInterval = self[keyPath: interval]
+  func setupPeriodicUpdate(
+    interval: KeyPath<Self, TimeInterval>,
+    action: @escaping () -> Void
+  ) {
+    runtime.updateAction = action
+    runtime.updateInterval = self[keyPath: interval]
 
-    // When any @Published property changes, check if interval changed and restart timer if needed
     objectWillChange.sink { [weak self] _ in
       guard let self = self else { return }
-      let newInterval = self[keyPath: interval]
-      if newInterval != self.state.timerInterval {
-        self.state.timerInterval = newInterval
-        Logger.debug(
-          "Timer interval changed to \(newInterval)s for \(self.id)",
-          logger: Logger.pluginLifecycle
-        )
-        if self.state.timer != nil {
-          self.recreateTimer()
+      let currentInterval = self[keyPath: interval]
+
+      if currentInterval != self.runtime.updateInterval {
+        self.runtime.updateInterval = currentInterval
+        if self.isEnabled {
+          self.restartTimer()
         }
       }
-    }
-    .store(in: &state.cancellables)
-  }
 
-  /// Recreate timer with current interval
-  private func recreateTimer() {
-    state.timer?.invalidate()
-    state.timer = nil
-
-    guard let action = state.timerAction else { return }
-
-    let timer = Timer.scheduledTimer(
-      withTimeInterval: state.timerInterval,
-      repeats: true
-    ) { _ in
-      Task { @MainActor in
-        action()
+      if self.isEnabled && self.runtime.timer == nil {
+        self.startTimer()
+      } else if !self.isEnabled && self.runtime.timer != nil {
+        self.stopTimer()
       }
     }
+    .store(in: &runtime.subscriptions)
+  }
 
-    RunLoop.main.add(timer, forMode: .common)
-    state.timer = timer
+  private func restartTimer() {
+    guard runtime.timer != nil else { return }
+
+    stopTimer()
+    startTimer()
 
     Logger.debug(
-      "Timer recreated with interval \(self.state.timerInterval)s for \(self.id)",
+      "Timer restarted with interval \(runtime.updateInterval)s",
       logger: Logger.pluginLifecycle
     )
   }
 
-  // MARK: Default Protocol Implementations
-
-  /// Default settings - returns configured definitions
-  func settings() -> PluginSettings {
-    PluginSettings(definitions: state.settingDefinitions)
-  }
-
-  /// Default configure - updates properties via reflection and saves to UserDefaults
-  func configure(_ values: [String: Any]) {
-    for (key, value) in values {
-      UserDefaults.standard.set(value, forKey: "plugin.\(id).\(key)")
-
-      // Use reflection to find and update matching properties via KVC
-      let mirror = Mirror(reflecting: self)
-      for child in mirror.children {
-        if let propertyName = child.label, propertyName == key {
-          if let writable = self as? AnyObject {
-            writable.setValue(value, forKey: key)
-          }
-        }
-      }
-    }
-  }
-
-  /// Default start - starts the periodic timer if configured
-  func start() {
-    guard let action = state.timerAction else {
-      Logger.debug("No timer action configured for \(self.id)", logger: Logger.pluginLifecycle)
-      return
-    }
+  private func startTimer() {
+    guard let action = runtime.updateAction else { return }
 
     let timer = Timer.scheduledTimer(
-      withTimeInterval: state.timerInterval,
+      withTimeInterval: runtime.updateInterval,
       repeats: true
     ) { _ in
-      Task { @MainActor in
-        action()
-      }
+      Task { @MainActor in action() }
     }
 
     RunLoop.main.add(timer, forMode: .common)
-    state.timer = timer
+    runtime.timer = timer
+  }
 
-    Logger.info("Started plugin \(self.id) (interval: \(self.state.timerInterval)s)")
+  private func stopTimer() {
+    runtime.timer?.invalidate()
+    runtime.timer = nil
+  }
+
+  // MARK: Default Protocol Implementations
+
+  func settings() -> PluginSettings {
+    PluginSettings(definitions: runtime.definitions)
+  }
+
+  func saveSettings(_ values: [String: Any]) {
+    let defaults = UserDefaults.standard
+    var currentSettings = defaults.dictionary(forKey: "plugin.\(id)") ?? [:]
+
+    for (key, value) in values {
+      currentSettings[key] = value
+    }
+
+    defaults.set(currentSettings, forKey: "plugin.\(id)")
+  }
+
+  func configure(_ values: [String: Any]) {
+    saveSettings(values)
+  }
+
+  func start() {
+    if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(id)") {
+      configure(saved)
+    }
+
+    guard isEnabled else {
+      Logger.debug("Plugin \(id) is disabled, skipping start", logger: Logger.pluginLifecycle)
+      return
+    }
+
+    guard runtime.updateAction != nil else {
+      Logger.debug("No update action configured", logger: Logger.pluginLifecycle)
+      return
+    }
+
+    startTimer()
+    Logger.info("Started plugin \(id) (interval: \(runtime.updateInterval)s)")
 
     Task { @MainActor in
-      action()
+      runtime.updateAction?()
     }
   }
 
-  /// Default stop - stops the periodic timer
   func stop() {
-    state.timer?.invalidate()
-    state.timer = nil
-    state.cancellables.removeAll()
+    stopTimer()
+    runtime.subscriptions.removeAll()
 
-    Logger.info("Stopped plugin \(self.id)")
+    let key = ObjectIdentifier(self)
+    runtimeState.removeValue(forKey: key)
+
+    Logger.info("Stopped plugin \(id)")
   }
 }

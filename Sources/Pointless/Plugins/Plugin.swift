@@ -13,6 +13,9 @@ protocol Plugin: ObservableObject {
   /// Text displayed in menu bar (fallback if menuBarView returns nil)
   var menuBarText: String { get }
 
+  /// Whether this plugin is currently enabled
+  var isEnabled: Bool { get set }
+
   /// Initialize plugin (setup settings, timers, etc.)
   func initialize()
 
@@ -58,6 +61,7 @@ class AnyPlugin: ObservableObject {
   let name: String
 
   private let _menuBarText: () -> String
+  private let _isEnabled: () -> Bool
   private let _menuBarView: () -> NSView?
   private let _detailView: () -> AnyView
   private let _settings: () -> PluginSettings
@@ -70,6 +74,10 @@ class AnyPlugin: ObservableObject {
     _menuBarText()
   }
 
+  var isEnabled: Bool {
+    _isEnabled()
+  }
+
   func settings() -> PluginSettings {
     _settings()
   }
@@ -78,6 +86,7 @@ class AnyPlugin: ObservableObject {
     self.id = plugin.id
     self.name = plugin.name
     self._menuBarText = { plugin.menuBarText }
+    self._isEnabled = { plugin.isEnabled }
     self._menuBarView = { plugin.menuBarView() }
     self._detailView = { plugin.detailView() }
     self._settings = { plugin.settings() }

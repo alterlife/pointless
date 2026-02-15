@@ -58,12 +58,16 @@ enum SimpleSetting {
     case slider(key: String, label: String, range: ClosedRange<Double>, defaultValue: Double)
     case toggle(key: String, label: String, defaultValue: Bool)
     case text(key: String, label: String, defaultValue: String)
+    case color(key: String, label: String, defaultValue: String)
+    case dropdown(key: String, label: String, options: [String], defaultValue: String)
 
     var key: String {
         switch self {
         case .slider(let key, _, _, _),
              .toggle(let key, _, _),
-             .text(let key, _, _):
+             .text(let key, _, _),
+             .color(let key, _, _),
+             .dropdown(let key, _, _, _):
             return key
         }
     }
@@ -72,7 +76,9 @@ enum SimpleSetting {
         switch self {
         case .slider(_, let label, _, _),
              .toggle(_, let label, _),
-             .text(_, let label, _):
+             .text(_, let label, _),
+             .color(_, let label, _),
+             .dropdown(_, let label, _, _):
             return label
         }
     }
@@ -121,13 +127,36 @@ testSuite("Plugin Settings Tests") {
         assertEqual(setting.label, "Name")
     }
 
+    runTest("Color setting") {
+        let setting = SimpleSetting.color(
+            key: "customColor",
+            label: "Custom Color",
+            defaultValue: "#007AFF"
+        )
+        assertEqual(setting.key, "customColor")
+        assertEqual(setting.label, "Custom Color")
+    }
+
+    runTest("Dropdown setting") {
+        let setting = SimpleSetting.dropdown(
+            key: "displayMode",
+            label: "Display Mode",
+            options: ["text", "graph", "both"],
+            defaultValue: "both"
+        )
+        assertEqual(setting.key, "displayMode")
+        assertEqual(setting.label, "Display Mode")
+    }
+
     runTest("Multiple settings") {
         let settings = SimplePluginSettings(definitions: [
             .slider(key: "interval", label: "Interval", range: 1.0...10.0, defaultValue: 5.0),
             .toggle(key: "enabled", label: "Enabled", defaultValue: true),
-            .text(key: "name", label: "Name", defaultValue: "Test")
+            .text(key: "name", label: "Name", defaultValue: "Test"),
+            .color(key: "customColor", label: "Custom Color", defaultValue: "#FF0000"),
+            .dropdown(key: "mode", label: "Mode", options: ["A", "B"], defaultValue: "A")
         ])
-        assertEqual(settings.definitions.count, 3, "Should have 3 settings")
+        assertEqual(settings.definitions.count, 5, "Should have 5 settings")
     }
 }
 
