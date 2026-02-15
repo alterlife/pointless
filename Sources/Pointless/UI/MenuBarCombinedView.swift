@@ -44,8 +44,8 @@ struct MenuBarContentView: View {
   var body: some View {
     HStack(spacing: 0) {
       if widgetRegistry.orderedMenuBarWidgets.isEmpty {
-        Image(systemName: "circle.grid.2x2")
-          .foregroundColor(.secondary)
+        Image(systemName: "cursorarrow.click.2")
+          .foregroundColor(.primary)
           .font(.system(size: 12))
       } else {
         ForEach(Array(widgetRegistry.orderedMenuBarWidgets.enumerated()), id: \.element.id) { index, widget in
