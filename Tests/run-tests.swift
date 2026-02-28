@@ -190,6 +190,76 @@ testSuite("Plugin Registry Tests") {
     }
 }
 
+// MARK: - Mock Suspend/Resume Lifecycle
+
+class MockSuspendLifecycle {
+    var timerRunning = false
+    var isSuspended = false
+    private var wasRunning = false
+
+    func start() { timerRunning = true }
+    func stop() { timerRunning = false }
+
+    func suspend() {
+        guard !isSuspended else { return }
+        wasRunning = timerRunning
+        stop()
+        isSuspended = true
+    }
+
+    func resume() {
+        guard isSuspended else { return }
+        isSuspended = false
+        if wasRunning { start() }
+    }
+}
+
+testSuite("Screen Sleep Tests") {
+    runTest("suspend() stops timer and sets suspended flag") {
+        let lifecycle = MockSuspendLifecycle()
+        lifecycle.start()
+        lifecycle.suspend()
+        verify(lifecycle.isSuspended, "Should be suspended")
+        verify(!lifecycle.timerRunning, "Timer should be stopped")
+    }
+
+    runTest("resume() clears suspended flag and restarts timer if was running") {
+        let lifecycle = MockSuspendLifecycle()
+        lifecycle.start()
+        lifecycle.suspend()
+        lifecycle.resume()
+        verify(!lifecycle.isSuspended, "Should not be suspended")
+        verify(lifecycle.timerRunning, "Timer should restart")
+    }
+
+    runTest("resume() does not start timer if it was not running") {
+        let lifecycle = MockSuspendLifecycle()
+        lifecycle.suspend()
+        lifecycle.resume()
+        verify(!lifecycle.isSuspended, "Should not be suspended")
+        verify(!lifecycle.timerRunning, "Timer should remain stopped")
+    }
+
+    runTest("suspend() is idempotent") {
+        let lifecycle = MockSuspendLifecycle()
+        lifecycle.start()
+        lifecycle.suspend()
+        lifecycle.suspend()
+        verify(lifecycle.isSuspended, "Should still be suspended")
+        verify(!lifecycle.timerRunning, "Timer should be stopped")
+    }
+
+    runTest("resume() is idempotent") {
+        let lifecycle = MockSuspendLifecycle()
+        lifecycle.start()
+        lifecycle.suspend()
+        lifecycle.resume()
+        lifecycle.resume()
+        verify(!lifecycle.isSuspended, "Should not be suspended")
+        verify(lifecycle.timerRunning, "Timer should be running")
+    }
+}
+
 testSuite("Plugin Lifecycle Tests") {
     runTest("Plugin properties") {
         let id = "test.mock"

@@ -65,6 +65,14 @@ class PluginRegistry: ObservableObject {
     }
   }
 
+  func suspendAll() {
+    plugins.forEach { $0.suspend() }
+  }
+
+  func resumeAll() {
+    plugins.forEach { $0.resume() }
+  }
+
   private func loadBundle(at url: URL) {
     guard let bundle = Bundle(url: url) else {
       Logger.error("Failed to create bundle from: \(url.path)")

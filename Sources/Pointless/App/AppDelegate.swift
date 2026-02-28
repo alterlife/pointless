@@ -41,6 +41,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
       }
 
       MenuBar.shared.setup()
+      ScreenStateMonitor.shared.start()
 
       Logger.info("Pointless ready")
     }

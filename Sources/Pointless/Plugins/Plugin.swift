@@ -38,6 +38,12 @@ protocol Plugin: ObservableObject {
   /// Stop the plugin
   func stop()
 
+  /// Suspend polling (screen off/locked) — timer stops entirely
+  func suspend()
+
+  /// Resume polling after suspension
+  func resume()
+
   /// Menu bar widgets provided by this plugin
   func menuBarWidgets() -> [MenuBarWidget]
 
@@ -84,6 +90,8 @@ class AnyPlugin: ObservableObject {
   private let _configure: ([String: Any]) -> Void
   private let _start: () -> Void
   private let _stop: () -> Void
+  private let _suspend: () -> Void
+  private let _resume: () -> Void
   private let _objectWillChange: () -> ObservableObjectPublisher
   private let _menuBarWidgets: () -> [MenuBarWidget]
   private let _menuWidgets: () -> [MenuWidget]
@@ -111,6 +119,8 @@ class AnyPlugin: ObservableObject {
     self._configure = { plugin.configure($0) }
     self._start = { plugin.start() }
     self._stop = { plugin.stop() }
+    self._suspend = { plugin.suspend() }
+    self._resume = { plugin.resume() }
     self._menuBarWidgets = { plugin.menuBarWidgets() }
     self._menuWidgets = { plugin.menuWidgets() }
 
@@ -151,6 +161,14 @@ class AnyPlugin: ObservableObject {
 
   func stop() {
     _stop()
+  }
+
+  func suspend() {
+    _suspend()
+  }
+
+  func resume() {
+    _resume()
   }
 
   func menuBarWidgets() -> [MenuBarWidget] {

@@ -12,6 +12,10 @@ class PluginLifecycle {
   private var updateAction: (() -> Void)?
   private(set) var updateInterval: TimeInterval = 2.0
 
+  // Suspend state
+  private var isSuspended = false
+  private var wasRunningBeforeSuspend = false
+
   // Subscriptions
   private var cancellables = Set<AnyCancellable>()
 
@@ -36,7 +40,7 @@ class PluginLifecycle {
         }
       }
 
-      if plugin.isEnabled && self.timer == nil {
+      if plugin.isEnabled && self.timer == nil && !self.isSuspended {
         self.start()
       } else if !plugin.isEnabled && self.timer != nil {
         self.stop()
@@ -48,6 +52,7 @@ class PluginLifecycle {
   /// Start the timer
   func start() {
     guard let action = updateAction else { return }
+    guard !isSuspended else { return }
 
     let timer = Timer.scheduledTimer(
       withTimeInterval: updateInterval,
@@ -77,6 +82,25 @@ class PluginLifecycle {
     stop()
     start()
     Logger.debug("Timer restarted with interval \(updateInterval)s", logger: Logger.pluginLifecycle)
+  }
+
+  /// Suspend polling (screen off/locked) — stops timer entirely
+  func suspend() {
+    guard !isSuspended else { return }
+    wasRunningBeforeSuspend = timer != nil
+    stop()
+    isSuspended = true
+    Logger.debug("Timer suspended", logger: Logger.pluginLifecycle)
+  }
+
+  /// Resume polling after suspension
+  func resume() {
+    guard isSuspended else { return }
+    isSuspended = false
+    if wasRunningBeforeSuspend {
+      start()
+    }
+    Logger.debug("Timer resumed", logger: Logger.pluginLifecycle)
   }
 
   /// Cleanup on deinitialization

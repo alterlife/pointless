@@ -82,4 +82,12 @@ extension Plugin where Self: AnyObject {
     lifecycle.stop()
     Logger.info("Stopped plugin \(id)")
   }
+
+  func suspend() {
+    lifecycle.suspend()
+  }
+
+  func resume() {
+    lifecycle.resume()
+  }
 }
