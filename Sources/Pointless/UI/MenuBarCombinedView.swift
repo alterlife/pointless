@@ -66,5 +66,3 @@ struct MenuBarContentView: View {
     .padding(.horizontal, 4)
   }
 }
-
-

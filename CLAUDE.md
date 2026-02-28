@@ -294,38 +294,58 @@ Sources/Pointless/
 ## Adding a New Plugin
 
 1. **Create plugin class** conforming to `Plugin` protocol
-2. **Implement required properties**: `id`, `name`, `menuBarText`, `settings`
+2. **Implement required properties**: `id`, `name`, `menuBarText`
 3. **Implement views**: `menuBarView()` (optional) and `detailView()`
-4. **Implement lifecycle**: `start()` creates timer, `stop()` invalidates it
+4. **Use lifecycle helpers**: `declareSettings()` and `setupPeriodicUpdate()` for automatic management
 5. **Register in AppDelegate**: Add to `plugins` array in `applicationDidFinishLaunching`
 
-Example structure:
+### Plugin Lifecycle Management
+
+Plugins automatically get lifecycle management with **zero boilerplate**:
+
 ```swift
-class MyPlugin: ObservableObject, Plugin {
+class MyPlugin: NSObject, ObservableObject, Plugin {
   let id = "pointless.myplugin"
   let name = "My Plugin"
 
   @Published var menuBarText = "..."
-  private var timer: Timer?
+  @Published var isEnabled = true
+  @Published var updateInterval: TimeInterval = 5.0
 
-  func start() {
-    timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-      self.update()
+  func initialize() {
+    // Declare settings
+    declareSettings([
+      .slider(
+        key: "updateInterval",
+        label: "Update Interval",
+        range: 1.0...60.0,
+        defaultValue: 5.0
+      )
+    ])
+
+    // Setup periodic updates
+    setupPeriodicUpdate(interval: \.updateInterval) {
+      self.refresh()
     }
   }
 
-  func stop() {
-    timer?.invalidate()
-    timer = nil
+  private func refresh() {
+    // Update plugin data
+    menuBarText = "Updated!"
   }
 
   func detailView() -> AnyView {
     AnyView(Text("Plugin detail view"))
   }
-
-  // ... other protocol methods
 }
 ```
+
+**Key points:**
+- **No boilerplate** - lifecycle is managed automatically via associated objects
+- Use `declareSettings()` to define plugin settings
+- Use `setupPeriodicUpdate()` to configure automatic timer management
+- The lifecycle handles timer start/stop, interval changes, and cleanup automatically
+- No need to manually manage timers or subscriptions
 
 ## Code Style
 
