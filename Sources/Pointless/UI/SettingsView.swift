@@ -7,12 +7,20 @@ public struct SettingsView: View {
   @ObservedObject var pluginRegistry = PluginRegistry.shared
   @ObservedObject var widgetRegistry = WidgetRegistry.shared
   @State var values: [String: [String: Any]] = [:]
-  @State private var selectedTab: String = "menubar"
+  @State private var selectedTab: String = "pointless.keyboard"
   @State private var draggedMenuBarWidgetId: String?
   @State private var draggedMenuWidgetId: String?
 
   public var body: some View {
     TabView(selection: $selectedTab) {
+      ForEach(pluginRegistry.plugins, id: \.id) { plugin in
+        pluginSettingsTab(for: plugin)
+          .tabItem {
+            Label(plugin.name, systemImage: plugin.icon)
+          }
+          .tag(plugin.id)
+      }
+
       menuBarTab()
         .tabItem {
           Label("Menu Bar", systemImage: "macwindow")
@@ -24,14 +32,6 @@ public struct SettingsView: View {
           Label("Menu Detail", systemImage: "list.bullet")
         }
         .tag("menudetail")
-
-      ForEach(pluginRegistry.plugins, id: \.id) { plugin in
-        pluginSettingsTab(for: plugin)
-          .tabItem {
-            Label(plugin.name, systemImage: "puzzlepiece")
-          }
-          .tag(plugin.id)
-      }
     }
     .frame(minWidth: 800, minHeight: 600)
     .onAppear {

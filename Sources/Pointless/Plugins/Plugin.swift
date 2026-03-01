@@ -10,6 +10,9 @@ protocol Plugin: ObservableObject {
   /// Display name (e.g., "CPU")
   var name: String { get }
 
+  /// SF Symbol name for settings tab icon (e.g., "keyboard", "cpu")
+  var icon: String { get }
+
   /// Text displayed in menu bar (fallback if menuBarView returns nil)
   var menuBarText: String { get }
 
@@ -53,6 +56,9 @@ protocol Plugin: ObservableObject {
 
 // Default implementation for menuBarView - plugins can opt-in to custom views
 extension Plugin {
+  /// Default: puzzlepiece icon for generic plugins
+  var icon: String { "puzzlepiece" }
+
   /// Default: use menuBarText instead of custom view
   func menuBarView() -> NSView? {
     nil
@@ -81,6 +87,7 @@ extension Plugin {
 class AnyPlugin: ObservableObject {
   let id: String
   let name: String
+  let icon: String
 
   private let _menuBarText: () -> String
   private let _isEnabled: () -> Bool
@@ -111,6 +118,7 @@ class AnyPlugin: ObservableObject {
   init<P: Plugin>(_ plugin: P) {
     self.id = plugin.id
     self.name = plugin.name
+    self.icon = plugin.icon
     self._menuBarText = { plugin.menuBarText }
     self._isEnabled = { plugin.isEnabled }
     self._menuBarView = { plugin.menuBarView() }

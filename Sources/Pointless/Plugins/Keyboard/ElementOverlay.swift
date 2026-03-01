@@ -147,7 +147,7 @@ struct OverlayContentView: View {
   }
 
   private var escHint: some View {
-    Text("type to jump  ·  ESC to cancel")
+    Text("type a letter to jump  ·  ⌫ back  ·  ESC cancel")
       .font(.system(size: 11, weight: .medium, design: .rounded))
       .foregroundColor(.white)
       .padding(.horizontal, 10)

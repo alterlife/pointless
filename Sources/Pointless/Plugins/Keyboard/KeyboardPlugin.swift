@@ -31,11 +31,17 @@ private func keyboardPluginEventCallback(
 // MARK: - KeyboardPlugin
 
 final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
+  static let activateNotification = Notification.Name("pointless.keyboard.activate")
+
   let id = "pointless.keyboard"
-  let name = "Jump"
+  let name = "Pointless"
+  let icon = "keyboard"
 
   @Published var menuBarText = "⌨"
   @Published var isEnabled = true
+  @Published var shortcutDisplay = "⌘⇧Space"
+  @Published var sessionJumpCount = 0
+  @Published var lastScanCount = 0
 
   // Appearance settings
   @Published var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
@@ -47,6 +53,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   // Activation hotkey (parsed from display string like "⌘⇧Space")
   private var hotkeyCode: UInt16 = 49  // Space
   private var hotkeyModifiers: NSEvent.ModifierFlags = [.command, .shift]
+  private var activationObserver: NSObjectProtocol?
 
   private enum OverlayPhase {
     case inactive
@@ -71,16 +78,15 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
 
   func initialize() {
     declareSettings([
-      .section(label: "General"),
+      .section(label: "Activation", description: "Keyboard shortcut and enable/disable"),
       .toggle(key: "enabled", label: "Enabled", defaultValue: true),
-      .section(label: "Shortcut"),
       .hotkey(key: "activationHotkey", label: "Activation Shortcut", defaultValue: "⌘⇧Space"),
-      .section(label: "Appearance"),
-      .color(key: "badgeColor", label: "Badge Color", defaultValue: "#F2BF1A"),
-      .color(key: "textColor", label: "Label Color", defaultValue: "#000000"),
-      .slider(key: "fontSize", label: "Label Font Size", range: 9...16, defaultValue: 11, step: 1),
-      .toggle(key: "showLines", label: "Show Connector Lines", defaultValue: true),
-      .slider(key: "fadeIn", label: "Fade In (s)", range: 0...0.3, defaultValue: 0.08, step: 0.02)
+      .section(label: "Overlay Style", description: "Customize the letter hints on screen elements"),
+      .color(key: "badgeColor", label: "Hint Color", defaultValue: "#F2BF1A"),
+      .color(key: "textColor", label: "Hint Text Color", defaultValue: "#000000"),
+      .slider(key: "fontSize", label: "Hint Size", range: 9...16, defaultValue: 11, step: 1),
+      .toggle(key: "showLines", label: "Lines to Targets", defaultValue: true),
+      .slider(key: "fadeIn", label: "Appear Speed", range: 0...0.3, defaultValue: 0.08, step: 0.02)
     ])
   }
 
@@ -98,6 +104,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
     if let lines = values["showLines"] as? Bool { showConnectorLines = lines }
     if let fade = values["fadeIn"] as? Double { fadeInDuration = fade }
     if let shortcut = values["activationHotkey"] as? String {
+      shortcutDisplay = shortcut
       let parsed = parseShortcutString(shortcut)
       self.hotkeyModifiers = parsed.modifiers
       self.hotkeyCode = parsed.keyCode
@@ -115,10 +122,13 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
       if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(self.id)") { self.configure(saved) }
       Logger.info("KeyboardPlugin start — isEnabled=\(self.isEnabled)", logger: Logger.pluginLifecycle)
       guard self.isEnabled else { return }
-      // Always install the activation monitor so ⌘⇧Space works even before permissions.
-      // If permissions aren't granted yet, handleActivation() will show onboarding.
       self.startActivationMonitor()
-      // Show onboarding on first launch if permissions are missing
+      self.activationObserver = NotificationCenter.default.addObserver(
+        forName: Self.activateNotification, object: nil, queue: .main
+      ) { [weak self] _ in
+        guard let self else { return }
+        Task { @MainActor in self.handleActivation() }
+      }
       KeyboardOnboardingController.shared.showIfNeeded {
         Logger.info("KeyboardPlugin permissions granted", logger: Logger.pluginLifecycle)
       }
@@ -129,6 +139,10 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
     Task { @MainActor in
       self.dismissOverlay()
       self.stopActivationMonitor()
+      if let observer = self.activationObserver {
+        NotificationCenter.default.removeObserver(observer)
+        self.activationObserver = nil
+      }
       Logger.info("Stopped plugin \(self.id)")
     }
   }
@@ -231,6 +245,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
         return lhs.screenFrame.minX < rhs.screenFrame.minX
       }
       let labeled = LabelGenerator.label(sorted)
+      self.lastScanCount = elements.count
       self.labeledElements = labeled
       self.overlayState.labeledElements = labeled
       self.overlayState.typedPrefix = ""
@@ -323,6 +338,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
 
   @MainActor
   private func activateElement(_ labeled: LabeledElement) {
+    sessionJumpCount += 1
     dismissOverlay()
     let center = labeled.element.screenFrame.center
     let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
@@ -338,22 +354,19 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   // MARK: - Widgets
 
   func menuBarWidgets() -> [MenuBarWidget] {
-    []
+    [
+      MenuBarWidget(id: "\(id).menubar", pluginId: id, name: "Navigation", priority: 1) {
+        Image(systemName: "cursorarrow.click.2")
+          .font(.system(size: 12))
+          .foregroundColor(self.isEnabled ? .primary : .secondary)
+      }
+    ]
   }
 
   func menuWidgets() -> [MenuWidget] {
     [
-      MenuWidget(id: "\(id).detail", pluginId: id, name: "Jump Navigation", priority: 50) {
-        HStack {
-          Image(systemName: "keyboard")
-            .foregroundColor(.secondary)
-          Text("Jump Navigation")
-          Spacer()
-          Text("⌘⇧Space")
-            .font(.caption)
-            .foregroundColor(.secondary)
-        }
-        .padding(.horizontal)
+      MenuWidget(id: "\(id).detail", pluginId: id, name: "Navigation", priority: 50) {
+        KeyboardMenuWidgetView(plugin: self)
       }
     ]
   }

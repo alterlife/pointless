@@ -17,11 +17,11 @@ enum SettingDefinition: Identifiable {
   case text(key: String, label: String, defaultValue: String)
   case dropdown(key: String, label: String, options: [String], defaultValue: String)
   case color(key: String, label: String, defaultValue: String)
-  case section(label: String)
+  case section(label: String, description: String? = nil)
 
   var id: String {
     switch self {
-    case .section(let label):
+    case .section(let label, _):
       return "section.\(label)"
     default:
       return key
@@ -49,8 +49,9 @@ enum SettingDefinition: Identifiable {
          .hotkey(_, let label, _),
          .text(_, let label, _),
          .dropdown(_, let label, _, _),
-         .color(_, let label, _),
-         .section(let label):
+         .color(_, let label, _):
+      return label
+    case .section(let label, _):
       return label
     }
   }

@@ -82,13 +82,23 @@ extension SettingsView {
         }
       }
 
-    case .section(let label):
-      VStack(alignment: .leading, spacing: 4) {
-        Text(label)
-          .font(.headline)
-          .foregroundColor(.secondary)
-        Divider()
+    case .section(let label, let description):
+      sectionHeaderView(label: label, description: description)
+    }
+  }
+
+  @ViewBuilder
+  private func sectionHeaderView(label: String, description: String?) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(label)
+        .font(.headline)
+        .foregroundColor(.secondary)
+      if let description {
+        Text(description)
+          .font(.caption)
+          .foregroundColor(Color(NSColor.tertiaryLabelColor))
       }
+      Divider()
     }
   }
 

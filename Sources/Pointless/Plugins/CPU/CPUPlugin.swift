@@ -7,6 +7,7 @@ import SwiftUI
 class CPUPlugin: NSObject, ObservableObject, Plugin {
   let id = "pointless.cpu"
   let name = "CPU"
+  let icon = "cpu"
 
   @Published var menuBarText: String = "CPU --"
   @Published var isEnabled: Bool = true
