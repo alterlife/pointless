@@ -53,6 +53,7 @@ class PluginLifecycle {
   func start() {
     guard let action = updateAction else { return }
     guard !isSuspended else { return }
+    guard timer == nil else { return }
 
     let timer = Timer.scheduledTimer(
       withTimeInterval: updateInterval,
