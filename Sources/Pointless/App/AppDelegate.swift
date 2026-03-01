@@ -9,8 +9,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
       // Register built-in plugins
       let plugins: [any Plugin] = [
+        KeyboardPlugin(),
         CPUPlugin()
-        // Add more built-in plugins here
       ]
 
       for plugin in plugins {

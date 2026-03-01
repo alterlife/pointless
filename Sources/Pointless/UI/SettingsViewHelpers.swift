@@ -61,15 +61,17 @@ extension SettingsView {
       }
 
     case .hotkey(let key, let label, let defaultValue):
-      VStack(alignment: .leading) {
-        Text(label).font(.subheadline)
-        TextField("Press shortcut...", text: binding(for: plugin.id, key: key, default: defaultValue))
-          .textFieldStyle(.roundedBorder)
-      }
+      ShortcutRecorderView(
+        label: label,
+        shortcutString: binding(for: plugin.id, key: key, default: defaultValue)
+      )
 
     case .color(let key, let label, let defaultValue):
+      // Only gate on colorMode when the plugin explicitly declares it.
+      // Plugins without a colorMode setting always show their color pickers.
+      let hasColorMode = plugin.settings().definitions.contains { $0.key == "colorMode" }
       let colorMode = getValue(for: plugin.id, key: "colorMode", default: "dynamic") as? String ?? "dynamic"
-      if colorMode == "custom" {
+      if !hasColorMode || colorMode == "custom" {
         VStack(alignment: .leading) {
           Text(label).font(.subheadline)
           ColorPicker(
@@ -166,6 +168,151 @@ extension SettingsView {
   private func saveSettings(for pluginID: String) {
     if let pluginValues = values[pluginID] {
       UserDefaults.standard.set(pluginValues, forKey: "plugin.\(pluginID)")
+    }
+  }
+}
+
+// MARK: - Shortcut Recorder
+
+struct ShortcutRecorderView: View {
+  let label: String
+  @Binding var shortcutString: String
+  @State private var isRecording = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(label).font(.subheadline)
+      HStack(spacing: 8) {
+        ZStack {
+          Text(isRecording ? "Press shortcut..." : shortcutString)
+            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .foregroundColor(isRecording ? .secondary : .primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+              isRecording
+                ? Color.accentColor.opacity(0.1)
+                : Color(NSColor.controlBackgroundColor)
+            )
+            .overlay(
+              RoundedRectangle(cornerRadius: 6)
+                .stroke(
+                  isRecording ? Color.accentColor : Color(NSColor.separatorColor),
+                  lineWidth: isRecording ? 2 : 1
+                )
+            )
+            .cornerRadius(6)
+            .contentShape(Rectangle())
+            .onTapGesture { isRecording = true }
+        }
+        .background(
+          ShortcutKeyListener(isRecording: $isRecording) { display in
+            shortcutString = display
+            isRecording = false
+          }
+        )
+
+        if isRecording {
+          Button("Cancel") { isRecording = false }
+            .buttonStyle(.borderless)
+            .font(.caption)
+        }
+      }
+    }
+  }
+}
+
+// MARK: - Key Listener (NSViewRepresentable)
+
+private struct ShortcutKeyListener: NSViewRepresentable {
+  @Binding var isRecording: Bool
+  let onCapture: (String) -> Void
+
+  func makeNSView(context: Context) -> NSView {
+    let view = NSView()
+    context.coordinator.parentView = view
+    return view
+  }
+
+  func updateNSView(_ nsView: NSView, context: Context) {
+    context.coordinator.isRecording = isRecording
+    context.coordinator.onCapture = onCapture
+    if isRecording {
+      context.coordinator.startMonitoring()
+    } else {
+      context.coordinator.stopMonitoring()
+    }
+  }
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(onCapture: onCapture)
+  }
+
+  class Coordinator {
+    var isRecording = false
+    var onCapture: (String) -> Void
+    var parentView: NSView?
+    private var monitor: Any?
+
+    init(onCapture: @escaping (String) -> Void) {
+      self.onCapture = onCapture
+    }
+
+    deinit { stopMonitoring() }
+
+    func startMonitoring() {
+      guard monitor == nil else { return }
+      monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        guard let self, self.isRecording else { return event }
+        let modifiers = event.modifierFlags.intersection(
+          [.command, .shift, .option, .control]
+        )
+        // Require at least one modifier for a valid shortcut
+        guard !modifiers.isEmpty else {
+          // ESC cancels recording
+          if event.keyCode == 53 {
+            self.isRecording = false
+            return nil
+          }
+          return event
+        }
+        let display = Self.modifierSymbols(modifiers) + Self.keyName(from: event)
+        self.onCapture(display)
+        return nil
+      }
+    }
+
+    func stopMonitoring() {
+      if let monitor {
+        NSEvent.removeMonitor(monitor)
+        self.monitor = nil
+      }
+    }
+
+    static func modifierSymbols(_ flags: NSEvent.ModifierFlags) -> String {
+      var result = ""
+      if flags.contains(.control) { result += "\u{2303}" }
+      if flags.contains(.option) { result += "\u{2325}" }
+      if flags.contains(.shift) { result += "\u{21E7}" }
+      if flags.contains(.command) { result += "\u{2318}" }
+      return result
+    }
+
+    static func keyName(from event: NSEvent) -> String {
+      switch event.keyCode {
+      case 49: return "Space"
+      case 36: return "Return"
+      case 48: return "Tab"
+      case 51: return "Delete"
+      case 53: return "Esc"
+      case 123: return "\u{2190}"
+      case 124: return "\u{2192}"
+      case 125: return "\u{2193}"
+      case 126: return "\u{2191}"
+      default:
+        return event.charactersIgnoringModifiers?.uppercased() ?? "Key\(event.keyCode)"
+      }
     }
   }
 }

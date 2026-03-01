@@ -282,6 +282,146 @@ testSuite("Plugin Lifecycle Tests") {
     }
 }
 
+// MARK: - LabelGenerator Tests (pure functions duplicated from LabelGenerator.swift)
+
+// Keyboard row priority: home → top → bottom
+let testPriorityKeys: [Character] = [
+    "a", "s", "d", "f", "j", "k", "l", "g", "h",
+    "q", "w", "e", "r", "t", "y", "u", "i", "o", "p",
+    "z", "x", "c", "v", "b", "n", "m"
+]
+
+func makeTestLabels(count: Int) -> [String] {
+    guard count > 0 else { return [] }
+    let keys = testPriorityKeys.map { String($0) }
+    var labels = keys
+    outer: for first in keys {
+        for second in keys {
+            labels.append(first + second)
+            if labels.count >= count { break outer }
+        }
+    }
+    return Array(labels.prefix(count))
+}
+
+testSuite("LabelGenerator Tests") {
+    runTest("testHomeRowOrder — first label is 'a'") {
+        let labels = makeTestLabels(count: 3)
+        assertEqual(labels[0], "a", "First label should be 'a' (home row)")
+        assertEqual(labels[1], "s", "Second label should be 's'")
+        assertEqual(labels[2], "d", "Third label should be 'd'")
+    }
+
+    runTest("testHomeRowOrder — ninth label is 'h'") {
+        let labels = makeTestLabels(count: 9)
+        assertEqual(labels[8], "h", "9th label should be last home-row key 'h'")
+    }
+
+    runTest("testTopRow — 10th label is top row start") {
+        let labels = makeTestLabels(count: 10)
+        assertEqual(labels[9], "q", "10th label should be 'q' (top row start)")
+    }
+
+    runTest("testAllLabelsUnique — 100 elements get distinct labels") {
+        let labels = makeTestLabels(count: 100)
+        let unique = Set(labels)
+        assertEqual(unique.count, labels.count, "All 100 labels must be unique")
+    }
+
+    runTest("testTwoLetterCombos — element 27 gets two-letter label") {
+        let labels = makeTestLabels(count: 30)
+        // Labels 0–26 are single letters (27 total in our key set); index 27 = first two-letter
+        let twoLetter = labels[27]
+        verify(twoLetter.count == 2, "Label at index 27 should be 2 chars, got '\(twoLetter)'")
+    }
+
+    runTest("testFilterEmptyPrefix — returns all unchanged") {
+        let labels = makeTestLabels(count: 5)
+        let filtered = labels.filter { $0.hasPrefix("") }
+        assertEqual(filtered.count, labels.count, "Empty prefix should return all labels")
+    }
+
+    runTest("testFilterMatchingPrefix — keeps only labels starting with 'a'") {
+        let labels = makeTestLabels(count: 27)
+        let filtered = labels.filter { $0.hasPrefix("a") }
+        verify(!filtered.isEmpty, "Should find labels starting with 'a'")
+        verify(filtered.allSatisfy { $0.hasPrefix("a") }, "All filtered labels start with 'a'")
+    }
+
+    runTest("testFilterNoMatch — unmatched prefix returns empty") {
+        let labels = makeTestLabels(count: 5)
+        let filtered = labels.filter { $0.hasPrefix("zz") }
+        verify(filtered.isEmpty, "No label should start with 'zz' in first 5")
+    }
+}
+
+// MARK: - Coordinate Tests
+// Uses plain Double structs — no CoreGraphics dependency needed in standalone script
+
+struct TPoint { let x: Double; let y: Double }
+struct TSize { let width: Double; let height: Double }
+struct TRect {
+    let x: Double; let y: Double; let width: Double; let height: Double
+    var minX: Double { x }
+    var minY: Double { y }
+    var maxX: Double { x + width }
+    var maxY: Double { y + height }
+}
+
+func axToNSScreenTest(axX: Double, axY: Double, w: Double, h: Double, screenH: Double) -> TRect {
+    TRect(x: axX, y: screenH - axY - h, width: w, height: h)
+}
+
+func anchorPointTest(frameX: Double, frameY: Double, frameMaxY: Double,
+                     screenMinX: Double, screenMaxY: Double) -> TPoint {
+    TPoint(x: frameX - screenMinX + 4, y: screenMaxY - frameMaxY + 4)
+}
+
+func badgeOriginTest(anchorX: Double, anchorY: Double,
+                     badgeW: Double, badgeH: Double,
+                     viewW: Double) -> TPoint {
+    let preferredY = anchorY - badgeH - 6
+    let finalY = preferredY < 8 ? anchorY + 10 : preferredY
+    let rawX = anchorX - badgeW - 4
+    let finalX = max(4, min(rawX, viewW - badgeW - 4))
+    return TPoint(x: finalX, y: finalY)
+}
+
+testSuite("Coordinate Tests") {
+    runTest("testAXToNSScreenTopElement — axY=0 maps to top of screen") {
+        let rect = axToNSScreenTest(axX: 0, axY: 0, w: 100, h: 30, screenH: 1200)
+        assertEqual(rect.y, 1170.0, "Element at AX top should map to screenH - h = 1170")
+    }
+
+    runTest("testAXToNSScreenBottomElement — axY near bottom maps near y=0") {
+        let rect = axToNSScreenTest(axX: 0, axY: 1170, w: 100, h: 30, screenH: 1200)
+        assertEqual(rect.y, 0.0, "Element at AX bottom (y=1170, h=30) -> NSScreen y=0")
+    }
+
+    runTest("testAnchorInsideElement — inset 4pt from element top-left in canvas coords") {
+        // screenFrame: x=100, y=200, w=80, h=30 → maxY=230; screenRect: y=0, maxY=900
+        let anchor = anchorPointTest(frameX: 100, frameY: 200, frameMaxY: 230,
+                                     screenMinX: 0, screenMaxY: 900)
+        assertEqual(anchor.x, 104.0, "anchorX = frame.minX - screen.minX + 4 = 104")
+        assertEqual(anchor.y, 674.0, "anchorY = screen.maxY - frame.maxY + 4 = 674")
+    }
+
+    runTest("testBadgeAboveAnchor — centre-screen element places badge above") {
+        let origin = badgeOriginTest(anchorX: 200, anchorY: 400, badgeW: 20, badgeH: 16, viewW: 1440)
+        verify(origin.y < 400, "Badge should be above anchor (anchorY=400) when space allows")
+    }
+
+    runTest("testBadgeBelowAtScreenTop — anchor near top (y=5) places badge below") {
+        let origin = badgeOriginTest(anchorX: 200, anchorY: 5, badgeW: 20, badgeH: 16, viewW: 1440)
+        verify(origin.y > 5, "Badge should be below anchor when anchor is near top edge")
+    }
+
+    runTest("testBadgeClampedToLeftEdge — anchor at x=2 clamps badge to x >= 4") {
+        let origin = badgeOriginTest(anchorX: 2, anchorY: 200, badgeW: 20, badgeH: 16, viewW: 1440)
+        verify(origin.x >= 4, "Badge x should be clamped to at least 4")
+    }
+}
+
 // MARK: - Results
 
 print("\n" + String(repeating: "=", count: 50))
