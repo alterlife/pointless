@@ -19,13 +19,13 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
   @Published var colorMode: String = "dynamic"
   @Published var customColor: String = "#007AFF"
 
-  private var totalUsage: Double = 0.0
-  private var coreUsages: [Double] = []
-  private var history: [Double] = []
-  private var coreHistories: [[Double]] = []
-  private let maxHistorySize = 30
+  var totalUsage: Double = 0.0
+  var coreUsages: [Double] = []
+  var history: [Double] = []
+  var coreHistories: [[Double]] = []
+  let maxHistorySize = 30
 
-  private var previousCPUInfo: [Int32] = []
+  var previousCPUInfo: [Int32] = []
 
   override init() {
     super.init()
@@ -34,11 +34,7 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
 
   func initialize() {
     declareSettings([
-      .toggle(
-        key: "enabled",
-        label: "Enabled",
-        defaultValue: true
-      ),
+      .section(label: "Display"),
       .dropdown(
         key: "displayMode",
         label: "Display Mode",
@@ -55,6 +51,7 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
         label: "Show Update Interval",
         defaultValue: true
       ),
+      .section(label: "CPU Cores"),
       .toggle(
         key: "showCores",
         label: "Show Individual Cores",
@@ -66,6 +63,7 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
         options: ["combined", "separate"],
         defaultValue: "separate"
       ),
+      .section(label: "Color"),
       .dropdown(
         key: "colorMode",
         label: "Color Mode",
@@ -76,6 +74,12 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
         key: "customColor",
         label: "Custom Color",
         defaultValue: "#007AFF"
+      ),
+      .section(label: "General"),
+      .toggle(
+        key: "enabled",
+        label: "Enabled",
+        defaultValue: true
       ),
       .slider(
         key: "updateInterval",
@@ -180,16 +184,22 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
         priority: 10
       ) {
         VStack(alignment: .leading, spacing: 12) {
-          if self.showIcon {
-            Image(systemName: "cpu")
-              .font(.title2)
-              .foregroundColor(self.primaryColor())
-          }
-
           if self.showCores && !self.coreUsages.isEmpty {
             self.coreViews()
           } else {
-            self.totalViews()
+            HStack(spacing: 6) {
+              if self.showIcon {
+                Image(systemName: "cpu")
+                  .font(.title2)
+                  .foregroundColor(self.primaryColor())
+              }
+              if self.displayMode == "text" || self.displayMode == "both" {
+                self.textView(usage: self.totalUsage)
+              }
+            }
+            if self.displayMode == "graph" || self.displayMode == "both" {
+              self.graphView(history: self.history, usage: self.totalUsage, label: nil)
+            }
           }
 
           if self.showUpdateText {
@@ -208,16 +218,22 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
   func detailView() -> AnyView {
     AnyView(
       VStack(alignment: .leading, spacing: 12) {
-        if showIcon {
-          Image(systemName: "cpu")
-            .font(.title2)
-            .foregroundColor(primaryColor())
-        }
-
         if showCores && !coreUsages.isEmpty {
           coreViews()
         } else {
-          totalViews()
+          HStack(spacing: 6) {
+            if showIcon {
+              Image(systemName: "cpu")
+                .font(.title2)
+                .foregroundColor(primaryColor())
+            }
+            if displayMode == "text" || displayMode == "both" {
+              textView(usage: totalUsage)
+            }
+          }
+          if displayMode == "graph" || displayMode == "both" {
+            graphView(history: history, usage: totalUsage, label: nil)
+          }
         }
 
         if showUpdateText {
@@ -254,189 +270,14 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
 
   @ViewBuilder
   private func combinedCoresView() -> some View {
+    let coreColors = coreHistories.indices.map { coreColor(for: $0) }
     VStack(alignment: .leading, spacing: 8) {
-      textView(usage: totalUsage)
-
+      if displayMode == "text" || displayMode == "both" {
+        textView(usage: totalUsage)
+      }
       if displayMode == "graph" || displayMode == "both" {
-        graphView(history: history, usage: totalUsage, label: nil)
+        CPUGraphView(histories: coreHistories, usage: totalUsage, colors: coreColors, compact: false)
       }
     }
-  }
-
-  @ViewBuilder
-  private func separateCoresView() -> some View {
-    switch displayMode {
-    case "text":
-      VStack(alignment: .leading, spacing: 8) {
-        ForEach(Array(coreUsages.enumerated()), id: \.offset) { [self] index, usage in
-          HStack {
-            Text("Core \(index + 1)")
-              .font(.caption)
-              .foregroundColor(.secondary)
-              .frame(width: 50, alignment: .leading)
-            self.textView(usage: usage, compact: true)
-          }
-        }
-      }
-    case "graph":
-      VStack(alignment: .leading, spacing: 6) {
-        ForEach(Array(coreHistories.enumerated()), id: \.offset) { [self] index, coreHistory in
-          if index < self.coreUsages.count {
-            self.graphView(
-              history: coreHistory,
-              usage: self.coreUsages[index],
-              label: "Core \(index + 1)",
-              compact: true
-            )
-          }
-        }
-      }
-    default: // "both"
-      VStack(alignment: .leading, spacing: 8) {
-        ForEach(Array(coreUsages.enumerated()), id: \.offset) { [self] index, usage in
-          if index < self.coreHistories.count {
-            VStack(alignment: .leading, spacing: 4) {
-              HStack {
-                Text("Core \(index + 1)")
-                  .font(.caption)
-                  .foregroundColor(.secondary)
-                textView(usage: usage, compact: true)
-              }
-              graphView(
-                history: self.coreHistories[index],
-                usage: usage,
-                label: nil,
-                compact: true
-              )
-            }
-          }
-        }
-      }
-    }
-  }
-
-  @ViewBuilder
-  private func textView(usage: Double, compact: Bool = false) -> some View {
-    Text(String(format: "%.1f%%", usage * 100))
-      .font(compact ? .body : .title3)
-      .foregroundColor(usageColor(for: usage))
-  }
-
-  @ViewBuilder
-  private func graphView(
-    history: [Double],
-    usage: Double,
-    label: String?,
-    compact: Bool = false
-  ) -> some View {
-    CPUGraphView(
-      history: history,
-      usage: usage,
-      label: label,
-      color: usageColor(for: usage),
-      compact: compact
-    )
-  }
-
-  private func primaryColor() -> Color {
-    if colorMode == "custom" {
-      return Color(hex: customColor) ?? .blue
-    }
-    return usageColor(for: totalUsage)
-  }
-
-  private func usageColor(for usage: Double) -> Color {
-    if colorMode == "custom" {
-      return Color(hex: customColor) ?? .blue
-    }
-
-    // Dynamic mode: color changes based on usage
-    switch usage {
-    case 0..<0.5:
-      return .green
-    case 0.5..<0.75:
-      return .orange
-    default:
-      return .red
-    }
-  }
-
-  // MARK: - CPU Usage
-
-  private func currentUsage() -> (total: Double, perCore: [Double]) {
-    var cpuInfo: processor_info_array_t?
-    var numCPUInfo: mach_msg_type_number_t = 0
-    var numProcessors: natural_t = 0
-
-    let result = host_processor_info(
-      mach_host_self(),
-      PROCESSOR_CPU_LOAD_INFO,
-      &numProcessors,
-      &cpuInfo,
-      &numCPUInfo
-    )
-
-    guard result == KERN_SUCCESS, let cpuInfo = cpuInfo else {
-      return (0.0, [])
-    }
-
-    // Copy current CPU info
-    let currentCPUInfo = Array(UnsafeBufferPointer(
-      start: cpuInfo,
-      count: Int(numCPUInfo)
-    ))
-
-    defer {
-      vm_deallocate(
-        mach_task_self_,
-        vm_address_t(UInt(bitPattern: cpuInfo)),
-        vm_size_t(Int(numCPUInfo) * MemoryLayout<integer_t>.stride)
-      )
-    }
-
-    var perCoreUsage: [Double] = []
-    var totalUsage: Double = 0.0
-
-    // Initialize previous CPU info if needed
-    if previousCPUInfo.isEmpty {
-      previousCPUInfo = currentCPUInfo
-      return (0.0, Array(repeating: 0.0, count: Int(numProcessors)))
-    }
-
-    for core in 0..<Int(numProcessors) {
-      let offset = Int(CPU_STATE_MAX) * core
-
-      // Current ticks
-      let user = currentCPUInfo[offset + Int(CPU_STATE_USER)]
-      let system = currentCPUInfo[offset + Int(CPU_STATE_SYSTEM)]
-      let idle = currentCPUInfo[offset + Int(CPU_STATE_IDLE)]
-      let nice = currentCPUInfo[offset + Int(CPU_STATE_NICE)]
-
-      // Previous ticks
-      let prevUser = previousCPUInfo[offset + Int(CPU_STATE_USER)]
-      let prevSystem = previousCPUInfo[offset + Int(CPU_STATE_SYSTEM)]
-      let prevIdle = previousCPUInfo[offset + Int(CPU_STATE_IDLE)]
-      let prevNice = previousCPUInfo[offset + Int(CPU_STATE_NICE)]
-
-      // Calculate deltas
-      let userDelta = Double(user - prevUser)
-      let systemDelta = Double(system - prevSystem)
-      let idleDelta = Double(idle - prevIdle)
-      let niceDelta = Double(nice - prevNice)
-
-      let totalDelta = userDelta + systemDelta + idleDelta + niceDelta
-      let usage = totalDelta > 0 ? (userDelta + systemDelta + niceDelta) / totalDelta : 0.0
-
-      perCoreUsage.append(usage)
-      totalUsage += usage
-    }
-
-    // Store current values for next iteration
-    previousCPUInfo = currentCPUInfo
-
-    // Average total usage across all cores
-    totalUsage = numProcessors > 0 ? totalUsage / Double(numProcessors) : 0.0
-
-    return (totalUsage, perCoreUsage)
   }
 }

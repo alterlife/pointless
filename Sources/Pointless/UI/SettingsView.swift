@@ -6,7 +6,7 @@ public struct SettingsView: View {
 
   @ObservedObject var pluginRegistry = PluginRegistry.shared
   @ObservedObject var widgetRegistry = WidgetRegistry.shared
-  @State private var values: [String: [String: Any]] = [:]
+  @State var values: [String: [String: Any]] = [:]
   @State private var selectedTab: String = "menubar"
   @State private var draggedMenuBarWidgetId: String?
   @State private var draggedMenuWidgetId: String?
@@ -313,137 +313,6 @@ public struct SettingsView: View {
         }
       }
       .padding()
-    }
-  }
-
-  @ViewBuilder
-  private func settingView(for definition: SettingDefinition, plugin: AnyPlugin) -> some View {
-    switch definition {
-    case .slider(let key, let label, let range, let defaultValue, let step):
-      VStack(alignment: .leading) {
-        Text(label)
-          .font(.subheadline)
-        HStack {
-          Slider(
-            value: binding(for: plugin.id, key: key, default: defaultValue),
-            in: range,
-            step: step
-          )
-          let currentValue = getValue(for: plugin.id, key: key, default: defaultValue) as? Double ?? defaultValue
-          let format = step >= 1.0 ? "%.0f" : "%.1f"
-          Text(String(format: format, currentValue))
-            .font(.caption)
-            .foregroundColor(.secondary)
-            .frame(width: 40)
-        }
-      }
-
-    case .toggle(let key, let label, let defaultValue):
-      Toggle(label, isOn: binding(for: plugin.id, key: key, default: defaultValue))
-
-    case .text(let key, let label, let defaultValue):
-      VStack(alignment: .leading) {
-        Text(label)
-          .font(.subheadline)
-        TextField("", text: binding(for: plugin.id, key: key, default: defaultValue))
-          .textFieldStyle(.roundedBorder)
-      }
-
-    case .dropdown(let key, let label, let options, let defaultValue):
-      VStack(alignment: .leading) {
-        Text(label)
-          .font(.subheadline)
-        Picker("", selection: binding(for: plugin.id, key: key, default: defaultValue)) {
-          ForEach(options, id: \.self) { option in
-            Text(option).tag(option)
-          }
-        }
-        .pickerStyle(.menu)
-      }
-
-    case .hotkey(let key, let label, let defaultValue):
-      VStack(alignment: .leading) {
-        Text(label)
-          .font(.subheadline)
-        TextField("Press shortcut...", text: binding(for: plugin.id, key: key, default: defaultValue))
-          .textFieldStyle(.roundedBorder)
-      }
-
-    case .color(let key, let label, let defaultValue):
-      let colorMode = getValue(for: plugin.id, key: "colorMode", default: "dynamic") as? String ?? "dynamic"
-      if colorMode == "custom" {
-        VStack(alignment: .leading) {
-          Text(label)
-            .font(.subheadline)
-          ColorPicker(
-            "",
-            selection: colorBinding(for: plugin.id, key: key, default: defaultValue),
-            supportsOpacity: false
-          )
-        }
-      }
-    }
-  }
-
-  private func colorBinding(for pluginID: String, key: String, default defaultValue: String) -> Binding<Color> {
-    Binding(
-      get: {
-        let hexString = getValue(for: pluginID, key: key, default: defaultValue) as? String ?? defaultValue
-        return Color(hex: hexString) ?? Color.blue
-      },
-      set: { newColor in
-        setValue(newColor.toHex(), for: pluginID, key: key)
-      }
-    )
-  }
-
-  // MARK: - Bindings
-
-  private func binding<T>(for pluginID: String, key: String, default defaultValue: T) -> Binding<T> {
-    Binding(
-      get: { getValue(for: pluginID, key: key, default: defaultValue) as? T ?? defaultValue },
-      set: { newValue in
-        setValue(newValue, for: pluginID, key: key)
-      }
-    )
-  }
-
-  private func getValue(for pluginID: String, key: String, default defaultValue: Any) -> Any {
-    return values[pluginID]?[key] ?? defaultValue
-  }
-
-  private func setValue(_ value: Any, for pluginID: String, key: String) {
-    if values[pluginID] == nil {
-      values[pluginID] = [:]
-    }
-    values[pluginID]?[key] = value
-
-    saveSettings(for: pluginID)
-
-    if let plugin = pluginRegistry.plugins.first(where: { $0.id == pluginID }) {
-      plugin.configure(values[pluginID] ?? [:])
-    }
-  }
-
-  // MARK: - Persistence
-
-  private func loadSettings() {
-    for plugin in pluginRegistry.plugins {
-      if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(plugin.id)") {
-        values[plugin.id] = saved
-      } else {
-        var defaults: [String: Any] = [:]
-        for definition in plugin.settings().definitions {
-          defaults[definition.key] = definition.defaultValue
-        }
-        values[plugin.id] = defaults
-      }
-    }
-  }
-
-  private func saveSettings(for pluginID: String) {
-    if let pluginValues = values[pluginID] {
-      UserDefaults.standard.set(pluginValues, forKey: "plugin.\(pluginID)")
     }
   }
 }

@@ -17,9 +17,15 @@ enum SettingDefinition: Identifiable {
   case text(key: String, label: String, defaultValue: String)
   case dropdown(key: String, label: String, options: [String], defaultValue: String)
   case color(key: String, label: String, defaultValue: String)
+  case section(label: String)
 
   var id: String {
-    key
+    switch self {
+    case .section(let label):
+      return "section.\(label)"
+    default:
+      return key
+    }
   }
 
   var key: String {
@@ -31,6 +37,8 @@ enum SettingDefinition: Identifiable {
          .dropdown(let key, _, _, _),
          .color(let key, _, _):
       return key
+    case .section:
+      return ""
     }
   }
 
@@ -41,7 +49,8 @@ enum SettingDefinition: Identifiable {
          .hotkey(_, let label, _),
          .text(_, let label, _),
          .dropdown(_, let label, _, _),
-         .color(_, let label, _):
+         .color(_, let label, _),
+         .section(let label):
       return label
     }
   }
@@ -60,6 +69,8 @@ enum SettingDefinition: Identifiable {
       return defaultValue
     case .color(_, _, let defaultValue):
       return defaultValue
+    case .section:
+      return ""
     }
   }
 }
