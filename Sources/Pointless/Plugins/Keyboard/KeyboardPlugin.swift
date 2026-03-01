@@ -44,6 +44,10 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   @Published var showConnectorLines = true
   @Published var fadeInDuration = 0.08
 
+  // Activation hotkey (parsed from display string like "⌘⇧Space")
+  private var hotkeyCode: UInt16 = 49  // Space
+  private var hotkeyModifiers: NSEvent.ModifierFlags = [.command, .shift]
+
   private enum OverlayPhase {
     case inactive
     case scanning
@@ -93,6 +97,15 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
     if let size = values["fontSize"] as? Double { badgeFontSize = CGFloat(size) }
     if let lines = values["showLines"] as? Bool { showConnectorLines = lines }
     if let fade = values["fadeIn"] as? Double { fadeInDuration = fade }
+    if let shortcut = values["activationHotkey"] as? String {
+      let parsed = parseShortcutString(shortcut)
+      self.hotkeyModifiers = parsed.modifiers
+      self.hotkeyCode = parsed.keyCode
+      Task { @MainActor in
+        self.stopActivationMonitor()
+        self.startActivationMonitor()
+      }
+    }
     Task { @MainActor in self.applySettingsToState() }
     saveSettings(values)
   }
@@ -102,10 +115,12 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
       if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(self.id)") { self.configure(saved) }
       Logger.info("KeyboardPlugin start — isEnabled=\(self.isEnabled)", logger: Logger.pluginLifecycle)
       guard self.isEnabled else { return }
-      KeyboardOnboardingController.shared.showIfNeeded { [weak self] in
-        Logger.info("KeyboardPlugin onboarding complete — installing activation monitor",
-                    logger: Logger.pluginLifecycle)
-        self?.startActivationMonitor()
+      // Always install the activation monitor so ⌘⇧Space works even before permissions.
+      // If permissions aren't granted yet, handleActivation() will show onboarding.
+      self.startActivationMonitor()
+      // Show onboarding on first launch if permissions are missing
+      KeyboardOnboardingController.shared.showIfNeeded {
+        Logger.info("KeyboardPlugin permissions granted", logger: Logger.pluginLifecycle)
       }
     }
   }
@@ -142,18 +157,13 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   // MARK: - Activation Monitor
 
   private func startActivationMonitor() {
+    let expectedCode = hotkeyCode
+    let expectedMods = hotkeyModifiers
     activationMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
       guard let self else { return }
-      let required: NSEvent.ModifierFlags = [.command, .shift]
       let relevantFlags: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
       let pressed = event.modifierFlags.intersection(relevantFlags)
-      if event.keyCode == 49 {
-        Logger.debug(
-          "KeyboardPlugin saw Space — modifiers: \(pressed.rawValue), required: \(required.rawValue)",
-          logger: Logger.pluginLifecycle
-        )
-      }
-      guard event.keyCode == 49, pressed == required else { return }
+      guard event.keyCode == expectedCode, pressed == expectedMods else { return }
       Logger.info("KeyboardPlugin activation triggered", logger: Logger.pluginLifecycle)
       Task { @MainActor in self.handleActivation() }
     }
@@ -190,6 +200,14 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
 
   @MainActor
   private func handleActivation() {
+    // If permissions aren't granted, show onboarding instead of activating
+    let onboarding = KeyboardOnboardingController.shared
+    onboarding.refresh()
+    guard onboarding.allGranted else {
+      onboarding.ensurePermissions()
+      return
+    }
+
     if case .active = phase {
       dismissOverlay()
       return
@@ -205,6 +223,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
         Logger.warning("No interactive elements found in focused window", logger: Logger.pluginLifecycle)
         self.phase = .inactive
         self.overlayWindows.forEach { $0.hide() }
+        showEmptyHint()
         return
       }
       let sorted = elements.sorted { lhs, rhs in

@@ -1,6 +1,45 @@
 import AppKit
 import SwiftUI
 
+// MARK: - Empty-scan hint
+
+@MainActor
+func showEmptyHint() {
+  let win = NSWindow(
+    contentRect: NSRect(x: 0, y: 0, width: 260, height: 36),
+    styleMask: .borderless,
+    backing: .buffered,
+    defer: false
+  )
+  win.backgroundColor = .clear
+  win.isOpaque = false
+  win.hasShadow = false
+  win.level = .popUpMenu
+  win.ignoresMouseEvents = true
+  win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+  let label = NSHostingView(rootView:
+    Text("No interactive elements found")
+      .font(.system(size: 12, weight: .medium, design: .rounded))
+      .foregroundColor(.white)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 6)
+      .background(Capsule().fill(Color.black.opacity(0.7)))
+  )
+  win.contentView = label
+  win.center()
+  win.makeKeyAndOrderFront(nil)
+
+  DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+    NSAnimationContext.runAnimationGroup { ctx in
+      ctx.duration = 0.3
+      win.animator().alphaValue = 0
+    } completionHandler: {
+      win.orderOut(nil)
+    }
+  }
+}
+
 // MARK: - CGRect helpers
 
 extension CGRect {
@@ -96,7 +135,7 @@ struct OverlayContentView: View {
   var body: some View {
     ZStack(alignment: .top) {
       Canvas { ctx, size in
-        for labeled in state.filteredElements {
+        for labeled in state.labeledElements {
           drawElement(labeled, in: &ctx, viewSize: size)
         }
       }

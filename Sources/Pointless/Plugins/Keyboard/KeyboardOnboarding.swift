@@ -29,8 +29,12 @@ final class KeyboardOnboardingController: ObservableObject {
 
   var allGranted: Bool { hasAccessibility && hasInputMonitoring }
 
+  /// Whether onComplete has been called (activation monitor installed)
+  private(set) var isActivated = false
+
   private var window: NSWindow?
   private var pollTimer: Timer?
+  private var pendingCompletion: (() -> Void)?
 
   private init() {
     hasAccessibility = AXIsProcessTrusted()
@@ -49,11 +53,24 @@ final class KeyboardOnboardingController: ObservableObject {
       logger: Logger.pluginLifecycle
     )
     if allGranted {
+      isActivated = true
       onComplete()
       return
     }
+    pendingCompletion = onComplete
     showWindow()
-    startPolling(onComplete: onComplete)
+    startPolling()
+  }
+
+  /// Re-check permissions and show onboarding if still needed.
+  /// Called when user tries to activate but permissions aren't granted yet.
+  func ensurePermissions() {
+    refresh()
+    guard !allGranted else { return }
+    showWindow()
+    if pollTimer == nil {
+      startPolling()
+    }
   }
 
   func refresh() {
@@ -61,7 +78,7 @@ final class KeyboardOnboardingController: ObservableObject {
     hasInputMonitoring = checkInputMonitoringAccess()
   }
 
-  private func startPolling(onComplete: @escaping () -> Void) {
+  private func startPolling() {
     stopPolling()
     let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
       Task { @MainActor [weak self] in
@@ -71,10 +88,15 @@ final class KeyboardOnboardingController: ObservableObject {
         self.stopPolling()
         self.showSuccess = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-          self?.showSuccess = false
-          self?.window?.orderOut(nil)
+          guard let self else { return }
+          self.showSuccess = false
+          self.window?.orderOut(nil)
           NSApp.setActivationPolicy(.accessory)
-          onComplete()
+          if !self.isActivated, let completion = self.pendingCompletion {
+            self.isActivated = true
+            self.pendingCompletion = nil
+            completion()
+          }
         }
       }
     }
@@ -132,12 +154,12 @@ struct OnboardingView: View {
     PermissionInfo(
       step: 1, symbol: "accessibility", title: "Accessibility",
       description: "Reads UI elements so jump targets can be found",
-      settingsPath: "Privacy_Accessibility"
+      settingsPath: "Accessibility"
     ),
     PermissionInfo(
       step: 2, symbol: "keyboard", title: "Input Monitoring",
       description: "Intercepts the activation shortcut and navigation keys",
-      settingsPath: "Privacy_InputMonitoring"
+      settingsPath: "InputMonitoring"
     )
   ]
 
@@ -254,8 +276,14 @@ struct OnboardingView: View {
   }
 
   private func openSettings(path: String) {
-    let base = "x-apple.systempreferences:com.apple.preference.security?"
-    guard let url = URL(string: base + path) else { return }
+    // macOS 13+ uses Privacy & Security pane with direct anchor URLs
+    let url: URL?
+    if #available(macOS 13.0, *) {
+      url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_\(path)")
+    } else {
+      url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_\(path)")
+    }
+    guard let url else { return }
     NSWorkspace.shared.open(url)
   }
 }
