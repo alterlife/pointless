@@ -34,13 +34,17 @@ public class SettingsWindowManager {
     windowDelegate = delegate
 
     settingsWindow = window
+    window.level = .floating
+    window.collectionBehavior = [.moveToActiveSpace, .transient]
     window.makeKeyAndOrderFront(nil)
+    NSApp.setActivationPolicy(.regular)
     NSApp.activate(ignoringOtherApps: true)
   }
 }
 
 private class WindowDelegate: NSObject, NSWindowDelegate {
   func windowWillClose(_ notification: Notification) {
-    // Window will close but reference will remain for reuse
+    // Return to accessory mode (hides dock icon) when settings closes
+    NSApp.setActivationPolicy(.accessory)
   }
 }

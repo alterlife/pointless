@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import OSLog
 import SwiftUI
 
 // MARK: - Input Monitoring check
@@ -37,7 +38,16 @@ final class KeyboardOnboardingController: ObservableObject {
   }
 
   func showIfNeeded(onComplete: @escaping () -> Void) {
+    // Trigger system permission prompts on first launch
+    if !hasAccessibility {
+      let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
+      _ = AXIsProcessTrustedWithOptions(options)
+    }
     refresh()
+    Logger.info(
+      "KeyboardOnboarding: AX=\(hasAccessibility), IM=\(hasInputMonitoring), allGranted=\(allGranted)",
+      logger: Logger.pluginLifecycle
+    )
     if allGranted {
       onComplete()
       return
@@ -63,6 +73,7 @@ final class KeyboardOnboardingController: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
           self?.showSuccess = false
           self?.window?.orderOut(nil)
+          NSApp.setActivationPolicy(.accessory)
           onComplete()
         }
       }
@@ -93,8 +104,11 @@ final class KeyboardOnboardingController: ObservableObject {
     win.contentView = NSHostingView(rootView: OnboardingView(controller: self))
     win.center()
     win.isReleasedWhenClosed = false
+    win.level = .floating
+    win.collectionBehavior = [.moveToActiveSpace, .transient]
     window = win
     win.makeKeyAndOrderFront(nil)
+    NSApp.setActivationPolicy(.regular)
     NSApp.activate(ignoringOtherApps: true)
   }
 }

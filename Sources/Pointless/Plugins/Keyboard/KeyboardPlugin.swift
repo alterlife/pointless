@@ -100,8 +100,11 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   func start() {
     Task { @MainActor in
       if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(self.id)") { self.configure(saved) }
+      Logger.info("KeyboardPlugin start — isEnabled=\(self.isEnabled)", logger: Logger.pluginLifecycle)
       guard self.isEnabled else { return }
       KeyboardOnboardingController.shared.showIfNeeded { [weak self] in
+        Logger.info("KeyboardPlugin onboarding complete — installing activation monitor",
+                    logger: Logger.pluginLifecycle)
         self?.startActivationMonitor()
       }
     }
@@ -143,10 +146,21 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
       guard let self else { return }
       let required: NSEvent.ModifierFlags = [.command, .shift]
       let relevantFlags: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
-      guard event.keyCode == 49,
-            event.modifierFlags.intersection(relevantFlags) == required else { return }
+      let pressed = event.modifierFlags.intersection(relevantFlags)
+      if event.keyCode == 49 {
+        Logger.debug(
+          "KeyboardPlugin saw Space — modifiers: \(pressed.rawValue), required: \(required.rawValue)",
+          logger: Logger.pluginLifecycle
+        )
+      }
+      guard event.keyCode == 49, pressed == required else { return }
+      Logger.info("KeyboardPlugin activation triggered", logger: Logger.pluginLifecycle)
       Task { @MainActor in self.handleActivation() }
     }
+    Logger.info(
+      "KeyboardPlugin activation monitor installed: \(self.activationMonitor != nil)",
+      logger: Logger.pluginLifecycle
+    )
 
     appSwitchObserver = NSWorkspace.shared.notificationCenter.addObserver(
       forName: NSWorkspace.didActivateApplicationNotification,
