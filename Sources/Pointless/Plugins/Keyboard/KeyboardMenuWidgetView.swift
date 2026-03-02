@@ -57,7 +57,10 @@ struct KeyboardMenuWidgetView: View {
   private var controlsRow: some View {
     HStack(spacing: 12) {
       Button {
-        NotificationCenter.default.post(name: KeyboardPlugin.activateNotification, object: nil)
+        MenuBar.dismissMenu()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+          NotificationCenter.default.post(name: KeyboardPlugin.activateNotification, object: nil)
+        }
       } label: {
         Label("Activate", systemImage: "keyboard")
           .font(.caption)

@@ -13,25 +13,22 @@ public struct SettingsView: View {
 
   public var body: some View {
     TabView(selection: $selectedTab) {
-      ForEach(pluginRegistry.plugins, id: \.id) { plugin in
+      // Pointless tab (keyboard plugin settings — always visible)
+      keyboardSettingsTab()
+        .tabItem { Label("Pointless", systemImage: "keyboard") }
+        .tag("pointless.keyboard")
+
+      // Plugins tab — card layout with per-widget toggles
+      pluginsTab()
+        .tabItem { Label("Plugins", systemImage: "puzzlepiece.extension") }
+        .tag("plugins")
+
+      // Conditional per-plugin settings tabs (only when enabled, not keyboard)
+      ForEach(enabledNonKeyboardPlugins, id: \.id) { plugin in
         pluginSettingsTab(for: plugin)
-          .tabItem {
-            Label(plugin.name, systemImage: plugin.icon)
-          }
+          .tabItem { Label(plugin.name, systemImage: plugin.icon) }
           .tag(plugin.id)
       }
-
-      menuBarTab()
-        .tabItem {
-          Label("Menu Bar", systemImage: "macwindow")
-        }
-        .tag("menubar")
-
-      menuDetailTab()
-        .tabItem {
-          Label("Menu Detail", systemImage: "list.bullet")
-        }
-        .tag("menudetail")
     }
     .frame(minWidth: 800, minHeight: 600)
     .onAppear {
@@ -39,51 +36,122 @@ public struct SettingsView: View {
     }
   }
 
-  // MARK: - Menu Bar Tab
+  private var enabledNonKeyboardPlugins: [AnyPlugin] {
+    pluginRegistry.plugins.filter { $0.isEnabled && $0.id != "pointless.keyboard" }
+  }
+
+  // MARK: - Pointless Tab (Keyboard Settings)
 
   @ViewBuilder
-  private func menuBarTab() -> some View {
-    HStack(spacing: 0) {
-      menuBarActiveSection()
-      Divider()
-      menuBarLibrarySection()
+  private func keyboardSettingsTab() -> some View {
+    if let keyboard = pluginRegistry.plugins.first(where: { $0.id == "pointless.keyboard" }) {
+      pluginSettingsTab(for: keyboard)
+    } else {
+      Text("Keyboard plugin not found")
+        .foregroundColor(.secondary)
+    }
+  }
+
+  // MARK: - Plugins Tab
+
+  @ViewBuilder
+  private func pluginsTab() -> some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 20) {
+        // Plugins section
+        pluginsSection()
+
+        // Icon Widgets section
+        if !widgetRegistry.sortedAllMenuBarWidgets.isEmpty {
+          iconWidgetsSection()
+        }
+
+        // Menu Widgets section
+        if !widgetRegistry.sortedAllMenuWidgets.isEmpty {
+          menuWidgetsSection()
+        }
+      }
+      .padding()
+    }
+  }
+
+  // MARK: - Plugins Section
+
+  @ViewBuilder
+  private func pluginsSection() -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Plugins")
+        .font(.headline)
+        .foregroundColor(.secondary)
+
+      VStack(spacing: 0) {
+        ForEach(Array(pluginRegistry.plugins.enumerated()), id: \.element.id) { index, plugin in
+          if index > 0 {
+            Divider()
+          }
+          pluginRow(for: plugin)
+        }
+      }
+      .background(Color(NSColor.controlBackgroundColor))
+      .cornerRadius(8)
     }
   }
 
   @ViewBuilder
-  private func menuBarActiveSection() -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Active Widgets")
-        .font(.headline)
-        .padding(.horizontal)
-        .padding(.top)
+  private func pluginRow(for plugin: AnyPlugin) -> some View {
+    HStack(spacing: 10) {
+      Image(systemName: plugin.icon)
+        .foregroundColor(plugin.isEnabled ? .accentColor : .secondary)
+        .frame(width: 20)
 
-      Text("Drag to reorder • Drag to library to remove")
+      Text(plugin.name)
+        .font(.body)
+
+      Spacer()
+
+      if plugin.isEnabled && pluginHasSettings(plugin) {
+        Button("Configure") {
+          selectedTab = plugin.id == "pointless.keyboard" ? "pointless.keyboard" : plugin.id
+        }
+        .buttonStyle(.borderless)
         .font(.caption)
+        .foregroundColor(.accentColor)
+      }
+
+      Toggle("", isOn: pluginEnabledBinding(for: plugin))
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .labelsHidden()
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+  }
+
+  private func pluginHasSettings(_ plugin: AnyPlugin) -> Bool {
+    plugin.id == "pointless.keyboard" || !plugin.settings().definitions.isEmpty
+  }
+
+  // MARK: - Icon Widgets Section
+
+  @ViewBuilder
+  private func iconWidgetsSection() -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Icon Widgets")
+        .font(.headline)
         .foregroundColor(.secondary)
-        .padding(.horizontal)
 
-      // WYSIWYG Preview
-      HStack(spacing: 0) {
-        ForEach(Array(widgetRegistry.orderedMenuBarWidgets.enumerated()), id: \.element.id) { index, widget in
-          HStack(spacing: 4) {
-            Image(systemName: "line.3.horizontal")
-              .font(.caption2)
-              .foregroundColor(.secondary)
-
-            if index > 0 {
-              Text(" | ")
-                .foregroundColor(.secondary)
-                .font(.system(size: 12))
-            }
-
-            ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
-              widget.viewBuilder()
-            }
+      VStack(spacing: 0) {
+        ForEach(
+          Array(widgetRegistry.sortedAllMenuBarWidgets.enumerated()), id: \.element.id
+        ) { index, widget in
+          if index > 0 {
+            Divider()
           }
-          .padding(4)
-          .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-          .cornerRadius(4)
+          widgetRow(
+            widget: widget,
+            isVisible: menuBarVisibilityBinding(for: widget.id),
+            isPluginEnabled: pluginEnabled(for: widget.pluginId)
+          )
           .onDrag {
             draggedMenuBarWidgetId = widget.id
             return NSItemProvider(object: widget.id as NSString)
@@ -94,200 +162,87 @@ public struct SettingsView: View {
             widgetRegistry: widgetRegistry
           ))
         }
-
-        Spacer()
       }
-      .padding()
-      .frame(maxWidth: .infinity, minHeight: 200)
       .background(Color(NSColor.controlBackgroundColor))
       .cornerRadius(8)
-      .padding(.horizontal)
-
-      Spacer()
     }
-    .frame(maxWidth: .infinity)
   }
 
+  // MARK: - Menu Widgets Section
+
   @ViewBuilder
-  private func menuBarLibrarySection() -> some View {
+  private func menuWidgetsSection() -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Library")
+      Text("Menu Widgets")
         .font(.headline)
-        .padding(.horizontal)
-        .padding(.top)
-
-      Text("Drag widgets to add them")
-        .font(.caption)
         .foregroundColor(.secondary)
-        .padding(.horizontal)
 
-      VStack(spacing: 8) {
-        ForEach(getInactiveMenuBarWidgets(), id: \.id) { widget in
-          HStack(spacing: 4) {
-            Image(systemName: "line.3.horizontal")
-              .font(.caption2)
-              .foregroundColor(.secondary)
-
-            ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
-              widget.viewBuilder()
-            }
+      VStack(spacing: 0) {
+        ForEach(
+          Array(widgetRegistry.sortedAllMenuWidgets.enumerated()), id: \.element.id
+        ) { index, widget in
+          if index > 0 {
+            Divider()
           }
-          .padding(8)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .background(Color(NSColor.controlBackgroundColor))
-          .cornerRadius(6)
-          .opacity(0.7)
-          .onDrag {
-            draggedMenuBarWidgetId = widget.id
-            widgetRegistry.setMenuBarVisibility(widgetId: widget.id, isVisible: true)
-            return NSItemProvider(object: widget.id as NSString)
-          }
-        }
-
-        if getInactiveMenuBarWidgets().isEmpty {
-          Text("All widgets active")
-            .font(.caption)
-            .foregroundColor(.secondary)
-            .padding()
-        }
-      }
-      .padding()
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
-      .cornerRadius(8)
-      .padding(.horizontal)
-      .onDrop(of: [.text], delegate: MenuBarRemoveDropDelegate(
-        draggedWidgetId: $draggedMenuBarWidgetId,
-        widgetRegistry: widgetRegistry
-      ))
-
-      Spacer()
-    }
-    .frame(width: 250)
-  }
-
-  // MARK: - Menu Detail Tab
-
-  @ViewBuilder
-  private func menuDetailTab() -> some View {
-    HStack(spacing: 0) {
-      menuDetailActiveSection()
-      Divider()
-      menuDetailLibrarySection()
-    }
-  }
-
-  @ViewBuilder
-  private func menuDetailActiveSection() -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Active Widgets")
-        .font(.headline)
-        .padding(.horizontal)
-        .padding(.top)
-
-      Text("Drag to reorder • Drag to library to remove")
-        .font(.caption)
-        .foregroundColor(.secondary)
-        .padding(.horizontal)
-
-      // WYSIWYG Preview
-      ScrollView {
-        VStack(spacing: 0) {
-          ForEach(widgetRegistry.orderedMenuWidgets, id: \.id) { widget in
-            VStack(spacing: 0) {
-              HStack(spacing: 4) {
-                Image(systemName: "line.3.horizontal")
-                  .font(.caption2)
-                  .foregroundColor(.secondary)
-
-                ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
-                  AnyView(widget.viewBuilder().frame(width: 320))
-                }
-              }
-              .padding(.vertical, 8)
-
-              if widget.id != widgetRegistry.orderedMenuWidgets.last?.id {
-                Divider()
-              }
-            }
-            .onDrag {
-              draggedMenuWidgetId = widget.id
-              return NSItemProvider(object: widget.id as NSString)
-            }
-            .onDrop(of: [.text], delegate: MenuActiveDropDelegate(
-              targetWidgetId: widget.id,
-              draggedWidgetId: $draggedMenuWidgetId,
-              widgetRegistry: widgetRegistry
-            ))
-          }
-        }
-      }
-      .frame(maxHeight: .infinity)
-      .background(Color(NSColor.controlBackgroundColor))
-      .cornerRadius(8)
-      .padding(.horizontal)
-
-      Spacer()
-    }
-    .frame(maxWidth: .infinity)
-  }
-
-  @ViewBuilder
-  private func menuDetailLibrarySection() -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Library")
-        .font(.headline)
-        .padding(.horizontal)
-        .padding(.top)
-
-      Text("Drag widgets to add them")
-        .font(.caption)
-        .foregroundColor(.secondary)
-        .padding(.horizontal)
-
-      VStack(spacing: 8) {
-        ForEach(getInactiveMenuWidgets(), id: \.id) { widget in
-          HStack(spacing: 4) {
-            Image(systemName: "line.3.horizontal")
-              .font(.caption2)
-              .foregroundColor(.secondary)
-
-            ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
-              AnyView(widget.viewBuilder())
-            }
-          }
-          .padding(8)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .background(Color(NSColor.controlBackgroundColor))
-          .cornerRadius(6)
-          .opacity(0.7)
+          widgetRow(
+            widget: widget,
+            isVisible: menuVisibilityBinding(for: widget.id),
+            isPluginEnabled: pluginEnabled(for: widget.pluginId)
+          )
           .onDrag {
             draggedMenuWidgetId = widget.id
-            widgetRegistry.setMenuVisibility(widgetId: widget.id, isVisible: true)
             return NSItemProvider(object: widget.id as NSString)
           }
-        }
-
-        if getInactiveMenuWidgets().isEmpty {
-          Text("All widgets active")
-            .font(.caption)
-            .foregroundColor(.secondary)
-            .padding()
+          .onDrop(of: [.text], delegate: MenuActiveDropDelegate(
+            targetWidgetId: widget.id,
+            draggedWidgetId: $draggedMenuWidgetId,
+            widgetRegistry: widgetRegistry
+          ))
         }
       }
-      .padding()
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+      .background(Color(NSColor.controlBackgroundColor))
       .cornerRadius(8)
-      .padding(.horizontal)
-      .onDrop(of: [.text], delegate: MenuRemoveDropDelegate(
-        draggedWidgetId: $draggedMenuWidgetId,
-        widgetRegistry: widgetRegistry
-      ))
+    }
+  }
+
+  // MARK: - Widget Row
+
+  @ViewBuilder
+  private func widgetRow(
+    widget: some WidgetProtocol,
+    isVisible: Binding<Bool>,
+    isPluginEnabled: Bool
+  ) -> some View {
+    let pluginIcon = pluginRegistry.plugins.first { $0.id == widget.pluginId }?.icon ?? "puzzlepiece"
+
+    HStack(spacing: 10) {
+      Image(systemName: "line.3.horizontal")
+        .font(.caption)
+        .foregroundColor(.secondary)
+
+      Toggle("", isOn: isVisible)
+        .toggleStyle(.checkbox)
+        .labelsHidden()
+        .disabled(!isPluginEnabled)
+
+      Image(systemName: pluginIcon)
+        .font(.caption)
+        .foregroundColor(isPluginEnabled ? .secondary : Color(NSColor.quaternaryLabelColor))
+        .frame(width: 16)
+
+      Text(widget.name)
+        .font(.body)
+        .foregroundColor(isPluginEnabled ? .primary : .secondary)
 
       Spacer()
     }
-    .frame(width: 250)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 6)
+    .opacity(isPluginEnabled ? 1.0 : 0.5)
+  }
+
+  private func pluginEnabled(for pluginId: String) -> Bool {
+    pluginRegistry.plugins.first { $0.id == pluginId }?.isEnabled ?? false
   }
 
   // MARK: - Plugin Settings Tab

@@ -1,21 +1,34 @@
 import SwiftUI
 
-/// Helper extensions for SettingsView widget filtering
+/// Helper extensions for SettingsView widget and plugin bindings
 extension SettingsView {
-  func getInactiveMenuBarWidgets() -> [MenuBarWidget] {
-    getAllMenuBarWidgets().filter { !widgetRegistry.isMenuBarWidgetVisible($0.id) }
+  /// Binding to toggle a menu bar widget's visibility
+  func menuBarVisibilityBinding(for widgetId: String) -> Binding<Bool> {
+    Binding(
+      get: { widgetRegistry.isMenuBarWidgetVisible(widgetId) },
+      set: { widgetRegistry.setMenuBarVisibility(widgetId: widgetId, isVisible: $0) }
+    )
   }
 
-  func getInactiveMenuWidgets() -> [MenuWidget] {
-    getAllMenuWidgets().filter { !widgetRegistry.isMenuWidgetVisible($0.id) }
+  /// Binding to toggle a menu widget's visibility
+  func menuVisibilityBinding(for widgetId: String) -> Binding<Bool> {
+    Binding(
+      get: { widgetRegistry.isMenuWidgetVisible(widgetId) },
+      set: { widgetRegistry.setMenuVisibility(widgetId: widgetId, isVisible: $0) }
+    )
   }
 
-  func getAllMenuBarWidgets() -> [MenuBarWidget] {
-    pluginRegistry.plugins.flatMap { $0.menuBarWidgets() }
-  }
-
-  func getAllMenuWidgets() -> [MenuWidget] {
-    pluginRegistry.plugins.flatMap { $0.menuWidgets() }
+  /// Binding to toggle a plugin's enabled state
+  func pluginEnabledBinding(for plugin: AnyPlugin) -> Binding<Bool> {
+    Binding(
+      get: { plugin.isEnabled },
+      set: { newValue in
+        plugin.configure(["enabled": newValue])
+        // Also update our local values dict so settings stay in sync
+        if values[plugin.id] == nil { values[plugin.id] = [:] }
+        values[plugin.id]?["enabled"] = newValue
+      }
+    )
   }
 }
 

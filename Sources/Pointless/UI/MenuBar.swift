@@ -8,6 +8,7 @@ class MenuBar {
   static let shared = MenuBar()
 
   private var statusItem: NSStatusItem?
+  private var activeMenu: NSMenu?
   private var cancellables = Set<AnyCancellable>()
 
   private init() {}
@@ -30,6 +31,11 @@ class MenuBar {
       button.action = #selector(showMenu)
       button.target = self
     }
+  }
+
+  /// Dismiss the currently displayed menu (if any)
+  static func dismissMenu() {
+    shared.activeMenu?.cancelTracking()
   }
 
   @objc private func showMenu() {
@@ -70,9 +76,11 @@ class MenuBar {
     quitItem.target = self
     menu.addItem(quitItem)
 
+    activeMenu = menu
     statusItem?.menu = menu
     button.performClick(nil)
     statusItem?.menu = nil
+    activeMenu = nil
   }
 
   @objc private func openSettings() {

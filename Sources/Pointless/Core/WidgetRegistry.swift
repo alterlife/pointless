@@ -10,6 +10,10 @@ class WidgetRegistry: ObservableObject {
   @Published private(set) var orderedMenuBarWidgets: [MenuBarWidget] = []
   @Published private(set) var orderedMenuWidgets: [MenuWidget] = []
 
+  /// All widgets sorted by saved position (visible + hidden)
+  @Published private(set) var sortedAllMenuBarWidgets: [MenuBarWidget] = []
+  @Published private(set) var sortedAllMenuWidgets: [MenuWidget] = []
+
   private var allMenuBarWidgets: [MenuBarWidget] = []
   private var allMenuWidgets: [MenuWidget] = []
   private var cancellables = Set<AnyCancellable>()
@@ -76,17 +80,47 @@ class WidgetRegistry: ObservableObject {
     rebuildOrderedMenuWidgets()
   }
 
+  // MARK: - Per-Plugin Queries
+
+  /// All menu bar widgets registered by a specific plugin
+  func menuBarWidgets(forPlugin pluginId: String) -> [MenuBarWidget] {
+    allMenuBarWidgets.filter { $0.pluginId == pluginId }
+  }
+
+  /// All menu widgets registered by a specific plugin
+  func menuWidgets(forPlugin pluginId: String) -> [MenuWidget] {
+    allMenuWidgets.filter { $0.pluginId == pluginId }
+  }
+
   // MARK: - Reordering
 
-  /// Reorder menu bar widgets
+  /// Reorder menu bar widgets (visible only)
   func reorderMenuBar(from source: IndexSet, to destination: Int) {
     orderedMenuBarWidgets.move(fromOffsets: source, toOffset: destination)
     saveConfigs()
   }
 
-  /// Reorder menu widgets
+  /// Reorder menu widgets (visible only)
   func reorderMenu(from source: IndexSet, to destination: Int) {
     orderedMenuWidgets.move(fromOffsets: source, toOffset: destination)
+    saveConfigs()
+  }
+
+  /// Reorder all menu bar widgets (visible + hidden), then rebuild visible list
+  func reorderAllMenuBar(from source: IndexSet, to destination: Int) {
+    sortedAllMenuBarWidgets.move(fromOffsets: source, toOffset: destination)
+    orderedMenuBarWidgets = sortedAllMenuBarWidgets.filter { widget in
+      isMenuBarWidgetVisible(widget.id)
+    }
+    saveConfigs()
+  }
+
+  /// Reorder all menu widgets (visible + hidden), then rebuild visible list
+  func reorderAllMenu(from source: IndexSet, to destination: Int) {
+    sortedAllMenuWidgets.move(fromOffsets: source, toOffset: destination)
+    orderedMenuWidgets = sortedAllMenuWidgets.filter { widget in
+      isMenuWidgetVisible(widget.id)
+    }
     saveConfigs()
   }
 
@@ -135,8 +169,9 @@ class WidgetRegistry: ObservableObject {
       widgets.append(WidgetInfo(widget: widget, position: position, isVisible: isVisible))
     }
 
-    // Sort by position, then filter visible
+    // Sort by position
     widgets.sort { $0.position < $1.position }
+    sortedAllMenuBarWidgets = widgets.map { $0.widget }
     orderedMenuBarWidgets = widgets.filter { $0.isVisible }.map { $0.widget }
   }
 
@@ -159,8 +194,9 @@ class WidgetRegistry: ObservableObject {
       widgets.append(WidgetInfo(widget: widget, position: position, isVisible: isVisible))
     }
 
-    // Sort by position, then filter visible
+    // Sort by position
     widgets.sort { $0.position < $1.position }
+    sortedAllMenuWidgets = widgets.map { $0.widget }
     orderedMenuWidgets = widgets.filter { $0.isVisible }.map { $0.widget }
   }
 
@@ -182,44 +218,26 @@ class WidgetRegistry: ObservableObject {
 
   private func saveConfigs() {
     var configs: [WidgetConfig] = []
+    let visibleMenuBarIds = Set(orderedMenuBarWidgets.map { $0.id })
+    let visibleMenuIds = Set(orderedMenuWidgets.map { $0.id })
 
-    // Save menu bar widget configs
-    for (index, widget) in orderedMenuBarWidgets.enumerated() {
+    // Save all menu bar widgets in their sorted order
+    for (index, widget) in sortedAllMenuBarWidgets.enumerated() {
       configs.append(WidgetConfig(
         id: widget.id,
         widgetType: .menuBar,
-        isVisible: true,
+        isVisible: visibleMenuBarIds.contains(widget.id),
         position: index
       ))
     }
 
-    // Save hidden menu bar widgets
-    for widget in allMenuBarWidgets where !orderedMenuBarWidgets.contains(where: { $0.id == widget.id }) {
-      configs.append(WidgetConfig(
-        id: widget.id,
-        widgetType: .menuBar,
-        isVisible: false,
-        position: widget.priority
-      ))
-    }
-
-    // Save menu widget configs
-    for (index, widget) in orderedMenuWidgets.enumerated() {
+    // Save all menu widgets in their sorted order
+    for (index, widget) in sortedAllMenuWidgets.enumerated() {
       configs.append(WidgetConfig(
         id: widget.id,
         widgetType: .menu,
-        isVisible: true,
+        isVisible: visibleMenuIds.contains(widget.id),
         position: index
-      ))
-    }
-
-    // Save hidden menu widgets
-    for widget in allMenuWidgets where !orderedMenuWidgets.contains(where: { $0.id == widget.id }) {
-      configs.append(WidgetConfig(
-        id: widget.id,
-        widgetType: .menu,
-        isVisible: false,
-        position: widget.priority
       ))
     }
 
