@@ -131,73 +131,68 @@ public struct SettingsView: View {
     plugin.id == "pointless.keyboard" || !plugin.settings().definitions.isEmpty
   }
 
-  // MARK: - Icon Widgets Section
+  // MARK: - Widget List Sections
 
   @ViewBuilder
   private func iconWidgetsSection() -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Menu Bar Widgets")
-        .font(.headline)
-        .foregroundColor(.secondary)
-
-      VStack(spacing: 0) {
-        ForEach(
-          Array(widgetRegistry.sortedAllMenuBarWidgets.enumerated()), id: \.element.id
-        ) { index, widget in
-          if index > 0 {
-            Divider()
-          }
-          widgetRow(
-            widget: widget,
-            isVisible: menuBarVisibilityBinding(for: widget.id),
-            isPluginEnabled: pluginEnabled(for: widget.pluginId)
-          )
-          .onDrag {
-            draggedMenuBarWidgetId = widget.id
-            return NSItemProvider(object: widget.id as NSString)
-          }
-          .onDrop(of: [.text], delegate: MenuBarActiveDropDelegate(
-            targetWidgetId: widget.id,
-            draggedWidgetId: $draggedMenuBarWidgetId,
-            widgetRegistry: widgetRegistry
-          ))
-        }
-      }
-      .background(Color(NSColor.controlBackgroundColor))
-      .cornerRadius(8)
+    widgetListSection(
+      title: "Menu Bar Widgets",
+      widgets: widgetRegistry.sortedAllMenuBarWidgets,
+      visibilityBinding: menuBarVisibilityBinding,
+      draggedId: $draggedMenuBarWidgetId
+    ) { widget in
+      MenuBarActiveDropDelegate(
+        targetWidgetId: widget.id,
+        draggedWidgetId: $draggedMenuBarWidgetId,
+        widgetRegistry: widgetRegistry
+      )
     }
   }
 
-  // MARK: - Menu Widgets Section
-
   @ViewBuilder
   private func menuWidgetsSection() -> some View {
+    widgetListSection(
+      title: "Menu Widgets",
+      widgets: widgetRegistry.sortedAllMenuWidgets,
+      visibilityBinding: menuVisibilityBinding,
+      draggedId: $draggedMenuWidgetId
+    ) { widget in
+      MenuActiveDropDelegate(
+        targetWidgetId: widget.id,
+        draggedWidgetId: $draggedMenuWidgetId,
+        widgetRegistry: widgetRegistry
+      )
+    }
+  }
+
+  @ViewBuilder
+  private func widgetListSection<W: WidgetProtocol & Identifiable, D: DropDelegate>(
+    title: String,
+    widgets: [W],
+    visibilityBinding: @escaping (String) -> Binding<Bool>,
+    draggedId: Binding<String?>,
+    dropDelegate: @escaping (W) -> D
+  ) -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Menu Widgets")
+      Text(title)
         .font(.headline)
         .foregroundColor(.secondary)
 
       VStack(spacing: 0) {
-        ForEach(
-          Array(widgetRegistry.sortedAllMenuWidgets.enumerated()), id: \.element.id
-        ) { index, widget in
+        ForEach(Array(widgets.enumerated()), id: \.element.id) { index, widget in
           if index > 0 {
             Divider()
           }
           widgetRow(
             widget: widget,
-            isVisible: menuVisibilityBinding(for: widget.id),
+            isVisible: visibilityBinding(widget.id),
             isPluginEnabled: pluginEnabled(for: widget.pluginId)
           )
           .onDrag {
-            draggedMenuWidgetId = widget.id
+            draggedId.wrappedValue = widget.id
             return NSItemProvider(object: widget.id as NSString)
           }
-          .onDrop(of: [.text], delegate: MenuActiveDropDelegate(
-            targetWidgetId: widget.id,
-            draggedWidgetId: $draggedMenuWidgetId,
-            widgetRegistry: widgetRegistry
-          ))
+          .onDrop(of: [.text], delegate: dropDelegate(widget))
         }
       }
       .background(Color(NSColor.controlBackgroundColor))

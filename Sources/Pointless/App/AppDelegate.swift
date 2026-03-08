@@ -28,16 +28,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
       // Register widgets from all plugins
       Logger.info("Registering widgets")
       for plugin in PluginRegistry.shared.plugins {
-        let menuBarWidgets = plugin.menuBarWidgets()
-        let menuWidgets = plugin.menuWidgets()
-
-        if !menuBarWidgets.isEmpty {
-          WidgetRegistry.shared.registerMenuBarWidgets(menuBarWidgets)
-        }
-
-        if !menuWidgets.isEmpty {
-          WidgetRegistry.shared.registerMenuWidgets(menuWidgets)
-        }
+        WidgetRegistry.shared.registerMenuBarWidgets(plugin.menuBarWidgets())
+        WidgetRegistry.shared.registerMenuWidgets(plugin.menuWidgets())
       }
 
       MenuBar.shared.setup()

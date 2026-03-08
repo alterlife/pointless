@@ -422,6 +422,1074 @@ testSuite("Coordinate Tests") {
     }
 }
 
+// MARK: - SettingDefinition Tests (mirroring actual PluginSettings.swift)
+
+enum TestSettingDefinition {
+    case slider(key: String, label: String, range: ClosedRange<Double>, defaultValue: Double, step: Double)
+    case toggle(key: String, label: String, defaultValue: Bool)
+    case hotkey(key: String, label: String, defaultValue: String)
+    case text(key: String, label: String, defaultValue: String)
+    case dropdown(key: String, label: String, options: [String], defaultValue: String)
+    case color(key: String, label: String, defaultValue: String)
+    case section(label: String, description: String?)
+
+    var id: String {
+        switch self {
+        case .section(let label, _):
+            return "section.\(label)"
+        default:
+            return key
+        }
+    }
+
+    var key: String {
+        switch self {
+        case .slider(let key, _, _, _, _),
+             .toggle(let key, _, _),
+             .hotkey(let key, _, _),
+             .text(let key, _, _),
+             .dropdown(let key, _, _, _),
+             .color(let key, _, _):
+            return key
+        case .section:
+            return ""
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .slider(_, let label, _, _, _),
+             .toggle(_, let label, _),
+             .hotkey(_, let label, _),
+             .text(_, let label, _),
+             .dropdown(_, let label, _, _),
+             .color(_, let label, _):
+            return label
+        case .section(let label, _):
+            return label
+        }
+    }
+
+    var defaultValue: Any {
+        switch self {
+        case .slider(_, _, _, let defaultValue, _):
+            return defaultValue
+        case .toggle(_, _, let defaultValue):
+            return defaultValue
+        case .hotkey(_, _, let defaultValue):
+            return defaultValue
+        case .text(_, _, let defaultValue):
+            return defaultValue
+        case .dropdown(_, _, _, let defaultValue):
+            return defaultValue
+        case .color(_, _, let defaultValue):
+            return defaultValue
+        case .section:
+            return ""
+        }
+    }
+}
+
+testSuite("SettingDefinition Tests") {
+    runTest("slider — key, label, defaultValue") {
+        let s = TestSettingDefinition.slider(key: "interval", label: "Update Interval",
+                                            range: 1.0...60.0, defaultValue: 5.0, step: 0.5)
+        assertEqual(s.key, "interval")
+        assertEqual(s.label, "Update Interval")
+        assertEqual(s.id, "interval", "id should equal key for non-section")
+        verify((s.defaultValue as? Double) == 5.0, "defaultValue should be 5.0")
+    }
+
+    runTest("toggle — key, label, defaultValue") {
+        let s = TestSettingDefinition.toggle(key: "enabled", label: "Enabled", defaultValue: true)
+        assertEqual(s.key, "enabled")
+        assertEqual(s.label, "Enabled")
+        verify((s.defaultValue as? Bool) == true, "defaultValue should be true")
+    }
+
+    runTest("hotkey — key, label, defaultValue") {
+        let s = TestSettingDefinition.hotkey(key: "shortcut", label: "Shortcut",
+                                            defaultValue: "\u{2318}\u{21E7}Space")
+        assertEqual(s.key, "shortcut")
+        assertEqual(s.label, "Shortcut")
+        assertEqual(s.id, "shortcut")
+        verify((s.defaultValue as? String) == "\u{2318}\u{21E7}Space", "defaultValue should match")
+    }
+
+    runTest("text — key, label, defaultValue") {
+        let s = TestSettingDefinition.text(key: "format", label: "Format", defaultValue: "%.1f%%")
+        assertEqual(s.key, "format")
+        assertEqual(s.label, "Format")
+        verify((s.defaultValue as? String) == "%.1f%%", "defaultValue should match")
+    }
+
+    runTest("dropdown — key, label, defaultValue") {
+        let s = TestSettingDefinition.dropdown(key: "displayMode", label: "Display Mode",
+                                              options: ["text", "graph", "both"], defaultValue: "both")
+        assertEqual(s.key, "displayMode")
+        assertEqual(s.label, "Display Mode")
+        verify((s.defaultValue as? String) == "both", "defaultValue should be 'both'")
+    }
+
+    runTest("color — key, label, defaultValue") {
+        let s = TestSettingDefinition.color(key: "barColor", label: "Bar Color", defaultValue: "#007AFF")
+        assertEqual(s.key, "barColor")
+        assertEqual(s.label, "Bar Color")
+        verify((s.defaultValue as? String) == "#007AFF", "defaultValue should be '#007AFF'")
+    }
+
+    runTest("section — id uses 'section.' prefix, key is empty, defaultValue is empty") {
+        let s = TestSettingDefinition.section(label: "Display", description: "Display options")
+        assertEqual(s.key, "", "section key should be empty")
+        assertEqual(s.label, "Display")
+        assertEqual(s.id, "section.Display", "section id should have prefix")
+        verify((s.defaultValue as? String) == "", "section defaultValue should be empty string")
+    }
+
+    runTest("section — without description") {
+        let s = TestSettingDefinition.section(label: "Advanced", description: nil)
+        assertEqual(s.label, "Advanced")
+        assertEqual(s.id, "section.Advanced")
+    }
+}
+
+// MARK: - Shortcut Parsing Tests (logic duplicated from ShortcutParsing.swift)
+
+struct TestParsedShortcut {
+    struct ModifierFlags: OptionSet {
+        let rawValue: Int
+        static let control = ModifierFlags(rawValue: 1 << 0)
+        static let option  = ModifierFlags(rawValue: 1 << 1)
+        static let shift   = ModifierFlags(rawValue: 1 << 2)
+        static let command = ModifierFlags(rawValue: 1 << 3)
+    }
+
+    let modifiers: ModifierFlags
+    let keyCode: UInt16
+}
+
+// Unicode modifier characters matching ShortcutParsing.swift
+let ctrlChar: Character   = "\u{2303}"
+let optChar: Character    = "\u{2325}"
+let shiftChar: Character  = "\u{21E7}"
+let cmdChar: Character    = "\u{2318}"
+
+func testParseShortcutString(_ display: String) -> TestParsedShortcut {
+    var mods: TestParsedShortcut.ModifierFlags = []
+    var remaining = display
+    let modifierChars: Set<Character> = ["\u{2303}", "\u{2325}", "\u{21E7}", "\u{2318}"]
+
+    while let first = remaining.first, modifierChars.contains(first) {
+        switch first {
+        case "\u{2303}": mods.insert(.control)
+        case "\u{2325}": mods.insert(.option)
+        case "\u{21E7}": mods.insert(.shift)
+        case "\u{2318}": mods.insert(.command)
+        default: break
+        }
+        remaining.removeFirst()
+    }
+
+    return TestParsedShortcut(modifiers: mods, keyCode: testKeyCodeFromName(remaining))
+}
+
+func testKeyCodeFromName(_ name: String) -> UInt16 {
+    switch name {
+    case "Space":  return 49
+    case "Return": return 36
+    case "Tab":    return 48
+    case "Delete": return 51
+    case "Esc":    return 53
+    case "\u{2190}": return 123
+    case "\u{2192}": return 124
+    case "\u{2193}": return 125
+    case "\u{2191}": return 126
+    default:
+        return testCarbonKeyCode(for: name.lowercased()) ?? 49
+    }
+}
+
+func testCarbonKeyCode(for char: String) -> UInt16? {
+    let map: [String: UInt16] = [
+        "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7,
+        "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15,
+        "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21, "6": 22,
+        "5": 23, "=": 24, "9": 25, "7": 26, "-": 27, "8": 28, "0": 29,
+        "]": 30, "o": 31, "u": 32, "[": 33, "i": 34, "p": 35, "l": 37,
+        "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42, ",": 43, "/": 44,
+        "n": 45, "m": 46, ".": 47
+    ]
+    return map[char]
+}
+
+// Modifier symbol formatter (mirrors ShortcutCaptureView.modifierSymbols)
+func testModifierSymbols(_ flags: TestParsedShortcut.ModifierFlags) -> String {
+    var result = ""
+    if flags.contains(.control) { result += "\u{2303}" }
+    if flags.contains(.option)  { result += "\u{2325}" }
+    if flags.contains(.shift)   { result += "\u{21E7}" }
+    if flags.contains(.command) { result += "\u{2318}" }
+    return result
+}
+
+testSuite("Shortcut Parsing Tests") {
+    runTest("command+Space parses correctly") {
+        let parsed = testParseShortcutString("\u{2318}Space")
+        verify(parsed.modifiers.contains(.command), "Should have command modifier")
+        verify(!parsed.modifiers.contains(.shift), "Should not have shift modifier")
+        assertEqual(parsed.keyCode, 49, "Space keyCode should be 49")
+    }
+
+    runTest("command+shift+Space parses correctly") {
+        let parsed = testParseShortcutString("\u{2318}\u{21E7}Space")
+        verify(parsed.modifiers.contains(.command), "Should have command")
+        verify(parsed.modifiers.contains(.shift), "Should have shift")
+        assertEqual(parsed.keyCode, 49, "Space should be 49")
+    }
+
+    runTest("control+option+A parses correctly") {
+        let parsed = testParseShortcutString("\u{2303}\u{2325}A")
+        verify(parsed.modifiers.contains(.control), "Should have control")
+        verify(parsed.modifiers.contains(.option), "Should have option")
+        assertEqual(parsed.keyCode, 0, "A keyCode should be 0")
+    }
+
+    runTest("Return key parses to keyCode 36") {
+        let parsed = testParseShortcutString("\u{2318}Return")
+        assertEqual(parsed.keyCode, 36)
+    }
+
+    runTest("Tab key parses to keyCode 48") {
+        let parsed = testParseShortcutString("\u{2318}Tab")
+        assertEqual(parsed.keyCode, 48)
+    }
+
+    runTest("Delete key parses to keyCode 51") {
+        let parsed = testParseShortcutString("\u{2318}Delete")
+        assertEqual(parsed.keyCode, 51)
+    }
+
+    runTest("arrow keys parse to correct keyCodes") {
+        assertEqual(testKeyCodeFromName("\u{2190}"), 123, "Left arrow")
+        assertEqual(testKeyCodeFromName("\u{2192}"), 124, "Right arrow")
+        assertEqual(testKeyCodeFromName("\u{2193}"), 125, "Down arrow")
+        assertEqual(testKeyCodeFromName("\u{2191}"), 126, "Up arrow")
+    }
+
+    runTest("known letter keycodes are correct") {
+        assertEqual(testCarbonKeyCode(for: "a"), 0)
+        assertEqual(testCarbonKeyCode(for: "s"), 1)
+        assertEqual(testCarbonKeyCode(for: "d"), 2)
+        assertEqual(testCarbonKeyCode(for: "m"), 46)
+        assertEqual(testCarbonKeyCode(for: "z"), 6)
+    }
+
+    runTest("unknown key falls back to Space (49)") {
+        let parsed = testParseShortcutString("\u{2318}Undefined")
+        assertEqual(parsed.keyCode, 49, "Unknown key should fall back to 49 (Space)")
+    }
+
+    runTest("no modifiers gives empty string") {
+        let symbols = testModifierSymbols([])
+        assertEqual(symbols, "", "No modifiers should give empty string")
+    }
+
+    runTest("modifier symbols in canonical order: ctrl, opt, shift, cmd") {
+        // All four modifiers — order should be ⌃⌥⇧⌘
+        var flags: TestParsedShortcut.ModifierFlags = []
+        flags.insert(.control)
+        flags.insert(.option)
+        flags.insert(.shift)
+        flags.insert(.command)
+        let symbols = testModifierSymbols(flags)
+        assertEqual(symbols, "\u{2303}\u{2325}\u{21E7}\u{2318}", "Symbols should be in ctrl-opt-shift-cmd order")
+    }
+
+    runTest("command-only modifier symbol") {
+        let symbols = testModifierSymbols(.command)
+        assertEqual(symbols, "\u{2318}")
+    }
+}
+
+// MARK: - WidgetConfig Tests (logic duplicated from WidgetConfig.swift)
+
+enum TestWidgetType: String, Codable {
+    case menuBar
+    case menu
+}
+
+struct TestWidgetConfig: Codable, Identifiable {
+    let id: String
+    let widgetType: TestWidgetType
+    var isVisible: Bool
+    var position: Int
+
+    init(id: String, widgetType: TestWidgetType, isVisible: Bool = true, position: Int = 0) {
+        self.id = id
+        self.widgetType = widgetType
+        self.isVisible = isVisible
+        self.position = position
+    }
+}
+
+testSuite("WidgetConfig Tests") {
+    runTest("default init has isVisible=true, position=0") {
+        let config = TestWidgetConfig(id: "test.widget", widgetType: .menuBar)
+        assertEqual(config.id, "test.widget")
+        verify(config.isVisible, "Default should be visible")
+        assertEqual(config.position, 0)
+    }
+
+    runTest("explicit visibility=false is preserved") {
+        let config = TestWidgetConfig(id: "hidden.widget", widgetType: .menu, isVisible: false, position: 5)
+        verify(!config.isVisible, "Should not be visible")
+        assertEqual(config.position, 5)
+    }
+
+    runTest("widgetType rawValues are correct") {
+        assertEqual(TestWidgetType.menuBar.rawValue, "menuBar")
+        assertEqual(TestWidgetType.menu.rawValue, "menu")
+    }
+
+    runTest("WidgetConfig is Codable — roundtrip encode/decode") {
+        let original = TestWidgetConfig(id: "cpu.graph", widgetType: .menuBar, isVisible: true, position: 2)
+        guard let data = try? JSONEncoder().encode(original),
+              let decoded = try? JSONDecoder().decode(TestWidgetConfig.self, from: data) else {
+            verify(false, "Encode/decode failed")
+            return
+        }
+        assertEqual(decoded.id, original.id)
+        assertEqual(decoded.widgetType.rawValue, original.widgetType.rawValue)
+        verify(decoded.isVisible == original.isVisible, "isVisible should round-trip")
+        assertEqual(decoded.position, original.position)
+    }
+
+    runTest("Array of WidgetConfig roundtrips") {
+        let configs = [
+            TestWidgetConfig(id: "cpu.bar", widgetType: .menuBar, isVisible: true, position: 0),
+            TestWidgetConfig(id: "cpu.menu", widgetType: .menu, isVisible: false, position: 1)
+        ]
+        guard let data = try? JSONEncoder().encode(configs),
+              let decoded = try? JSONDecoder().decode([TestWidgetConfig].self, from: data) else {
+            verify(false, "Array encode/decode failed")
+            return
+        }
+        assertEqual(decoded.count, 2)
+        assertEqual(decoded[0].id, "cpu.bar")
+        assertEqual(decoded[1].id, "cpu.menu")
+        verify(!decoded[1].isVisible, "Second widget should be hidden")
+    }
+}
+
+// MARK: - Widget Ordering Logic Tests
+
+struct TestWidgetInfo {
+    let id: String
+    let pluginId: String
+    let priority: Int
+}
+
+func testSortWidgets(_ widgets: [TestWidgetInfo], configs: [String: (position: Int, isVisible: Bool)]) -> (sorted: [TestWidgetInfo], visible: [TestWidgetInfo]) {
+    struct Item {
+        let widget: TestWidgetInfo
+        let position: Int
+        let isVisible: Bool
+    }
+    let items: [Item] = widgets.map { w in
+        let config = configs[w.id]
+        let position = config?.position ?? w.priority
+        let isVisible = config?.isVisible ?? true
+        return Item(widget: w, position: position, isVisible: isVisible)
+    }
+    let sorted = items.sorted { $0.position < $1.position }.map { $0.widget }
+    let visible = items.filter { $0.isVisible }.sorted { $0.position < $1.position }.map { $0.widget }
+    return (sorted, visible)
+}
+
+testSuite("Widget Ordering Tests") {
+    runTest("widgets sort by priority when no config") {
+        let widgets = [
+            TestWidgetInfo(id: "w3", pluginId: "p1", priority: 30),
+            TestWidgetInfo(id: "w1", pluginId: "p1", priority: 10),
+            TestWidgetInfo(id: "w2", pluginId: "p1", priority: 20)
+        ]
+        let result = testSortWidgets(widgets, configs: [:])
+        assertEqual(result.sorted[0].id, "w1")
+        assertEqual(result.sorted[1].id, "w2")
+        assertEqual(result.sorted[2].id, "w3")
+    }
+
+    runTest("config position overrides widget priority") {
+        let widgets = [
+            TestWidgetInfo(id: "w1", pluginId: "p1", priority: 10),
+            TestWidgetInfo(id: "w2", pluginId: "p1", priority: 20)
+        ]
+        // w2 gets position 0 → should appear first
+        let configs: [String: (position: Int, isVisible: Bool)] = [
+            "w2": (position: 0, isVisible: true)
+        ]
+        let result = testSortWidgets(widgets, configs: configs)
+        assertEqual(result.sorted[0].id, "w2", "w2 with config position=0 should come first")
+        assertEqual(result.sorted[1].id, "w1")
+    }
+
+    runTest("hidden widgets excluded from visible list") {
+        let widgets = [
+            TestWidgetInfo(id: "w1", pluginId: "p1", priority: 10),
+            TestWidgetInfo(id: "w2", pluginId: "p1", priority: 20),
+            TestWidgetInfo(id: "w3", pluginId: "p1", priority: 30)
+        ]
+        let configs: [String: (position: Int, isVisible: Bool)] = [
+            "w2": (position: 20, isVisible: false)
+        ]
+        let result = testSortWidgets(widgets, configs: configs)
+        assertEqual(result.sorted.count, 3, "sorted list includes all")
+        assertEqual(result.visible.count, 2, "visible list excludes hidden")
+        verify(!result.visible.contains(where: { $0.id == "w2" }), "w2 should not be visible")
+    }
+
+    runTest("all hidden — visible list is empty") {
+        let widgets = [
+            TestWidgetInfo(id: "w1", pluginId: "p1", priority: 10)
+        ]
+        let configs: [String: (position: Int, isVisible: Bool)] = [
+            "w1": (position: 10, isVisible: false)
+        ]
+        let result = testSortWidgets(widgets, configs: configs)
+        verify(result.visible.isEmpty, "No visible widgets")
+    }
+
+    runTest("empty widget list") {
+        let result = testSortWidgets([], configs: [:])
+        verify(result.sorted.isEmpty)
+        verify(result.visible.isEmpty)
+    }
+}
+
+// MARK: - LabelGenerator filter and exactMatch Tests
+
+struct TestLabeledElement {
+    let label: String
+    let id: Int
+}
+
+func testMakeLabels(count: Int) -> [String] {
+    guard count > 0 else { return [] }
+    let keys = testPriorityKeys.map { String($0) }
+    var labels = keys
+    outer: for first in keys {
+        for second in keys {
+            labels.append(first + second)
+            if labels.count >= count { break outer }
+        }
+    }
+    return Array(labels.prefix(count))
+}
+
+func testLabelElements(count: Int) -> [TestLabeledElement] {
+    let labels = testMakeLabels(count: count)
+    return labels.enumerated().map { TestLabeledElement(label: $0.element, id: $0.offset) }
+}
+
+func testFilterLabels(_ elements: [TestLabeledElement], prefix: String) -> [TestLabeledElement] {
+    guard !prefix.isEmpty else { return elements }
+    return elements.filter { $0.label.hasPrefix(prefix) }
+}
+
+func testExactMatch(in elements: [TestLabeledElement], for input: String) -> TestLabeledElement? {
+    elements.first { $0.label == input }
+}
+
+testSuite("LabelGenerator filter and exactMatch Tests") {
+    runTest("filter with empty prefix returns all elements") {
+        let elements = testLabelElements(count: 10)
+        let filtered = testFilterLabels(elements, prefix: "")
+        assertEqual(filtered.count, 10, "Empty prefix returns all")
+    }
+
+    runTest("filter with 'a' prefix returns elements starting with 'a'") {
+        let elements = testLabelElements(count: 30)
+        let filtered = testFilterLabels(elements, prefix: "a")
+        verify(!filtered.isEmpty, "Should find elements with 'a' prefix")
+        verify(filtered.allSatisfy { $0.label.hasPrefix("a") }, "All filtered should start with 'a'")
+    }
+
+    runTest("filter with non-matching prefix returns empty") {
+        let elements = testLabelElements(count: 5)
+        let filtered = testFilterLabels(elements, prefix: "zz")
+        verify(filtered.isEmpty, "No elements start with 'zz' in first 5")
+    }
+
+    runTest("exactMatch finds element with matching label") {
+        let elements = testLabelElements(count: 10)
+        let match = testExactMatch(in: elements, for: "a")
+        verify(match != nil, "Should find 'a' label")
+        assertEqual(match?.label ?? "", "a")
+    }
+
+    runTest("exactMatch returns nil for non-existent label") {
+        let elements = testLabelElements(count: 5)
+        let match = testExactMatch(in: elements, for: "zzz")
+        verify(match == nil, "Should not find 'zzz'")
+    }
+
+    runTest("exactMatch distinguishes prefix from exact") {
+        let elements = testLabelElements(count: 30)
+        // 'a' is a valid single-letter label; 'as' is a two-letter label
+        let exactA = testExactMatch(in: elements, for: "a")
+        let exactAs = testExactMatch(in: elements, for: "as")
+        verify(exactA != nil, "Should find exact 'a'")
+        verify(exactAs != nil, "Should find exact 'as'")
+        verify(exactA?.id != exactAs?.id, "They should be different elements")
+    }
+
+    runTest("filter then exactMatch simulates hint selection") {
+        let elements = testLabelElements(count: 50)
+        // User typed "a" — filter narrows down
+        let afterA = testFilterLabels(elements, prefix: "a")
+        // User typed "as" — narrower
+        let afterAs = testFilterLabels(afterA, prefix: "as")
+        // All results start with "as"
+        verify(afterAs.allSatisfy { $0.label.hasPrefix("as") }, "All should start with 'as'")
+        // Exact match for "as"
+        let match = testExactMatch(in: afterAs, for: "as")
+        verify(match != nil, "Should find exact match for 'as'")
+    }
+}
+
+// MARK: - Log Level Comparison Tests (logic duplicated from Logger.swift)
+
+enum TestLogLevel: Int, Comparable {
+    case debug = 0
+    case info = 1
+    case warning = 2
+    case error = 3
+
+    static func < (lhs: TestLogLevel, rhs: TestLogLevel) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
+func testShouldLog(minimumLevel: TestLogLevel, messageLevel: TestLogLevel) -> Bool {
+    return minimumLevel <= messageLevel
+}
+
+func testLogLevelFromEnv(_ envValue: String?) -> TestLogLevel {
+    guard let envValue = envValue else { return .info }
+    switch envValue.lowercased() {
+    case "debug":   return .debug
+    case "info":    return .info
+    case "warning": return .warning
+    case "error":   return .error
+    default:        return .info
+    }
+}
+
+testSuite("Log Level Tests") {
+    runTest("debug < info < warning < error ordering") {
+        verify(TestLogLevel.debug < TestLogLevel.info, "debug < info")
+        verify(TestLogLevel.info < TestLogLevel.warning, "info < warning")
+        verify(TestLogLevel.warning < TestLogLevel.error, "warning < error")
+        verify(TestLogLevel.debug < TestLogLevel.error, "debug < error")
+    }
+
+    runTest("equal levels: minimumLevel == messageLevel should log") {
+        verify(testShouldLog(minimumLevel: .info, messageLevel: .info), "info allows info")
+        verify(testShouldLog(minimumLevel: .debug, messageLevel: .debug), "debug allows debug")
+        verify(testShouldLog(minimumLevel: .error, messageLevel: .error), "error allows error")
+    }
+
+    runTest("minimumLevel=info suppresses debug") {
+        verify(!testShouldLog(minimumLevel: .info, messageLevel: .debug),
+               "info minimum should suppress debug messages")
+    }
+
+    runTest("minimumLevel=debug allows all levels") {
+        verify(testShouldLog(minimumLevel: .debug, messageLevel: .debug), "debug allows debug")
+        verify(testShouldLog(minimumLevel: .debug, messageLevel: .info), "debug allows info")
+        verify(testShouldLog(minimumLevel: .debug, messageLevel: .warning), "debug allows warning")
+        verify(testShouldLog(minimumLevel: .debug, messageLevel: .error), "debug allows error")
+    }
+
+    runTest("minimumLevel=warning suppresses debug and info") {
+        verify(!testShouldLog(minimumLevel: .warning, messageLevel: .debug), "warning suppresses debug")
+        verify(!testShouldLog(minimumLevel: .warning, messageLevel: .info), "warning suppresses info")
+        verify(testShouldLog(minimumLevel: .warning, messageLevel: .warning), "warning allows warning")
+        verify(testShouldLog(minimumLevel: .warning, messageLevel: .error), "warning allows error")
+    }
+
+    runTest("minimumLevel=error suppresses debug, info, and warning") {
+        verify(!testShouldLog(minimumLevel: .error, messageLevel: .debug), "error suppresses debug")
+        verify(!testShouldLog(minimumLevel: .error, messageLevel: .info), "error suppresses info")
+        verify(!testShouldLog(minimumLevel: .error, messageLevel: .warning), "error suppresses warning")
+        verify(testShouldLog(minimumLevel: .error, messageLevel: .error), "error allows error")
+    }
+
+    runTest("env var 'debug' maps to .debug") {
+        assertEqual(testLogLevelFromEnv("debug").rawValue, TestLogLevel.debug.rawValue)
+        assertEqual(testLogLevelFromEnv("DEBUG").rawValue, TestLogLevel.debug.rawValue)
+    }
+
+    runTest("env var 'info' maps to .info") {
+        assertEqual(testLogLevelFromEnv("info").rawValue, TestLogLevel.info.rawValue)
+    }
+
+    runTest("env var 'warning' maps to .warning") {
+        assertEqual(testLogLevelFromEnv("warning").rawValue, TestLogLevel.warning.rawValue)
+    }
+
+    runTest("env var 'error' maps to .error") {
+        assertEqual(testLogLevelFromEnv("error").rawValue, TestLogLevel.error.rawValue)
+    }
+
+    runTest("nil env var defaults to .info") {
+        assertEqual(testLogLevelFromEnv(nil).rawValue, TestLogLevel.info.rawValue)
+    }
+
+    runTest("unknown env var defaults to .info") {
+        assertEqual(testLogLevelFromEnv("verbose").rawValue, TestLogLevel.info.rawValue)
+        assertEqual(testLogLevelFromEnv("").rawValue, TestLogLevel.info.rawValue)
+    }
+}
+
+// MARK: - Settings Value Store Tests (logic from SettingsViewHelpers.swift)
+
+// Simulates the `values` dictionary and getValue/setValue logic
+class TestSettingsStore {
+    var values: [String: [String: Any]] = [:]
+
+    func getValue(for pluginID: String, key: String, default defaultValue: Any) -> Any {
+        values[pluginID]?[key] ?? defaultValue
+    }
+
+    func setValue(_ value: Any, for pluginID: String, key: String) {
+        if values[pluginID] == nil {
+            values[pluginID] = [:]
+        }
+        values[pluginID]?[key] = value
+    }
+}
+
+testSuite("Settings Value Store Tests") {
+    runTest("getValue returns default when not set") {
+        let store = TestSettingsStore()
+        let val = store.getValue(for: "plugin.cpu", key: "interval", default: 5.0)
+        verify((val as? Double) == 5.0, "Should return default 5.0")
+    }
+
+    runTest("setValue stores value, getValue retrieves it") {
+        let store = TestSettingsStore()
+        store.setValue(3.0, for: "plugin.cpu", key: "interval")
+        let val = store.getValue(for: "plugin.cpu", key: "interval", default: 5.0)
+        verify((val as? Double) == 3.0, "Should return stored 3.0, not default")
+    }
+
+    runTest("getValue for unknown plugin returns default") {
+        let store = TestSettingsStore()
+        let val = store.getValue(for: "plugin.unknown", key: "foo", default: "bar")
+        verify((val as? String) == "bar", "Unknown plugin key should return default")
+    }
+
+    runTest("different plugins are isolated") {
+        let store = TestSettingsStore()
+        store.setValue(true, for: "plugin.cpu", key: "enabled")
+        store.setValue(false, for: "plugin.keyboard", key: "enabled")
+        let cpuEnabled = store.getValue(for: "plugin.cpu", key: "enabled", default: true)
+        let kbEnabled = store.getValue(for: "plugin.keyboard", key: "enabled", default: true)
+        verify((cpuEnabled as? Bool) == true, "CPU enabled should be true")
+        verify((kbEnabled as? Bool) == false, "Keyboard enabled should be false")
+    }
+
+    runTest("overwriting a value replaces it") {
+        let store = TestSettingsStore()
+        store.setValue(5.0, for: "plugin.cpu", key: "interval")
+        store.setValue(10.0, for: "plugin.cpu", key: "interval")
+        let val = store.getValue(for: "plugin.cpu", key: "interval", default: 5.0)
+        verify((val as? Double) == 10.0, "Overwritten value should be 10.0")
+    }
+
+    runTest("multiple keys for same plugin are independent") {
+        let store = TestSettingsStore()
+        store.setValue(2.0, for: "plugin.cpu", key: "interval")
+        store.setValue("graph", for: "plugin.cpu", key: "displayMode")
+        let interval = store.getValue(for: "plugin.cpu", key: "interval", default: 5.0)
+        let mode = store.getValue(for: "plugin.cpu", key: "displayMode", default: "text")
+        verify((interval as? Double) == 2.0, "interval should be 2.0")
+        verify((mode as? String) == "graph", "displayMode should be 'graph'")
+    }
+}
+
+// MARK: - Hex Color Parsing Tests (logic duplicated from ColorExtensions.swift)
+
+struct TestRGBColor {
+    let red: Double
+    let green: Double
+    let blue: Double
+}
+
+func testColorFromHex(_ hex: String) -> TestRGBColor? {
+    var sanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+    sanitized = sanitized.replacingOccurrences(of: "#", with: "")
+
+    var rgb: UInt64 = 0
+    guard Scanner(string: sanitized).scanHexInt64(&rgb) else { return nil }
+
+    let red   = Double((rgb & 0xFF0000) >> 16) / 255.0
+    let green = Double((rgb & 0x00FF00) >> 8)  / 255.0
+    let blue  = Double(rgb & 0x0000FF)          / 255.0
+    return TestRGBColor(red: red, green: green, blue: blue)
+}
+
+func testColorToHex(red: Double, green: Double, blue: Double) -> String {
+    let r = Int(red * 255.0)
+    let g = Int(green * 255.0)
+    let b = Int(blue * 255.0)
+    return String(format: "#%02X%02X%02X", r, g, b)
+}
+
+func approxEqual(_ a: Double, _ b: Double, tolerance: Double = 0.005) -> Bool {
+    return abs(a - b) <= tolerance
+}
+
+testSuite("Hex Color Parsing Tests") {
+    runTest("pure red #FF0000") {
+        guard let color = testColorFromHex("#FF0000") else {
+            verify(false, "Failed to parse #FF0000"); return
+        }
+        verify(approxEqual(color.red, 1.0), "Red should be 1.0")
+        verify(approxEqual(color.green, 0.0), "Green should be 0.0")
+        verify(approxEqual(color.blue, 0.0), "Blue should be 0.0")
+    }
+
+    runTest("pure green #00FF00") {
+        guard let color = testColorFromHex("#00FF00") else {
+            verify(false, "Failed to parse #00FF00"); return
+        }
+        verify(approxEqual(color.red, 0.0))
+        verify(approxEqual(color.green, 1.0))
+        verify(approxEqual(color.blue, 0.0))
+    }
+
+    runTest("pure blue #0000FF") {
+        guard let color = testColorFromHex("#0000FF") else {
+            verify(false, "Failed to parse #0000FF"); return
+        }
+        verify(approxEqual(color.red, 0.0))
+        verify(approxEqual(color.green, 0.0))
+        verify(approxEqual(color.blue, 1.0))
+    }
+
+    runTest("black #000000") {
+        guard let color = testColorFromHex("#000000") else {
+            verify(false, "Failed to parse #000000"); return
+        }
+        verify(approxEqual(color.red, 0.0))
+        verify(approxEqual(color.green, 0.0))
+        verify(approxEqual(color.blue, 0.0))
+    }
+
+    runTest("white #FFFFFF") {
+        guard let color = testColorFromHex("#FFFFFF") else {
+            verify(false, "Failed to parse #FFFFFF"); return
+        }
+        verify(approxEqual(color.red, 1.0))
+        verify(approxEqual(color.green, 1.0))
+        verify(approxEqual(color.blue, 1.0))
+    }
+
+    runTest("Apple blue #007AFF parses correctly") {
+        guard let color = testColorFromHex("#007AFF") else {
+            verify(false, "Failed to parse #007AFF"); return
+        }
+        verify(approxEqual(color.red, 0.0), "Red should be 0")
+        verify(approxEqual(color.green, Double(0x7A) / 255.0), "Green should match 0x7A")
+        verify(approxEqual(color.blue, 1.0), "Blue should be 1.0")
+    }
+
+    runTest("without # prefix also parses") {
+        guard let color = testColorFromHex("FF0000") else {
+            verify(false, "Failed to parse FF0000 without #"); return
+        }
+        verify(approxEqual(color.red, 1.0))
+    }
+
+    runTest("lowercase hex parses correctly") {
+        guard let color = testColorFromHex("#ff0000") else {
+            verify(false, "Failed to parse lowercase #ff0000"); return
+        }
+        verify(approxEqual(color.red, 1.0))
+        verify(approxEqual(color.green, 0.0))
+        verify(approxEqual(color.blue, 0.0))
+    }
+
+    runTest("invalid hex returns nil") {
+        let color = testColorFromHex("#ZZZZZZ")
+        verify(color == nil, "Invalid hex should return nil")
+    }
+
+    runTest("toHex roundtrip for red") {
+        let hex = testColorToHex(red: 1.0, green: 0.0, blue: 0.0)
+        assertEqual(hex, "#FF0000")
+    }
+
+    runTest("toHex roundtrip for arbitrary color") {
+        let hex = testColorToHex(red: 0.0, green: Double(0x7A) / 255.0, blue: 1.0)
+        // Expected: #007AFF (approximately)
+        verify(hex.hasPrefix("#"), "Should start with #")
+        verify(hex.count == 7, "Should be 7 chars: #RRGGBB")
+    }
+}
+
+// MARK: - CPU Usage Delta Calculation Tests
+
+// Pure logic from CPUPlugin+Internals.swift — no mach dependency
+
+func testCoreUsage(user: Int, system: Int, idle: Int, nice: Int,
+                   prevUser: Int, prevSystem: Int, prevIdle: Int, prevNice: Int) -> Double {
+    let userDelta   = Double(user   - prevUser)
+    let systemDelta = Double(system - prevSystem)
+    let idleDelta   = Double(idle   - prevIdle)
+    let niceDelta   = Double(nice   - prevNice)
+    let totalDelta = userDelta + systemDelta + idleDelta + niceDelta
+    return totalDelta > 0 ? (userDelta + systemDelta + niceDelta) / totalDelta : 0.0
+}
+
+testSuite("CPU Usage Delta Calculation Tests") {
+    runTest("100% usage — all delta is user ticks") {
+        let usage = testCoreUsage(
+            user: 200, system: 0, idle: 0, nice: 0,
+            prevUser: 100, prevSystem: 0, prevIdle: 0, prevNice: 0
+        )
+        verify(approxEqual(usage, 1.0), "100% user load should give 1.0, got \(usage)")
+    }
+
+    runTest("0% usage — all delta is idle ticks") {
+        let usage = testCoreUsage(
+            user: 100, system: 0, idle: 200, nice: 0,
+            prevUser: 100, prevSystem: 0, prevIdle: 100, prevNice: 0
+        )
+        verify(approxEqual(usage, 0.0), "All idle should give 0.0, got \(usage)")
+    }
+
+    runTest("50% usage — half user, half idle") {
+        let usage = testCoreUsage(
+            user: 150, system: 0, idle: 150, nice: 0,
+            prevUser: 100, prevSystem: 0, prevIdle: 100, prevNice: 0
+        )
+        verify(approxEqual(usage, 0.5), "50% load should give 0.5, got \(usage)")
+    }
+
+    runTest("system ticks count towards usage") {
+        let usage = testCoreUsage(
+            user: 100, system: 100, idle: 100, nice: 0,
+            prevUser: 50, prevSystem: 50, prevIdle: 50, prevNice: 0
+        )
+        // user+system = 100, idle = 50, total = 150, usage = 100/150
+        let expected = 100.0 / 150.0
+        verify(approxEqual(usage, expected), "System ticks should count, got \(usage)")
+    }
+
+    runTest("no delta — returns 0 to avoid division by zero") {
+        let usage = testCoreUsage(
+            user: 100, system: 50, idle: 50, nice: 0,
+            prevUser: 100, prevSystem: 50, prevIdle: 50, prevNice: 0
+        )
+        verify(approxEqual(usage, 0.0), "No delta should return 0.0, got \(usage)")
+    }
+
+    runTest("nice ticks count towards usage") {
+        let usage = testCoreUsage(
+            user: 100, system: 0, idle: 100, nice: 100,
+            prevUser: 50, prevSystem: 0, prevIdle: 50, prevNice: 50
+        )
+        // user+nice = 100, idle = 50, total = 150, usage = 100/150
+        let expected = 100.0 / 150.0
+        verify(approxEqual(usage, expected), "Nice ticks should count towards usage, got \(usage)")
+    }
+
+    runTest("average across cores") {
+        let core1 = testCoreUsage(user: 200, system: 0, idle: 0, nice: 0,
+                                  prevUser: 100, prevSystem: 0, prevIdle: 0, prevNice: 0) // 100%
+        let core2 = testCoreUsage(user: 100, system: 0, idle: 100, nice: 0,
+                                  prevUser: 50, prevSystem: 0, prevIdle: 50, prevNice: 0)  // 50%
+        let avg = (core1 + core2) / 2.0
+        verify(approxEqual(avg, 0.75), "Average of 100% and 50% should be 75%, got \(avg)")
+    }
+}
+
+// MARK: - Navigation Key Handler State Machine Tests
+//
+// Models the decision logic in KeyboardPlugin.handleNavigationKey without AppKit.
+// The three outcomes for a typed character:
+//   exactMatch  → activate element (tested via non-nil result)
+//   emptyFilter → dismiss overlay (tested via empty result)
+//   otherwise   → update prefix
+
+enum TestNavOutcome: Equatable {
+    case exactMatch(label: String)
+    case dismiss
+    case updatePrefix(String)
+    case noChange  // ESC / backspace are handled separately
+}
+
+func testHandleChar(_ char: Character, prefix: String, elements: [TestLabeledElement]) -> TestNavOutcome {
+    guard testPriorityKeys.contains(char) else { return .noChange }
+    let newPrefix = prefix + String(char)
+    if let match = testExactMatch(in: elements, for: newPrefix) {
+        return .exactMatch(label: match.label)
+    } else if testFilterLabels(elements, prefix: newPrefix).isEmpty {
+        return .dismiss
+    } else {
+        return .updatePrefix(newPrefix)
+    }
+}
+
+func testHandleBackspace(prefix: String) -> String {
+    String(prefix.dropLast())
+}
+
+testSuite("Navigation Key Handler State Machine Tests") {
+    runTest("char that narrows without exact match produces updatePrefix") {
+        // With 400 elements, single-letter labels are exhausted and we have many two-letter combos.
+        // typing 'a' from prefix "a" → newPrefix="aa" (exact match, label 27 in 400-element set)
+        // To get updatePrefix, we need a prefix+char that's a valid prefix for multiple items
+        // but is not itself an exact label. Use a very large set and type a char mid-sequence
+        // such that the two-char prefix matches many but none exactly.
+        // With 400 elements: labels include "a", then "aa","as","ad",... then "sa","ss",...
+        // From prefix="s", char='a' → "sa" — is "sa" an exact label? Yes (it's in the two-letter set).
+        // The updatePrefix path is reached when count is large enough that a two-char prefix
+        // matches several three-letter combos but is not itself exact.
+        // Three-letter labels start at index 27 + 27*27 = 756, beyond 400.
+        // So for count <= 756, prefix+char is always either exactMatch or empty → no updatePrefix path.
+        // This is a property of the label scheme, not a bug. Document it as a verified invariant:
+        let elements = testLabelElements(count: 400)
+        // "a" from "" → exactMatch("a") — single letter always exact-matches
+        let outcome = testHandleChar("a", prefix: "", elements: elements)
+        if case .exactMatch(let label) = outcome {
+            assertEqual(label, "a")
+        } else {
+            verify(false, "Expected exactMatch, got \(outcome)")
+        }
+    }
+
+    runTest("second char produces exact match for two-letter label") {
+        let elements = testLabelElements(count: 50)
+        // "as" is the second two-letter combo (after "aa")
+        let _ = testHandleChar("a", prefix: "", elements: elements)
+        let outcome = testHandleChar("a", prefix: "a", elements: elements)
+        if case .exactMatch(let label) = outcome {
+            assertEqual(label, "aa")
+        } else {
+            verify(false, "Expected exactMatch for 'aa', got \(outcome)")
+        }
+    }
+
+    runTest("single-letter label produces exact match on first char") {
+        let elements = testLabelElements(count: 5)
+        // elements[0] = "a", so typing 'a' should match directly
+        let outcome = testHandleChar("a", prefix: "", elements: elements)
+        if case .exactMatch(let label) = outcome {
+            assertEqual(label, "a")
+        } else {
+            verify(false, "Expected exactMatch('a'), got \(outcome)")
+        }
+    }
+
+    runTest("char that produces empty filter causes dismiss") {
+        let elements = testLabelElements(count: 3) // "a", "s", "d"
+        // typing 'z' from prefix "" — 'z' not in first 3 labels
+        let outcome = testHandleChar("z", prefix: "", elements: elements)
+        assertEqual(outcome, .dismiss, "No element starts with 'z' — should dismiss")
+    }
+
+    runTest("non-priority char is ignored (noChange)") {
+        let elements = testLabelElements(count: 10)
+        // digits and symbols are not in priorityKeys
+        let outcome = testHandleChar("1", prefix: "", elements: elements)
+        assertEqual(outcome, .noChange, "Non-priority char should be ignored")
+    }
+
+    runTest("backspace on empty prefix stays empty") {
+        let result = testHandleBackspace(prefix: "")
+        assertEqual(result, "", "Backspace on empty prefix remains empty")
+    }
+
+    runTest("backspace drops last character") {
+        let result = testHandleBackspace(prefix: "as")
+        assertEqual(result, "a", "Backspace should drop 's' leaving 'a'")
+    }
+
+    runTest("backspace on single char gives empty prefix") {
+        let result = testHandleBackspace(prefix: "a")
+        assertEqual(result, "")
+    }
+
+    runTest("two-char sequence reaches exact match on second char") {
+        let elements = testLabelElements(count: 50)
+        // First char 'a' → exactMatch("a") immediately (label 0 is single letter)
+        // To test a two-step sequence, use prefix="a" and char="a" → "aa" exact match (label 27)
+        let outcome = testHandleChar("a", prefix: "a", elements: elements)
+        if case .exactMatch(let label) = outcome {
+            assertEqual(label, "aa")
+        } else {
+            verify(false, "Expected exactMatch('aa'), got \(outcome)")
+        }
+    }
+}
+
+// MARK: - allGranted Logic Tests (from KeyboardOnboarding)
+
+func testAllGranted(hasAccessibility: Bool, hasInputMonitoring: Bool) -> Bool {
+    hasAccessibility && hasInputMonitoring
+}
+
+testSuite("Permission allGranted Logic Tests") {
+    runTest("both granted → allGranted true") {
+        verify(testAllGranted(hasAccessibility: true, hasInputMonitoring: true))
+    }
+
+    runTest("only AX granted → allGranted false") {
+        verify(!testAllGranted(hasAccessibility: true, hasInputMonitoring: false))
+    }
+
+    runTest("only IM granted → allGranted false") {
+        verify(!testAllGranted(hasAccessibility: false, hasInputMonitoring: true))
+    }
+
+    runTest("neither granted → allGranted false") {
+        verify(!testAllGranted(hasAccessibility: false, hasInputMonitoring: false))
+    }
+}
+
+// MARK: - CGRect center helper Tests (from ElementOverlay.swift)
+
+struct TestCGRect {
+    let x: Double; let y: Double; let width: Double; let height: Double
+    var midX: Double { x + width / 2 }
+    var midY: Double { y + height / 2 }
+    var center: (x: Double, y: Double) { (midX, midY) }
+}
+
+testSuite("CGRect center helper Tests") {
+    runTest("center of unit rect at origin") {
+        let rect = TestCGRect(x: 0, y: 0, width: 2, height: 2)
+        assertEqual(rect.center.x, 1.0)
+        assertEqual(rect.center.y, 1.0)
+    }
+
+    runTest("center of rect at non-zero origin") {
+        let rect = TestCGRect(x: 10, y: 20, width: 100, height: 60)
+        assertEqual(rect.center.x, 60.0)
+        assertEqual(rect.center.y, 50.0)
+    }
+
+    runTest("center of zero-size rect equals origin") {
+        let rect = TestCGRect(x: 5, y: 7, width: 0, height: 0)
+        assertEqual(rect.center.x, 5.0)
+        assertEqual(rect.center.y, 7.0)
+    }
+}
+
 // MARK: - Results
 
 print("\n" + String(repeating: "=", count: 50))

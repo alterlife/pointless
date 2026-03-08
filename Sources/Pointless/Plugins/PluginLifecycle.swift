@@ -28,22 +28,26 @@ class PluginLifecycle {
     self.updateAction = action
     self.updateInterval = plugin[keyPath: interval]
 
-    // Watch for changes to update interval or enabled state
+    // Watch for changes to update interval or enabled state.
+    // objectWillChange fires *before* the property is updated, so we defer the read
+    // to the next run loop turn to pick up the new value.
     plugin.objectWillChange.sink { [weak self, weak plugin] _ in
-      guard let self = self, let plugin = plugin else { return }
-      let newInterval = plugin[keyPath: interval]
+      DispatchQueue.main.async { [weak self, weak plugin] in
+        guard let self = self, let plugin = plugin else { return }
+        let newInterval = plugin[keyPath: interval]
 
-      if newInterval != self.updateInterval {
-        self.updateInterval = newInterval
-        if plugin.isEnabled {
-          self.restart()
+        if newInterval != self.updateInterval {
+          self.updateInterval = newInterval
+          if plugin.isEnabled {
+            self.restart()
+          }
         }
-      }
 
-      if plugin.isEnabled && self.timer == nil && !self.isSuspended {
-        self.start()
-      } else if !plugin.isEnabled && self.timer != nil {
-        self.stop()
+        if plugin.isEnabled && self.timer == nil && !self.isSuspended {
+          self.start()
+        } else if !plugin.isEnabled && self.timer != nil {
+          self.stop()
+        }
       }
     }
     .store(in: &cancellables)

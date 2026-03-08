@@ -110,8 +110,9 @@ final class AccessibilityScanner {
     if let role = axRole(of: element), Self.interactiveRoles.contains(role),
        let frame = axFrame(of: element, primaryHeight: primaryHeight),
        frame.width >= 4, frame.height >= 4 {
-      let screen = NSScreen.screens.first { $0.frame.intersects(frame) } ?? NSScreen.main ?? NSScreen.screens[0]
-      results.append(DiscoveredElement(element: element, screenFrame: frame, role: role, screen: screen))
+      if let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }) ?? NSScreen.main {
+        results.append(DiscoveredElement(element: element, screenFrame: frame, role: role, screen: screen))
+      }
     }
 
     var childrenRef: CFTypeRef?
@@ -132,17 +133,14 @@ final class AccessibilityScanner {
     return ref as? String
   }
 
-  private func isEnabled(_ element: AXUIElement) -> Bool {
+  private func axBool(_ element: AXUIElement, attr: String, fallback: Bool) -> Bool {
     var ref: CFTypeRef?
-    guard AXUIElementCopyAttributeValue(element, AXAttr.enabled as CFString, &ref) == .success else { return true }
-    return (ref as? NSNumber)?.boolValue ?? true
+    guard AXUIElementCopyAttributeValue(element, attr as CFString, &ref) == .success else { return fallback }
+    return (ref as? NSNumber)?.boolValue ?? fallback
   }
 
-  private func isHidden(_ element: AXUIElement) -> Bool {
-    var ref: CFTypeRef?
-    guard AXUIElementCopyAttributeValue(element, AXAttr.hidden as CFString, &ref) == .success else { return false }
-    return (ref as? NSNumber)?.boolValue ?? false
-  }
+  private func isEnabled(_ element: AXUIElement) -> Bool { axBool(element, attr: AXAttr.enabled, fallback: true) }
+  private func isHidden(_ element: AXUIElement) -> Bool { axBool(element, attr: AXAttr.hidden, fallback: false) }
 
   private func axFrame(of element: AXUIElement, primaryHeight: CGFloat) -> CGRect? {
     var posRef: CFTypeRef?

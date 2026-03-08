@@ -153,55 +153,37 @@ class WidgetRegistry: ObservableObject {
   // MARK: - Rebuild Ordered Lists
 
   private func rebuildOrderedMenuBarWidgets(forcedVisibility: [String: Bool] = [:]) {
-    let configs = loadConfigsDict()
-
-    struct WidgetInfo {
-      let widget: MenuBarWidget
-      let position: Int
-      let isVisible: Bool
-    }
-
-    var widgets: [WidgetInfo] = []
-
-    for widget in allMenuBarWidgets {
-      let config = configs[widget.id]
-      let pluginEnabled = PluginRegistry.shared.plugins.first { $0.id == widget.pluginId }?.isEnabled ?? true
-      let isVisible = pluginEnabled && (forcedVisibility[widget.id] ?? config?.isVisible ?? true)
-      let position = config?.position ?? widget.priority
-
-      widgets.append(WidgetInfo(widget: widget, position: position, isVisible: isVisible))
-    }
-
-    // Sort by position
-    widgets.sort { $0.position < $1.position }
-    sortedAllMenuBarWidgets = widgets.map { $0.widget }
-    orderedMenuBarWidgets = widgets.filter { $0.isVisible }.map { $0.widget }
+    let (sorted, ordered) = buildSortedWidgets(allMenuBarWidgets, forcedVisibility: forcedVisibility)
+    sortedAllMenuBarWidgets = sorted
+    orderedMenuBarWidgets = ordered
   }
 
   private func rebuildOrderedMenuWidgets(forcedVisibility: [String: Bool] = [:]) {
+    let (sorted, ordered) = buildSortedWidgets(allMenuWidgets, forcedVisibility: forcedVisibility)
+    sortedAllMenuWidgets = sorted
+    orderedMenuWidgets = ordered
+  }
+
+  private func buildSortedWidgets<W: WidgetProtocol>(
+    _ widgets: [W],
+    forcedVisibility: [String: Bool]
+  ) -> (sorted: [W], ordered: [W]) {
     let configs = loadConfigsDict()
+    let enabledPlugins = Set(PluginRegistry.shared.plugins.filter { $0.isEnabled }.map { $0.id })
 
-    struct WidgetInfo {
-      let widget: MenuWidget
-      let position: Int
-      let isVisible: Bool
+    // Sort by saved position (or widget priority as default)
+    let sorted = widgets.sorted { lhs, rhs in
+      let lhsPos = configs[lhs.id]?.position ?? lhs.priority
+      let rhsPos = configs[rhs.id]?.position ?? rhs.priority
+      return lhsPos < rhsPos
     }
 
-    var widgets: [WidgetInfo] = []
-
-    for widget in allMenuWidgets {
-      let config = configs[widget.id]
-      let pluginEnabled = PluginRegistry.shared.plugins.first { $0.id == widget.pluginId }?.isEnabled ?? true
-      let isVisible = pluginEnabled && (forcedVisibility[widget.id] ?? config?.isVisible ?? true)
-      let position = config?.position ?? widget.priority
-
-      widgets.append(WidgetInfo(widget: widget, position: position, isVisible: isVisible))
+    let ordered = sorted.filter { widget in
+      let pluginEnabled = enabledPlugins.contains(widget.pluginId)
+      return pluginEnabled && (forcedVisibility[widget.id] ?? configs[widget.id]?.isVisible ?? true)
     }
 
-    // Sort by position
-    widgets.sort { $0.position < $1.position }
-    sortedAllMenuWidgets = widgets.map { $0.widget }
-    orderedMenuWidgets = widgets.filter { $0.isVisible }.map { $0.widget }
+    return (sorted: sorted, ordered: ordered)
   }
 
   // MARK: - Persistence

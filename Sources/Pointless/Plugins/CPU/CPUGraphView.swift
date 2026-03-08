@@ -111,14 +111,8 @@ struct CPUGraphView: View {
   @ViewBuilder
   private func multiHistoryGraph(width: CGFloat, height: CGFloat) -> some View {
     ForEach(Array(histories.indices), id: \.self) { index in
+      let pts = points(for: histories[index], width: width, height: height)
       Path { path in
-        let hist = histories[index]
-        let pts = hist.enumerated().map { idx, value in
-          CGPoint(
-            x: width * CGFloat(idx) / CGFloat(max(hist.count - 1, 1)),
-            y: height * (1 - CGFloat(value))
-          )
-        }
         guard !pts.isEmpty else { return }
         path.move(to: pts[0])
         for point in pts { path.addLine(to: point) }

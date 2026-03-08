@@ -105,10 +105,7 @@ extension CPUPlugin {
 
 extension CPUPlugin {
   func primaryColor() -> Color {
-    if colorMode == "custom" {
-      return Color(hex: customColor) ?? .blue
-    }
-    return usageColor(for: totalUsage)
+    usageColor(for: totalUsage)
   }
 
   func usageColor(for usage: Double) -> Color {

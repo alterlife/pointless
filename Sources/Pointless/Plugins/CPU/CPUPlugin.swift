@@ -178,86 +178,44 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
 
   func menuWidgets() -> [MenuWidget] {
     [
-      MenuWidget(
-        id: "\(id).detail",
-        pluginId: id,
-        name: "CPU Details",
-        priority: 10
-      ) {
-        VStack(alignment: .leading, spacing: 12) {
-          if self.showCores && !self.coreUsages.isEmpty {
-            self.coreViews()
-          } else {
-            HStack(spacing: 6) {
-              if self.showIcon {
-                Image(systemName: "cpu")
-                  .font(.title2)
-                  .foregroundColor(self.primaryColor())
-              }
-              if self.displayMode == "text" || self.displayMode == "both" {
-                self.textView(usage: self.totalUsage)
-              }
-            }
-            if self.displayMode == "graph" || self.displayMode == "both" {
-              self.graphView(history: self.history, usage: self.totalUsage, label: nil)
-            }
-          }
-
-          if self.showUpdateText {
-            Text("Updates every \(String(format: "%.0f", self.updateInterval))s")
-              .font(.caption)
-              .foregroundColor(.secondary)
-          }
-        }
-        .padding()
+      MenuWidget(id: "\(id).detail", pluginId: id, name: "CPU Details", priority: 10) {
+        self.detailContentView()
       }
     ]
   }
 
-  // MARK: - Legacy Views
-
   func detailView() -> AnyView {
-    AnyView(
-      VStack(alignment: .leading, spacing: 12) {
-        if showCores && !coreUsages.isEmpty {
-          coreViews()
-        } else {
-          HStack(spacing: 6) {
-            if showIcon {
-              Image(systemName: "cpu")
-                .font(.title2)
-                .foregroundColor(primaryColor())
-            }
-            if displayMode == "text" || displayMode == "both" {
-              textView(usage: totalUsage)
-            }
-          }
-          if displayMode == "graph" || displayMode == "both" {
-            graphView(history: history, usage: totalUsage, label: nil)
-          }
-        }
-
-        if showUpdateText {
-          Text("Updates every \(String(format: "%.0f", updateInterval))s")
-            .font(.caption)
-            .foregroundColor(.secondary)
-        }
-      }
-      .padding()
-    )
+    AnyView(detailContentView())
   }
 
   @ViewBuilder
-  private func totalViews() -> some View {
-    switch displayMode {
-    case "text":
-      textView(usage: totalUsage)
-    case "graph":
-      graphView(history: history, usage: totalUsage, label: nil)
-    default: // "both"
-      textView(usage: totalUsage)
-      graphView(history: history, usage: totalUsage, label: nil)
+  private func detailContentView() -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+      if showCores && !coreUsages.isEmpty {
+        coreViews()
+      } else {
+        HStack(spacing: 6) {
+          if showIcon {
+            Image(systemName: "cpu")
+              .font(.title2)
+              .foregroundColor(primaryColor())
+          }
+          if displayMode == "text" || displayMode == "both" {
+            textView(usage: totalUsage)
+          }
+        }
+        if displayMode == "graph" || displayMode == "both" {
+          graphView(history: history, usage: totalUsage, label: nil)
+        }
+      }
+
+      if showUpdateText {
+        Text("Updates every \(String(format: "%.0f", updateInterval))s")
+          .font(.caption)
+          .foregroundColor(.secondary)
+      }
     }
+    .padding()
   }
 
   @ViewBuilder
