@@ -109,8 +109,9 @@ class WidgetRegistry: ObservableObject {
   /// Reorder all menu bar widgets (visible + hidden), then rebuild visible list
   func reorderAllMenuBar(from source: IndexSet, to destination: Int) {
     sortedAllMenuBarWidgets.move(fromOffsets: source, toOffset: destination)
+    let enabledPlugins = Set(PluginRegistry.shared.plugins.filter { $0.isEnabled }.map { $0.id })
     orderedMenuBarWidgets = sortedAllMenuBarWidgets.filter { widget in
-      isMenuBarWidgetVisible(widget.id)
+      enabledPlugins.contains(widget.pluginId) && isMenuBarWidgetVisible(widget.id)
     }
     saveConfigs()
   }
@@ -118,8 +119,9 @@ class WidgetRegistry: ObservableObject {
   /// Reorder all menu widgets (visible + hidden), then rebuild visible list
   func reorderAllMenu(from source: IndexSet, to destination: Int) {
     sortedAllMenuWidgets.move(fromOffsets: source, toOffset: destination)
+    let enabledPlugins = Set(PluginRegistry.shared.plugins.filter { $0.isEnabled }.map { $0.id })
     orderedMenuWidgets = sortedAllMenuWidgets.filter { widget in
-      isMenuWidgetVisible(widget.id)
+      enabledPlugins.contains(widget.pluginId) && isMenuWidgetVisible(widget.id)
     }
     saveConfigs()
   }
@@ -163,7 +165,8 @@ class WidgetRegistry: ObservableObject {
 
     for widget in allMenuBarWidgets {
       let config = configs[widget.id]
-      let isVisible = forcedVisibility[widget.id] ?? config?.isVisible ?? true
+      let pluginEnabled = PluginRegistry.shared.plugins.first { $0.id == widget.pluginId }?.isEnabled ?? true
+      let isVisible = pluginEnabled && (forcedVisibility[widget.id] ?? config?.isVisible ?? true)
       let position = config?.position ?? widget.priority
 
       widgets.append(WidgetInfo(widget: widget, position: position, isVisible: isVisible))
@@ -188,7 +191,8 @@ class WidgetRegistry: ObservableObject {
 
     for widget in allMenuWidgets {
       let config = configs[widget.id]
-      let isVisible = forcedVisibility[widget.id] ?? config?.isVisible ?? true
+      let pluginEnabled = PluginRegistry.shared.plugins.first { $0.id == widget.pluginId }?.isEnabled ?? true
+      let isVisible = pluginEnabled && (forcedVisibility[widget.id] ?? config?.isVisible ?? true)
       let position = config?.position ?? widget.priority
 
       widgets.append(WidgetInfo(widget: widget, position: position, isVisible: isVisible))

@@ -136,7 +136,7 @@ public struct SettingsView: View {
   @ViewBuilder
   private func iconWidgetsSection() -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Icon Widgets")
+      Text("Menu Bar Widgets")
         .font(.headline)
         .foregroundColor(.secondary)
 
