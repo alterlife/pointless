@@ -12,34 +12,29 @@ class PluginRegistry: ObservableObject {
 
   private init() {}
 
-  /// Register a plugin
+  /// Register a plugin — wraps it for type erasure and adds it to the list
   func register<P: Plugin>(_ plugin: P) {
-    registerWrapped(AnyPlugin(plugin))
+    register(AnyPlugin(plugin))
   }
 
   /// Register multiple plugins
   func register(_ plugins: [any Plugin]) {
-    for plugin in plugins {
-      registerWrapped(AnyPlugin(plugin))
-    }
+    plugins.forEach { register(AnyPlugin($0)) }
   }
 
-  /// Internal registration logic - accepts pre-wrapped plugin
-  private func registerWrapped(_ wrapped: AnyPlugin) {
-    // Check for duplicate IDs
-    if plugins.contains(where: { $0.id == wrapped.id }) {
-      Logger.warning("Plugin with ID '\(wrapped.id)' already registered. Skipping.")
+  private func register(_ plugin: AnyPlugin) {
+    guard !plugins.contains(where: { $0.id == plugin.id }) else {
+      Logger.warning("Plugin with ID '\(plugin.id)' already registered. Skipping.")
       return
     }
 
-    // Observe plugin changes and forward to this registry
-    wrapped.objectWillChange.sink { [weak self] _ in
+    plugin.objectWillChange.sink { [weak self] _ in
       self?.objectWillChange.send()
     }
     .store(in: &cancellables)
 
-    plugins.append(wrapped)
-    Logger.info("Registered plugin: \(wrapped.name) (\(wrapped.id))", logger: Logger.pluginRegistry)
+    plugins.append(plugin)
+    Logger.info("Registered plugin: \(plugin.name) (\(plugin.id))", logger: Logger.pluginRegistry)
   }
 
   /// Load external plugins from bundles
@@ -94,6 +89,6 @@ class PluginRegistry: ObservableObject {
       return
     }
 
-    registerWrapped(AnyPlugin(plugin))
+    register(AnyPlugin(plugin))
   }
 }

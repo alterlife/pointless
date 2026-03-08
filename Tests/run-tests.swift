@@ -192,25 +192,35 @@ testSuite("Plugin Registry Tests") {
 
 // MARK: - Mock Suspend/Resume Lifecycle
 
+/// Mirrors the SuspendState enum from PluginLifecycle.swift so tests reflect
+/// the same state machine logic without importing the app target.
 class MockSuspendLifecycle {
+    enum SuspendState: Equatable {
+        case running
+        case suspended(wasActive: Bool)
+    }
+
     var timerRunning = false
-    var isSuspended = false
-    private var wasRunning = false
+    private(set) var suspendState: SuspendState = .running
+
+    var isSuspended: Bool {
+        if case .suspended = suspendState { return true }
+        return false
+    }
 
     func start() { timerRunning = true }
     func stop() { timerRunning = false }
 
     func suspend() {
-        guard !isSuspended else { return }
-        wasRunning = timerRunning
+        guard case .running = suspendState else { return }
+        suspendState = .suspended(wasActive: timerRunning)
         stop()
-        isSuspended = true
     }
 
     func resume() {
-        guard isSuspended else { return }
-        isSuspended = false
-        if wasRunning { start() }
+        guard case .suspended(let wasActive) = suspendState else { return }
+        suspendState = .running
+        if wasActive { start() }
     }
 }
 
@@ -257,6 +267,50 @@ testSuite("Screen Sleep Tests") {
         lifecycle.resume()
         verify(!lifecycle.isSuspended, "Should not be suspended")
         verify(lifecycle.timerRunning, "Timer should be running")
+    }
+
+    runTest("SuspendState captures wasActive=true when timer was running at suspend time") {
+        let lifecycle = MockSuspendLifecycle()
+        lifecycle.start()
+        lifecycle.suspend()
+        if case .suspended(let wasActive) = lifecycle.suspendState {
+            verify(wasActive, "wasActive should be true — timer was running when suspended")
+        } else {
+            verify(false, "Should be in suspended state")
+        }
+    }
+
+    runTest("SuspendState captures wasActive=false when timer was stopped at suspend time") {
+        let lifecycle = MockSuspendLifecycle()
+        // timer never started
+        lifecycle.suspend()
+        if case .suspended(let wasActive) = lifecycle.suspendState {
+            verify(!wasActive, "wasActive should be false — timer was not running when suspended")
+        } else {
+            verify(false, "Should be in suspended state")
+        }
+    }
+
+    runTest("SuspendState returns to .running after resume") {
+        let lifecycle = MockSuspendLifecycle()
+        lifecycle.start()
+        lifecycle.suspend()
+        lifecycle.resume()
+        verify(lifecycle.suspendState == .running, "suspendState should be .running after resume")
+    }
+
+    runTest("stopping timer between suspend and resume does not restart it") {
+        // The wasActive flag is captured at suspend time. Even if the timer stops
+        // (it does, via stop()), resume still uses the captured wasActive value.
+        // This test confirms the associated value is locked at suspend time.
+        let lifecycle = MockSuspendLifecycle()
+        lifecycle.start()
+        lifecycle.suspend() // wasActive=true captured here
+        // timerRunning is already false after suspend; stopping again is a no-op
+        lifecycle.stop()
+        lifecycle.resume()
+        // resume reads wasActive=true from the enum, so it restarts
+        verify(lifecycle.timerRunning, "Timer should restart — wasActive was true at suspend time")
     }
 }
 

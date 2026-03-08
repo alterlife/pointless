@@ -122,7 +122,7 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
     Logger.debug("CPU: \(String(format: "%.1f%%", totalUsage * 100))")
   }
 
-  func configure(_ values: [String: Any]) {
+  func configure(with values: [String: Any]) {
     if let enabled = values["enabled"] as? Bool {
       isEnabled = enabled
     }

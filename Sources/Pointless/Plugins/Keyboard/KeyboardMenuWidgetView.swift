@@ -72,7 +72,7 @@ struct KeyboardMenuWidgetView: View {
 
       Toggle("", isOn: Binding(
         get: { plugin.isEnabled },
-        set: { plugin.configure(["enabled": $0]) }
+        set: { plugin.configure(with: ["enabled": $0]) }
       ))
       .toggleStyle(.switch)
       .controlSize(.small)

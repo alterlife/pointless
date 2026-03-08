@@ -1,7 +1,7 @@
 import Cocoa
 import OSLog
 
-/// Monitors screen sleep/wake events and suspends or resumes all plugins accordingly
+/// Listens for screen sleep/wake events and pauses or resumes all plugins accordingly.
 @MainActor
 class ScreenStateMonitor {
   static let shared = ScreenStateMonitor()
@@ -9,26 +9,23 @@ class ScreenStateMonitor {
   private init() {}
 
   func start() {
-    NSWorkspace.shared.notificationCenter.addObserver(
-      forName: NSWorkspace.screensDidSleepNotification,
-      object: nil,
-      queue: .main
-    ) { _ in
-      Task { @MainActor in
-        Logger.info("Screen slept — suspending plugins")
-        PluginRegistry.shared.suspendAll()
-      }
+    observe(NSWorkspace.screensDidSleepNotification) {
+      Logger.info("Screen slept — suspending plugins")
+      PluginRegistry.shared.suspendAll()
     }
+    observe(NSWorkspace.screensDidWakeNotification) {
+      Logger.info("Screen woke — resuming plugins")
+      PluginRegistry.shared.resumeAll()
+    }
+  }
 
+  private func observe(_ name: Notification.Name, handler: @escaping @MainActor () -> Void) {
     NSWorkspace.shared.notificationCenter.addObserver(
-      forName: NSWorkspace.screensDidWakeNotification,
+      forName: name,
       object: nil,
       queue: .main
     ) { _ in
-      Task { @MainActor in
-        Logger.info("Screen woke — resuming plugins")
-        PluginRegistry.shared.resumeAll()
-      }
+      Task { @MainActor in handler() }
     }
   }
 }

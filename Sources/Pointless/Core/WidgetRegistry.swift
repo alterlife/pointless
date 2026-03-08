@@ -48,36 +48,25 @@ class WidgetRegistry: ObservableObject {
 
   // MARK: - Registration
 
-  /// Register menu bar widgets from a plugin
   func registerMenuBarWidgets(_ widgets: [MenuBarWidget]) {
-    for widget in widgets {
-      // Check for duplicate IDs
-      if allMenuBarWidgets.contains(where: { $0.id == widget.id }) {
-        Logger.warning("MenuBarWidget with ID '\(widget.id)' already registered. Skipping.")
-        continue
-      }
-
-      allMenuBarWidgets.append(widget)
-      Logger.info("Registered MenuBarWidget: \(widget.name) (\(widget.id))")
-    }
-
+    addWidgets(widgets, to: &allMenuBarWidgets, kind: "MenuBarWidget")
     rebuildOrderedMenuBarWidgets()
   }
 
-  /// Register menu widgets from a plugin
   func registerMenuWidgets(_ widgets: [MenuWidget]) {
-    for widget in widgets {
-      // Check for duplicate IDs
-      if allMenuWidgets.contains(where: { $0.id == widget.id }) {
-        Logger.warning("MenuWidget with ID '\(widget.id)' already registered. Skipping.")
+    addWidgets(widgets, to: &allMenuWidgets, kind: "MenuWidget")
+    rebuildOrderedMenuWidgets()
+  }
+
+  private func addWidgets<W: WidgetProtocol>(_ incoming: [W], to list: inout [W], kind: String) {
+    for widget in incoming {
+      if list.contains(where: { $0.id == widget.id }) {
+        Logger.warning("\(kind) with ID '\(widget.id)' already registered. Skipping.")
         continue
       }
-
-      allMenuWidgets.append(widget)
-      Logger.info("Registered MenuWidget: \(widget.name) (\(widget.id))")
+      list.append(widget)
+      Logger.info("Registered \(kind): \(widget.name) (\(widget.id))")
     }
-
-    rebuildOrderedMenuWidgets()
   }
 
   // MARK: - Per-Plugin Queries

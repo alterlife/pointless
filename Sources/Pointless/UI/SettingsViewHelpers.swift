@@ -23,7 +23,7 @@ extension SettingsView {
     Binding(
       get: { plugin.isEnabled },
       set: { newValue in
-        plugin.configure(["enabled": newValue])
+        plugin.configure(with: ["enabled": newValue])
         // Also update our local values dict so settings stay in sync
         if values[plugin.id] == nil { values[plugin.id] = [:] }
         values[plugin.id]?["enabled"] = newValue
@@ -170,7 +170,7 @@ extension SettingsView {
     values[pluginID]?[key] = value
     saveSettings(for: pluginID)
     if let plugin = pluginRegistry.plugins.first(where: { $0.id == pluginID }) {
-      plugin.configure(values[pluginID] ?? [:])
+      plugin.configure(with: values[pluginID] ?? [:])
     }
   }
 

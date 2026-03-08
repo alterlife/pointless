@@ -92,7 +92,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
 
   // MARK: - Plugin Protocol
 
-  func configure(_ values: [String: Any]) {
+  func configure(with values: [String: Any]) {
     if let enabled = values["enabled"] as? Bool { isEnabled = enabled }
     if let hex = values["badgeColor"] as? String {
       badgeColor = Color(hex: hex) ?? Color(red: 0.95, green: 0.75, blue: 0.1)
@@ -119,7 +119,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
 
   func start() {
     Task { @MainActor in
-      if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(self.id)") { self.configure(saved) }
+      if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(self.id)") { self.configure(with: saved) }
       Logger.info("KeyboardPlugin start — isEnabled=\(self.isEnabled)", logger: Logger.pluginLifecycle)
       guard self.isEnabled else { return }
       self.startActivationMonitor()

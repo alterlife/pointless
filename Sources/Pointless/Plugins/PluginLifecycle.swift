@@ -2,24 +2,33 @@ import Combine
 import Foundation
 import OSLog
 
-/// Manages the lifecycle and runtime state for a plugin
+/// Manages the timer, settings, and suspend/resume lifecycle for a plugin.
+/// Plugins don't touch this directly — they use `setupPeriodicUpdate()` from the
+/// default implementations extension, and the lifecycle handles the rest.
 class PluginLifecycle {
-  // Settings
   var settingDefinitions: [SettingDefinition] = []
 
-  // Timer management
   private(set) var timer: Timer?
   private var updateAction: (() -> Void)?
   private(set) var updateInterval: TimeInterval = 2.0
 
-  // Suspend state
-  private var isSuspended = false
-  private var wasRunningBeforeSuspend = false
+  private enum SuspendState {
+    case running
+    case suspended(wasActive: Bool)
+  }
+  private var suspendState: SuspendState = .running
 
-  // Subscriptions
   private var cancellables = Set<AnyCancellable>()
 
-  /// Configure periodic updates with dynamic interval tracking
+  private var isSuspended: Bool {
+    if case .suspended = suspendState { return true }
+    return false
+  }
+
+  /// Attach a repeating action to this lifecycle, watching `interval` on `plugin` for changes.
+  ///
+  /// - objectWillChange fires *before* the property updates, so we defer one run-loop turn
+  ///   to read the new value.
   func configurePeriodicUpdate<P: Plugin>(
     plugin: P,
     interval: KeyPath<P, TimeInterval>,
@@ -28,19 +37,14 @@ class PluginLifecycle {
     self.updateAction = action
     self.updateInterval = plugin[keyPath: interval]
 
-    // Watch for changes to update interval or enabled state.
-    // objectWillChange fires *before* the property is updated, so we defer the read
-    // to the next run loop turn to pick up the new value.
     plugin.objectWillChange.sink { [weak self, weak plugin] _ in
       DispatchQueue.main.async { [weak self, weak plugin] in
-        guard let self = self, let plugin = plugin else { return }
+        guard let self, let plugin else { return }
         let newInterval = plugin[keyPath: interval]
 
         if newInterval != self.updateInterval {
           self.updateInterval = newInterval
-          if plugin.isEnabled {
-            self.restart()
-          }
+          if plugin.isEnabled { self.restart() }
         }
 
         if plugin.isEnabled && self.timer == nil && !self.isSuspended {
@@ -53,62 +57,47 @@ class PluginLifecycle {
     .store(in: &cancellables)
   }
 
-  /// Start the timer
   func start() {
-    guard let action = updateAction else { return }
-    guard !isSuspended else { return }
-    guard timer == nil else { return }
+    guard let action = updateAction, !isSuspended, timer == nil else { return }
 
-    let timer = Timer.scheduledTimer(
-      withTimeInterval: updateInterval,
-      repeats: true
-    ) { _ in
+    let timer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { _ in
       Task { @MainActor in action() }
     }
-
     RunLoop.main.add(timer, forMode: .common)
     self.timer = timer
 
     Logger.debug("Timer started with interval \(updateInterval)s", logger: Logger.pluginLifecycle)
-
-    // Run immediately
     Task { @MainActor in action() }
   }
 
-  /// Stop the timer
   func stop() {
     timer?.invalidate()
     timer = nil
   }
 
-  /// Restart the timer with new interval
-  func restart() {
+  private func restart() {
     guard timer != nil else { return }
     stop()
     start()
     Logger.debug("Timer restarted with interval \(updateInterval)s", logger: Logger.pluginLifecycle)
   }
 
-  /// Suspend polling (screen off/locked) — stops timer entirely
+  /// Pause polling while the screen is off or locked.
   func suspend() {
-    guard !isSuspended else { return }
-    wasRunningBeforeSuspend = timer != nil
+    guard case .running = suspendState else { return }
+    suspendState = .suspended(wasActive: timer != nil)
     stop()
-    isSuspended = true
     Logger.debug("Timer suspended", logger: Logger.pluginLifecycle)
   }
 
-  /// Resume polling after suspension
+  /// Resume polling after the screen wakes.
   func resume() {
-    guard isSuspended else { return }
-    isSuspended = false
-    if wasRunningBeforeSuspend {
-      start()
-    }
+    guard case .suspended(let wasActive) = suspendState else { return }
+    suspendState = .running
+    if wasActive { start() }
     Logger.debug("Timer resumed", logger: Logger.pluginLifecycle)
   }
 
-  /// Cleanup on deinitialization
   deinit {
     stop()
     cancellables.removeAll()
