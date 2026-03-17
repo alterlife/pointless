@@ -348,61 +348,76 @@ let testPriorityKeys: [Character] = [
 func makeTestLabels(count: Int) -> [String] {
     guard count > 0 else { return [] }
     let keys = testPriorityKeys.map { String($0) }
-    var labels = keys
-    outer: for first in keys {
-        for second in keys {
-            labels.append(first + second)
-            if labels.count >= count { break outer }
-        }
+    let base = keys.count
+    let length: Int
+    if count <= base { length = 1 }
+    else if count <= base * base { length = 2 }
+    else { length = 3 }
+    var labels: [String] = []
+    generateTestCombos(keys: keys, length: length, current: "", into: &labels, needed: count)
+    return labels
+}
+
+func generateTestCombos(keys: [String], length: Int, current: String, into labels: inout [String], needed: Int) {
+    if current.count == length { labels.append(current); return }
+    for key in keys {
+        if labels.count >= needed { return }
+        generateTestCombos(keys: keys, length: length, current: current + key, into: &labels, needed: needed)
     }
-    return Array(labels.prefix(count))
 }
 
 testSuite("LabelGenerator Tests") {
-    runTest("testHomeRowOrder — first label is 'a'") {
+    runTest("single-char labels — ≤26 elements use 1-char labels") {
         let labels = makeTestLabels(count: 3)
         assertEqual(labels[0], "a", "First label should be 'a' (home row)")
         assertEqual(labels[1], "s", "Second label should be 's'")
         assertEqual(labels[2], "d", "Third label should be 'd'")
+        verify(labels.allSatisfy { $0.count == 1 }, "All labels should be 1 char")
     }
 
-    runTest("testHomeRowOrder — ninth label is 'h'") {
-        let labels = makeTestLabels(count: 9)
-        assertEqual(labels[8], "h", "9th label should be last home-row key 'h'")
+    runTest("single-char labels — full 26 elements") {
+        let labels = makeTestLabels(count: 26)
+        assertEqual(labels.count, 26)
+        verify(labels.allSatisfy { $0.count == 1 }, "All 26 labels should be 1 char")
+        assertEqual(Set(labels).count, 26, "All 26 labels must be unique")
     }
 
-    runTest("testTopRow — 10th label is top row start") {
-        let labels = makeTestLabels(count: 10)
-        assertEqual(labels[9], "q", "10th label should be 'q' (top row start)")
+    runTest("two-char labels — 27+ elements use uniform 2-char labels") {
+        let labels = makeTestLabels(count: 30)
+        verify(labels.allSatisfy { $0.count == 2 }, "All labels should be 2 chars for count > 26")
+        assertEqual(labels[0], "aa", "First 2-char label should be 'aa'")
+        assertEqual(labels[1], "as", "Second should be 'as'")
     }
 
-    runTest("testAllLabelsUnique — 100 elements get distinct labels") {
+    runTest("all labels unique — 100 elements") {
         let labels = makeTestLabels(count: 100)
         let unique = Set(labels)
         assertEqual(unique.count, labels.count, "All 100 labels must be unique")
+        verify(labels.allSatisfy { $0.count == 2 }, "100 elements should all get 2-char labels")
     }
 
-    runTest("testTwoLetterCombos — element 27 gets two-letter label") {
-        let labels = makeTestLabels(count: 30)
-        // Labels 0–26 are single letters (27 total in our key set); index 27 = first two-letter
-        let twoLetter = labels[27]
-        verify(twoLetter.count == 2, "Label at index 27 should be 2 chars, got '\(twoLetter)'")
+    runTest("no prefix ambiguity — no label is a prefix of another") {
+        let labels = makeTestLabels(count: 100)
+        for label in labels {
+            let prefixMatches = labels.filter { $0 != label && $0.hasPrefix(label) }
+            verify(prefixMatches.isEmpty, "Label '\(label)' should not be a prefix of any other label")
+        }
     }
 
-    runTest("testFilterEmptyPrefix — returns all unchanged") {
+    runTest("filterEmptyPrefix — returns all unchanged") {
         let labels = makeTestLabels(count: 5)
         let filtered = labels.filter { $0.hasPrefix("") }
         assertEqual(filtered.count, labels.count, "Empty prefix should return all labels")
     }
 
-    runTest("testFilterMatchingPrefix — keeps only labels starting with 'a'") {
-        let labels = makeTestLabels(count: 27)
+    runTest("filterMatchingPrefix — keeps only labels starting with 'a'") {
+        let labels = makeTestLabels(count: 30)
         let filtered = labels.filter { $0.hasPrefix("a") }
         verify(!filtered.isEmpty, "Should find labels starting with 'a'")
         verify(filtered.allSatisfy { $0.hasPrefix("a") }, "All filtered labels start with 'a'")
     }
 
-    runTest("testFilterNoMatch — unmatched prefix returns empty") {
+    runTest("filterNoMatch — unmatched prefix returns empty") {
         let labels = makeTestLabels(count: 5)
         let filtered = labels.filter { $0.hasPrefix("zz") }
         verify(filtered.isEmpty, "No label should start with 'zz' in first 5")
@@ -928,16 +943,7 @@ struct TestLabeledElement {
 }
 
 func testMakeLabels(count: Int) -> [String] {
-    guard count > 0 else { return [] }
-    let keys = testPriorityKeys.map { String($0) }
-    var labels = keys
-    outer: for first in keys {
-        for second in keys {
-            labels.append(first + second)
-            if labels.count >= count { break outer }
-        }
-    }
-    return Array(labels.prefix(count))
+    makeTestLabels(count: count)
 }
 
 func testLabelElements(count: Int) -> [TestLabeledElement] {
@@ -976,6 +982,7 @@ testSuite("LabelGenerator filter and exactMatch Tests") {
 
     runTest("exactMatch finds element with matching label") {
         let elements = testLabelElements(count: 10)
+        // 10 elements → 1-char labels; first is "a"
         let match = testExactMatch(in: elements, for: "a")
         verify(match != nil, "Should find 'a' label")
         assertEqual(match?.label ?? "", "a")
@@ -987,14 +994,14 @@ testSuite("LabelGenerator filter and exactMatch Tests") {
         verify(match == nil, "Should not find 'zzz'")
     }
 
-    runTest("exactMatch distinguishes prefix from exact") {
+    runTest("exactMatch with uniform 2-char labels") {
         let elements = testLabelElements(count: 30)
-        // 'a' is a valid single-letter label; 'as' is a two-letter label
-        let exactA = testExactMatch(in: elements, for: "a")
-        let exactAs = testExactMatch(in: elements, for: "as")
-        verify(exactA != nil, "Should find exact 'a'")
-        verify(exactAs != nil, "Should find exact 'as'")
-        verify(exactA?.id != exactAs?.id, "They should be different elements")
+        // 30 elements → all 2-char labels; first is "aa", second is "as"
+        let exactAA = testExactMatch(in: elements, for: "aa")
+        let exactAS = testExactMatch(in: elements, for: "as")
+        verify(exactAA != nil, "Should find exact 'aa'")
+        verify(exactAS != nil, "Should find exact 'as'")
+        verify(exactAA?.id != exactAS?.id, "They should be different elements")
     }
 
     runTest("filter then exactMatch simulates hint selection") {
@@ -1403,44 +1410,8 @@ func testHandleBackspace(prefix: String) -> String {
 }
 
 testSuite("Navigation Key Handler State Machine Tests") {
-    runTest("char that narrows without exact match produces updatePrefix") {
-        // With 400 elements, single-letter labels are exhausted and we have many two-letter combos.
-        // typing 'a' from prefix "a" → newPrefix="aa" (exact match, label 27 in 400-element set)
-        // To get updatePrefix, we need a prefix+char that's a valid prefix for multiple items
-        // but is not itself an exact label. Use a very large set and type a char mid-sequence
-        // such that the two-char prefix matches many but none exactly.
-        // With 400 elements: labels include "a", then "aa","as","ad",... then "sa","ss",...
-        // From prefix="s", char='a' → "sa" — is "sa" an exact label? Yes (it's in the two-letter set).
-        // The updatePrefix path is reached when count is large enough that a two-char prefix
-        // matches several three-letter combos but is not itself exact.
-        // Three-letter labels start at index 27 + 27*27 = 756, beyond 400.
-        // So for count <= 756, prefix+char is always either exactMatch or empty → no updatePrefix path.
-        // This is a property of the label scheme, not a bug. Document it as a verified invariant:
-        let elements = testLabelElements(count: 400)
-        // "a" from "" → exactMatch("a") — single letter always exact-matches
-        let outcome = testHandleChar("a", prefix: "", elements: elements)
-        if case .exactMatch(let label) = outcome {
-            assertEqual(label, "a")
-        } else {
-            verify(false, "Expected exactMatch, got \(outcome)")
-        }
-    }
-
-    runTest("second char produces exact match for two-letter label") {
-        let elements = testLabelElements(count: 50)
-        // "as" is the second two-letter combo (after "aa")
-        let _ = testHandleChar("a", prefix: "", elements: elements)
-        let outcome = testHandleChar("a", prefix: "a", elements: elements)
-        if case .exactMatch(let label) = outcome {
-            assertEqual(label, "aa")
-        } else {
-            verify(false, "Expected exactMatch for 'aa', got \(outcome)")
-        }
-    }
-
-    runTest("single-letter label produces exact match on first char") {
-        let elements = testLabelElements(count: 5)
-        // elements[0] = "a", so typing 'a' should match directly
+    runTest("single-char labels — typing 'a' is an exact match") {
+        let elements = testLabelElements(count: 5) // 1-char labels: a, s, d, f, j
         let outcome = testHandleChar("a", prefix: "", elements: elements)
         if case .exactMatch(let label) = outcome {
             assertEqual(label, "a")
@@ -1449,16 +1420,33 @@ testSuite("Navigation Key Handler State Machine Tests") {
         }
     }
 
+    runTest("two-char labels — first char narrows (updatePrefix)") {
+        let elements = testLabelElements(count: 50) // 2-char labels: aa, as, ad, ...
+        // typing 'a' from "" → newPrefix="a" — matches "aa","as","ad",... but no exact match
+        let outcome = testHandleChar("a", prefix: "", elements: elements)
+        assertEqual(outcome, .updatePrefix("a"), "First char should narrow, not match")
+    }
+
+    runTest("two-char labels — second char produces exact match") {
+        let elements = testLabelElements(count: 50) // 2-char labels
+        // typing 'a' from prefix "a" → newPrefix="aa" — exact match
+        let outcome = testHandleChar("a", prefix: "a", elements: elements)
+        if case .exactMatch(let label) = outcome {
+            assertEqual(label, "aa")
+        } else {
+            verify(false, "Expected exactMatch('aa'), got \(outcome)")
+        }
+    }
+
     runTest("char that produces empty filter causes dismiss") {
-        let elements = testLabelElements(count: 3) // "a", "s", "d"
-        // typing 'z' from prefix "" — 'z' not in first 3 labels
+        let elements = testLabelElements(count: 3) // 1-char labels: a, s, d
+        // typing 'z' — not in first 3 labels
         let outcome = testHandleChar("z", prefix: "", elements: elements)
         assertEqual(outcome, .dismiss, "No element starts with 'z' — should dismiss")
     }
 
     runTest("non-priority char is ignored (noChange)") {
         let elements = testLabelElements(count: 10)
-        // digits and symbols are not in priorityKeys
         let outcome = testHandleChar("1", prefix: "", elements: elements)
         assertEqual(outcome, .noChange, "Non-priority char should be ignored")
     }
@@ -1478,16 +1466,12 @@ testSuite("Navigation Key Handler State Machine Tests") {
         assertEqual(result, "")
     }
 
-    runTest("two-char sequence reaches exact match on second char") {
+    runTest("no prefix ambiguity — updatePrefix is reachable with uniform labels") {
+        // With uniform 2-char labels, typing the first char always goes to updatePrefix
+        // (never an ambiguous exact match). This is the key improvement.
         let elements = testLabelElements(count: 50)
-        // First char 'a' → exactMatch("a") immediately (label 0 is single letter)
-        // To test a two-step sequence, use prefix="a" and char="a" → "aa" exact match (label 27)
-        let outcome = testHandleChar("a", prefix: "a", elements: elements)
-        if case .exactMatch(let label) = outcome {
-            assertEqual(label, "aa")
-        } else {
-            verify(false, "Expected exactMatch('aa'), got \(outcome)")
-        }
+        let outcome = testHandleChar("s", prefix: "", elements: elements)
+        assertEqual(outcome, .updatePrefix("s"), "First char of 2-char label narrows without ambiguity")
     }
 }
 
