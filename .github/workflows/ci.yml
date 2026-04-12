@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: SwiftLint
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: norio-nomura/action-swiftlint@3.2.1
+        with:
+          args: --strict
+
+  build-and-test:
+    name: Build & Test
+    runs-on: macos-15
+    needs: lint
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+      - name: Build (debug)
+        run: swift build
+      - name: Run tests
+        run: swift Tests/run-tests.swift
+      - name: Build (release)
+        run: swift build -c release
