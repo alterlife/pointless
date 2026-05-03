@@ -78,6 +78,7 @@ internal func badgeOrigin(anchor: CGPoint, badgeSize: CGSize, viewSize: CGSize) 
 final class OverlayState: ObservableObject {
   @Published var labeledElements: [LabeledElement] = []
   @Published var typedPrefix: String = ""
+  @Published var scrollTargetFrame: CGRect?
 
   var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
   var textColor = Color.black
@@ -114,7 +115,7 @@ final class ElementOverlayWindow: NSWindow {
 
   func show(fadeDuration: Double) {
     alphaValue = 0
-    makeKeyAndOrderFront(nil)
+    orderFront(nil)
     NSAnimationContext.runAnimationGroup { ctx in
       ctx.duration = fadeDuration
       animator().alphaValue = 1
@@ -138,6 +139,9 @@ struct OverlayContentView: View {
         for labeled in state.labeledElements {
           drawElement(labeled, in: &ctx, viewSize: size)
         }
+        if let target = state.scrollTargetFrame {
+          drawScrollTarget(target, in: &ctx)
+        }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -147,7 +151,10 @@ struct OverlayContentView: View {
   }
 
   private var escHint: some View {
-    Text("type a letter to jump  ·  ⌫ back  ·  ESC cancel")
+    let text = state.scrollTargetFrame != nil
+      ? "j/k scroll  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
+      : "type a letter to jump  ·  ⌫ back  ·  ESC cancel"
+    return Text(text)
       .font(.system(size: 11, weight: .medium, design: .rounded))
       .foregroundColor(.white)
       .padding(.horizontal, 10)
@@ -213,5 +220,17 @@ struct OverlayContentView: View {
       .font(.system(size: state.badgeFontSize, weight: .bold, design: .monospaced))
       .foregroundColor(state.textColor.opacity(alpha))
     context.draw(textView, at: rect.center)
+  }
+
+  private func drawScrollTarget(_ frame: CGRect, in context: inout GraphicsContext) {
+    let canvasRect = CGRect(
+      x: frame.minX - screen.frame.minX,
+      y: screen.frame.maxY - frame.maxY,
+      width: frame.width,
+      height: frame.height
+    )
+    let path = Path(roundedRect: canvasRect.insetBy(dx: 2, dy: 2), cornerRadius: 6)
+    context.fill(path, with: .color(state.badgeColor.opacity(0.08)))
+    context.stroke(path, with: .color(state.badgeColor), lineWidth: 2.5)
   }
 }

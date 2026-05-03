@@ -3,31 +3,6 @@ import CoreGraphics
 import OSLog
 import SwiftUI
 
-// MARK: - CGEventTap free function (C callback — must be top-level)
-
-private func keyboardPluginEventCallback(
-  proxy: CGEventTapProxy,
-  type: CGEventType,
-  event: CGEvent?,
-  userInfo: UnsafeMutableRawPointer?
-) -> Unmanaged<CGEvent>? {
-  guard let event else { return nil }
-  guard let userInfo else { return Unmanaged.passUnretained(event) }
-  let plugin = Unmanaged<KeyboardPlugin>.fromOpaque(userInfo).takeUnretainedValue()
-
-  if type == .leftMouseDown || type == .rightMouseDown {
-    Task { @MainActor in plugin.dismissOverlay() }
-    return Unmanaged.passUnretained(event)
-  }
-
-  if type == .keyDown, let nsEvent = NSEvent(cgEvent: event) {
-    Task { @MainActor in plugin.handleNavigationKey(nsEvent) }
-    return nil
-  }
-
-  return Unmanaged.passUnretained(event)
-}
-
 // MARK: - KeyboardPlugin
 
 final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
@@ -40,6 +15,8 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   @Published var menuBarText = "⌨"
   @Published var isEnabled = true
   @Published var shortcutDisplay = "⌘⇧Space"
+  @Published var scrollNextShortcutDisplay = "⌘⇧J"
+  @Published var scrollPrevShortcutDisplay = "⌘⇧K"
   @Published var sessionJumpCount = 0
   @Published var lastScanCount = 0
 
@@ -50,26 +27,36 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   @Published var showConnectorLines = true
   @Published var fadeInDuration = 0.08
 
-  // Activation hotkey (parsed from display string like "⌘⇧Space")
+  // Click activation hotkey
   private var hotkeyCode: UInt16 = 49  // Space
   private var hotkeyModifiers: NSEvent.ModifierFlags = [.command, .shift]
   private var activationObserver: NSObjectProtocol?
 
-  private enum OverlayPhase {
+  // Scroll hotkeys — internal so extensions can access them
+  var scrollNextCode: UInt16 = 38  // J
+  var scrollNextMods: NSEvent.ModifierFlags = [.command, .shift]
+  var scrollPrevCode: UInt16 = 40  // K
+  var scrollPrevMods: NSEvent.ModifierFlags = [.command, .shift]
+  var scrollNextMonitor: Any?
+  var scrollPrevMonitor: Any?
+
+  // Internal so extensions can pattern-match and update phase
+  enum OverlayPhase {
     case inactive
     case scanning
     case active(typedSoFar: String)
+    case scrolling(targets: [DiscoveredElement], currentIndex: Int)
   }
 
-  private var phase: OverlayPhase = .inactive
-  private let overlayState = OverlayState()
-  private var overlayWindows: [ElementOverlayWindow] = []
-  private var labeledElements: [LabeledElement] = []
+  var phase: OverlayPhase = .inactive
+  let overlayState = OverlayState()
+  var overlayWindows: [ElementOverlayWindow] = []
+  var labeledElements: [LabeledElement] = []
 
   private var activationMonitor: Any?
   private var appSwitchObserver: NSObjectProtocol?
-  private var eventTap: CFMachPort?
-  private var scanner: AccessibilityScanner?
+  var eventTap: CFMachPort?
+  var scanner: AccessibilityScanner?
 
   override init() {
     super.init()
@@ -81,6 +68,9 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
       .section(label: "Activation", description: "Keyboard shortcut and enable/disable"),
       .toggle(key: "enabled", label: "Enabled", defaultValue: true),
       .hotkey(key: "activationHotkey", label: "Activation Shortcut", defaultValue: "⌘⇧Space"),
+      .section(label: "Scroll Mode", description: "Cycle and scroll scrollable areas by keyboard"),
+      .hotkey(key: "scrollNextHotkey", label: "Scroll / Next Area", defaultValue: "⌘⇧J"),
+      .hotkey(key: "scrollPrevHotkey", label: "Previous Scroll Area", defaultValue: "⌘⇧K"),
       .section(label: "Overlay Style", description: "Customize the letter hints on screen elements"),
       .color(key: "badgeColor", label: "Hint Color", defaultValue: "#F2BF1A"),
       .color(key: "textColor", label: "Hint Text Color", defaultValue: "#000000"),
@@ -111,6 +101,27 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
       Task { @MainActor in
         self.stopActivationMonitor()
         self.startActivationMonitor()
+      }
+    }
+    var scrollMonitorsNeedRestart = false
+    if let shortcut = values["scrollNextHotkey"] as? String {
+      scrollNextShortcutDisplay = shortcut
+      let parsed = parseShortcutString(shortcut)
+      scrollNextMods = parsed.modifiers
+      scrollNextCode = parsed.keyCode
+      scrollMonitorsNeedRestart = true
+    }
+    if let shortcut = values["scrollPrevHotkey"] as? String {
+      scrollPrevShortcutDisplay = shortcut
+      let parsed = parseShortcutString(shortcut)
+      scrollPrevMods = parsed.modifiers
+      scrollPrevCode = parsed.keyCode
+      scrollMonitorsNeedRestart = true
+    }
+    if scrollMonitorsNeedRestart {
+      Task { @MainActor in
+        self.stopScrollMonitors()
+        self.startScrollMonitors()
       }
     }
     Task { @MainActor in self.applySettingsToState() }
@@ -149,7 +160,11 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
 
   func suspend() {
     Task { @MainActor in
-      if case .active = self.phase { self.dismissOverlay() }
+      switch self.phase {
+      case .active: self.dismissOverlay()
+      case .scrolling: self.exitScrollMode()
+      default: break
+      }
     }
   }
 
@@ -193,9 +208,15 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
     ) { [weak self] _ in
       guard let self else { return }
       Task { @MainActor in
-        if case .active = self.phase { self.dismissOverlay() }
+        switch self.phase {
+        case .active: self.dismissOverlay()
+        case .scrolling: self.exitScrollMode()
+        default: break
+        }
       }
     }
+
+    startScrollMonitors()
   }
 
   private func stopActivationMonitor() {
@@ -207,113 +228,37 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
       NSWorkspace.shared.notificationCenter.removeObserver(observer)
       appSwitchObserver = nil
     }
+    stopScrollMonitors()
     stopNavigationMonitor()
-  }
-
-  // MARK: - Overlay Activation
-
-  @MainActor
-  private func handleActivation() {
-    // If permissions aren't granted, show onboarding instead of activating
-    let onboarding = KeyboardOnboardingController.shared
-    onboarding.refresh()
-    guard onboarding.allGranted else {
-      onboarding.ensurePermissions()
-      return
-    }
-
-    if case .active = phase {
-      dismissOverlay()
-      return
-    }
-    phase = .scanning
-    rebuildOverlayWindows()
-
-    let scan = AccessibilityScanner()
-    scanner = scan
-    scan.scan { [weak self] elements in
-      guard let self else { return }
-      guard !elements.isEmpty else {
-        Logger.warning("No interactive elements found in focused window", logger: Logger.pluginLifecycle)
-        self.phase = .inactive
-        self.overlayWindows.forEach { $0.hide() }
-        showEmptyHint()
-        return
-      }
-      let sorted = elements.sorted { lhs, rhs in
-        if lhs.screenFrame.minY != rhs.screenFrame.minY { return lhs.screenFrame.minY > rhs.screenFrame.minY }
-        return lhs.screenFrame.minX < rhs.screenFrame.minX
-      }
-      let labeled = LabelGenerator.label(sorted)
-      self.lastScanCount = elements.count
-      self.labeledElements = labeled
-      self.overlayState.labeledElements = labeled
-      self.overlayState.typedPrefix = ""
-      self.phase = .active(typedSoFar: "")
-      self.overlayWindows.forEach { $0.show(fadeDuration: self.fadeInDuration) }
-      self.startNavigationMonitor()
-    }
-  }
-
-  private func rebuildOverlayWindows() {
-    overlayWindows.forEach { $0.hide() }
-    overlayWindows = NSScreen.screens.map { ElementOverlayWindow(screen: $0, state: overlayState) }
-  }
-
-  // MARK: - Navigation Monitor (CGEventTap)
-
-  private func startNavigationMonitor() {
-    let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
-                          | (1 << CGEventType.leftMouseDown.rawValue)
-                          | (1 << CGEventType.rightMouseDown.rawValue)
-    let selfPtr = Unmanaged.passUnretained(self).toOpaque()
-    guard let tap = CGEvent.tapCreate(
-      tap: .cghidEventTap,
-      place: .headInsertEventTap,
-      options: .defaultTap,
-      eventsOfInterest: mask,
-      callback: keyboardPluginEventCallback,
-      userInfo: selfPtr
-    ) else {
-      Logger.error("Failed to create CGEventTap — Input Monitoring permission may be missing")
-      Task { @MainActor in self.dismissOverlay() }
-      return
-    }
-    eventTap = tap
-    if let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) {
-      CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-    }
-    CGEvent.tapEnable(tap: tap, enable: true)
-  }
-
-  private func stopNavigationMonitor() {
-    guard let tap = eventTap else { return }
-    CGEvent.tapEnable(tap: tap, enable: false)
-    CFMachPortInvalidate(tap)
-    eventTap = nil
   }
 
   // MARK: - Key Handling
 
   @MainActor
   func handleNavigationKey(_ event: NSEvent) {
-    guard case .active(let prefix) = phase else { return }
-    switch event.keyCode {
-    case 53:  // ESC
-      dismissOverlay()
-    case 51:  // Backspace
-      updatePrefix(String(prefix.dropLast()))
-    default:
-      guard let char = event.charactersIgnoringModifiers?.lowercased().first,
-            LabelGenerator.priorityKeys.contains(char) else { return }
-      let newPrefix = prefix + String(char)
-      if let match = LabelGenerator.exactMatch(in: labeledElements, for: newPrefix) {
-        activateElement(match)
-      } else if LabelGenerator.filter(labeledElements, prefix: newPrefix).isEmpty {
+    switch phase {
+    case .active(let prefix):
+      switch event.keyCode {
+      case 53:  // ESC
         dismissOverlay()
-      } else {
-        updatePrefix(newPrefix)
+      case 51:  // Backspace
+        updatePrefix(String(prefix.dropLast()))
+      default:
+        guard let char = event.charactersIgnoringModifiers?.lowercased().first,
+              LabelGenerator.priorityKeys.contains(char) else { return }
+        let newPrefix = prefix + String(char)
+        if let match = LabelGenerator.exactMatch(in: labeledElements, for: newPrefix) {
+          activateElement(match)
+        } else if LabelGenerator.filter(labeledElements, prefix: newPrefix).isEmpty {
+          dismissOverlay()
+        } else {
+          updatePrefix(newPrefix)
+        }
       }
+    case .scrolling(let targets, let currentIndex):
+      handleScrollKey(event, targets: targets, currentIndex: currentIndex)
+    default:
+      break
     }
   }
 
@@ -334,6 +279,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
     overlayWindows.forEach { $0.hide() }
     overlayState.labeledElements = []
     overlayState.typedPrefix = ""
+    overlayState.scrollTargetFrame = nil
   }
 
   @MainActor
