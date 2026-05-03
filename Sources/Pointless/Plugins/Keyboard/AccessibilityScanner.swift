@@ -81,74 +81,43 @@ final class AccessibilityScanner {
   }
 
   private func performScan(mode: ScanMode) -> [DiscoveredElement] {
-    guard let app = NSWorkspace.shared.frontmostApplication else {
-      Logger.info("AX scan: no frontmost app", logger: Logger.pluginLifecycle)
-      return []
-    }
-    Logger.info("AX scan: app=\(app.localizedName ?? "?"), pid=\(app.processIdentifier)",
-                logger: Logger.pluginLifecycle)
+    guard let app = NSWorkspace.shared.frontmostApplication else { return [] }
     let axApp = AXUIElementCreateApplication(app.processIdentifier)
-    guard let window = focusedWindow(from: axApp) else {
-      Logger.info("AX scan: no focused/main window", logger: Logger.pluginLifecycle)
-      return []
-    }
+    guard let window = focusedWindow(from: axApp) else { return [] }
     let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
     let windowFrame = axFrame(of: window, primaryHeight: primaryHeight)
-    Logger.info("AX scan: windowFrame=\(windowFrame.debugDescription)", logger: Logger.pluginLifecycle)
     let roles: Set<String>
     switch mode {
     case .interactive: roles = Self.interactiveRoles
     case .scrollable: roles = Self.scrollableRoles
     }
 
-    // Primary: traverse from window
+    // Primary: traverse from the focused window
     var results: [DiscoveredElement] = []
-    var stats = TraversalStats()
     traverse(window, depth: 0, results: &results, primaryHeight: primaryHeight,
-             roles: roles, visibleRect: windowFrame, stats: &stats)
+             roles: roles, visibleRect: windowFrame)
 
-    // Fallback: if window traversal found very few results, try from focused element
-    // (Firefox/Mullvad may expose empty AXChildren on containers but still have a focused element)
+    // Fallback: Firefox/Mullvad expose empty AXChildren on window containers but the
+    // focused element API still reaches the full accessibility tree. Walk up from the
+    // focused element to a content root and traverse from there.
     if results.count < 5, let root = contentRoot(from: axApp) {
-      let rootRole = axRole(of: root) ?? "?"
-      Logger.info("AX scan: fallback from focused element, root role=\(rootRole)",
-                  logger: Logger.pluginLifecycle)
-      var fallbackStats = TraversalStats()
+      Logger.debug("AX scan: window had \(results.count) hits, falling back to focused element",
+                   logger: Logger.pluginLifecycle)
       traverse(root, depth: 0, results: &results, primaryHeight: primaryHeight,
-               roles: roles, visibleRect: windowFrame, stats: &fallbackStats)
-      stats.visited += fallbackStats.visited
-      stats.maxDepthReached = max(stats.maxDepthReached, fallbackStats.maxDepthReached)
-      stats.depthCutoffs += fallbackStats.depthCutoffs
-      stats.elementCutoffs += fallbackStats.elementCutoffs
-      stats.hiddenSkips += fallbackStats.hiddenSkips
-      stats.noChildrenLeaves += fallbackStats.noChildrenLeaves
-      for (k, v) in fallbackStats.roleCounts { stats.roleCounts[k, default: 0] += v }
+               roles: roles, visibleRect: windowFrame)
     }
 
-    Logger.info(
-      "AX scan done: \(results.count) matches, \(stats.visited) visited, " +
-      "maxDepth=\(stats.maxDepthReached), " +
-      "depthCutoff=\(stats.depthCutoffs), elementCutoff=\(stats.elementCutoffs), " +
-      "hiddenSkips=\(stats.hiddenSkips), noChildrenLeaves=\(stats.noChildrenLeaves), " +
-      "roles=\(stats.roleCounts.sorted { $0.value > $1.value }.prefix(10))",
-      logger: Logger.pluginLifecycle
-    )
     return results
   }
 
-  /// Walk from AXFocusedUIElement up to find a content root (AXWebArea, AXScrollArea, or AXGroup
-  /// with children), then return it as a traversal starting point.
+  /// Walk from AXFocusedUIElement up to find a content root (AXWebArea, AXScrollArea, or the
+  /// highest ancestor with children), then return it as a traversal starting point.
   private func contentRoot(from axApp: AXUIElement) -> AXUIElement? {
     var ref: CFTypeRef?
     guard AXUIElementCopyAttributeValue(
       axApp, "AXFocusedUIElement" as CFString, &ref
-    ) == .success, let raw = ref else {
-      Logger.info("AX scan: no AXFocusedUIElement", logger: Logger.pluginLifecycle)
-      return nil
-    }
+    ) == .success, let raw = ref else { return nil }
     var current = unsafeBitCast(raw, to: AXUIElement.self)
-    let focusedRole = axRole(of: current) ?? "?"
-    Logger.info("AX scan: focused element role=\(focusedRole)", logger: Logger.pluginLifecycle)
 
     // Walk up to find the best root (AXWebArea or AXScrollArea)
     let contentRoles: Set<String> = ["AXWebArea", AXRole.scrollArea, "AXBrowser"]
@@ -164,17 +133,8 @@ final class AccessibilityScanner {
     }
     // If we didn't find a content root, return whatever we have if it has children
     let arr = axChildren(of: current)
+    // swiftlint:disable:next empty_count
     return arr.count > 0 ? current : nil
-  }
-
-  private struct TraversalStats {
-    var visited = 0
-    var maxDepthReached = 0
-    var depthCutoffs = 0
-    var elementCutoffs = 0
-    var hiddenSkips = 0
-    var noChildrenLeaves = 0
-    var roleCounts: [String: Int] = [:]
   }
 
   private func focusedWindow(from axApp: AXUIElement) -> AXUIElement? {
@@ -191,72 +151,37 @@ final class AccessibilityScanner {
     return nil
   }
 
+  // swiftlint:disable:next function_parameter_count — recursive AX traversal needs all params
   private func traverse(
     _ element: AXUIElement,
     depth: Int,
     results: inout [DiscoveredElement],
     primaryHeight: CGFloat,
     roles: Set<String>,
-    visibleRect: CGRect?,
-    stats: inout TraversalStats
+    visibleRect: CGRect?
   ) {
-    if depth > Self.maxDepth { stats.depthCutoffs += 1; return }
-    if results.count >= Self.maxElements { stats.elementCutoffs += 1; return }
-    guard !isCancelled else { return }
+    guard !isCancelled, depth <= Self.maxDepth, results.count < Self.maxElements else { return }
+    guard !isHidden(element), isEnabled(element) else { return }
 
-    stats.visited += 1
-    stats.maxDepthReached = max(stats.maxDepthReached, depth)
-
-    if isHidden(element) || !isEnabled(element) {
-      stats.hiddenSkips += 1
-      return
-    }
-
-    if let role = axRole(of: element) {
-      stats.roleCounts[role, default: 0] += 1
-      if roles.contains(role),
-         let frame = axFrame(of: element, primaryHeight: primaryHeight),
-         frame.width >= 4, frame.height >= 4,
-         visibleRect.map({ $0.intersects(frame) }) ?? true {
-        if let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }) {
-          results.append(DiscoveredElement(element: element, screenFrame: frame, role: role, screen: screen))
-        }
+    if let role = axRole(of: element), roles.contains(role),
+       let frame = axFrame(of: element, primaryHeight: primaryHeight),
+       frame.width >= 4, frame.height >= 4,
+       visibleRect.map({ $0.intersects(frame) }) ?? true {
+      if let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }) {
+        results.append(DiscoveredElement(element: element, screenFrame: frame, role: role, screen: screen))
       }
     }
 
     let rawArr = axChildren(of: element)
-    if rawArr.count == 0, depth <= 4 {
-      var attrNames: CFArray?
-      AXUIElementCopyAttributeNames(element, &attrNames)
-      let names = (attrNames as? [String]) ?? []
-      let role = axRole(of: element) ?? "?"
-      // Detailed diagnosis: check what AXChildren actually returns
-      var childRef: CFTypeRef?
-      let err = AXUIElementCopyAttributeValue(element, AXAttr.children as CFString, &childRef)
-      let detail: String
-      if err != .success {
-        detail = "err=\(err.rawValue)"
-      } else if let arr = childRef as? NSArray {
-        detail = "empty(count=\(arr.count))"
-      } else {
-        detail = "type=\(childRef.map { CFGetTypeID($0) } ?? 0)"
-      }
-      Logger.info("AX scan: leaf \(role) at depth \(depth), children=\(detail), attrs=\(names)",
-                  logger: Logger.pluginLifecycle)
-      stats.noChildrenLeaves += 1
-      return
-    }
-    guard rawArr.count > 0 else {
-      stats.noChildrenLeaves += 1
-      return
-    }
+    // swiftlint:disable:next empty_count
+    guard rawArr.count > 0 else { return }
     // CFArray of AXUIElement objects — map via unsafeBitCast to avoid CF conditional cast error
     let children = rawArr.map { unsafeBitCast($0 as AnyObject, to: AXUIElement.self) }
 
     for child in children {
       guard results.count < Self.maxElements else { break }
       traverse(child, depth: depth + 1, results: &results, primaryHeight: primaryHeight,
-               roles: roles, visibleRect: visibleRect, stats: &stats)
+               roles: roles, visibleRect: visibleRect)
     }
   }
 
@@ -269,7 +194,7 @@ final class AccessibilityScanner {
     for attr in Self.childAttrs {
       var ref: CFTypeRef?
       if AXUIElementCopyAttributeValue(element, attr as CFString, &ref) == .success,
-         let arr = ref as? NSArray, arr.count > 0 {
+         let arr = ref as? NSArray, arr.count > 0 { // swiftlint:disable:this empty_count
         return arr
       }
     }
