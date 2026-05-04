@@ -9,6 +9,16 @@ struct DiscoveredElement {
   let screen: NSScreen
 }
 
+extension Array where Element == DiscoveredElement {
+  /// Sort top-to-bottom (highest Y first in NSScreen coords), left-to-right within each row.
+  func sortedByPosition() -> [DiscoveredElement] {
+    sorted { lhs, rhs in
+      if lhs.screenFrame.minY != rhs.screenFrame.minY { return lhs.screenFrame.minY > rhs.screenFrame.minY }
+      return lhs.screenFrame.minX < rhs.screenFrame.minX
+    }
+  }
+}
+
 /// Converts AX top-left-origin coordinates to NSScreen bottom-left-origin
 internal func axToNSScreen(axOrigin: CGPoint, axSize: CGSize, primaryScreenHeight: CGFloat) -> CGRect {
   let nsScreenY = primaryScreenHeight - axOrigin.y - axSize.height
@@ -62,6 +72,14 @@ final class AccessibilityScanner {
   private static let maxDepth = 25
   private static let maxElements = 500
 
+  /// If the window scan yields fewer results than this, retry via AXFocusedUIElement.
+  /// Firefox/Mullvad expose empty AXChildren on window containers, so the fallback
+  /// walks from the focused element up to a content root instead.
+  private static let fallbackThreshold = 5
+
+  /// Max AXParent hops when walking up to find a content root.
+  private static let maxParentWalk = 30
+
   private var isCancelled = false
 
   func cancel() {
@@ -100,7 +118,7 @@ final class AccessibilityScanner {
     // Fallback: Firefox/Mullvad expose empty AXChildren on window containers but the
     // focused element API still reaches the full accessibility tree. Walk up from the
     // focused element to a content root and traverse from there.
-    if results.count < 5, let root = contentRoot(from: axApp) {
+    if results.count < Self.fallbackThreshold, let root = contentRoot(from: axApp) {
       Logger.debug("AX scan: window had \(results.count) hits, falling back to focused element",
                    logger: Logger.pluginLifecycle)
       traverse(root, depth: 0, results: &results, primaryHeight: primaryHeight,
@@ -110,8 +128,9 @@ final class AccessibilityScanner {
     return results
   }
 
-  /// Walk from AXFocusedUIElement up to find a content root (AXWebArea, AXScrollArea, or the
-  /// highest ancestor with children), then return it as a traversal starting point.
+  /// Walk from AXFocusedUIElement up to a content root (AXWebArea, AXScrollArea) that
+  /// can serve as a traversal starting point. Stops before AXApplication to avoid
+  /// scanning the entire app (menu bars, other windows, etc.).
   private func contentRoot(from axApp: AXUIElement) -> AXUIElement? {
     var ref: CFTypeRef?
     guard AXUIElementCopyAttributeValue(
@@ -119,11 +138,12 @@ final class AccessibilityScanner {
     ) == .success, let raw = ref else { return nil }
     var current = unsafeBitCast(raw, to: AXUIElement.self)
 
-    // Walk up to find the best root (AXWebArea or AXScrollArea)
     let contentRoles: Set<String> = ["AXWebArea", AXRole.scrollArea, "AXBrowser"]
-    for _ in 0..<30 {
-      if let role = axRole(of: current), contentRoles.contains(role) {
-        return current
+    let stopRoles: Set<String> = ["AXApplication"]
+    for _ in 0..<Self.maxParentWalk {
+      if let role = axRole(of: current) {
+        if contentRoles.contains(role) { return current }
+        if stopRoles.contains(role) { break }
       }
       var parentRef: CFTypeRef?
       guard AXUIElementCopyAttributeValue(
@@ -131,7 +151,7 @@ final class AccessibilityScanner {
       ) == .success, let parentRaw = parentRef else { break }
       current = unsafeBitCast(parentRaw, to: AXUIElement.self)
     }
-    // If we didn't find a content root, return whatever we have if it has children
+    // Didn't find a content root — use the highest reachable ancestor that has children
     let arr = axChildren(of: current)
     // swiftlint:disable:next empty_count
     return arr.count > 0 ? current : nil

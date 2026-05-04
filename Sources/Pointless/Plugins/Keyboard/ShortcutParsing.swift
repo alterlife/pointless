@@ -40,6 +40,13 @@ private func keyCodeFromName(_ name: String) -> UInt16 {
   }
 }
 
+private let relevantModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+
+/// Check whether an NSEvent matches a specific hotkey (key code + modifier mask).
+func eventMatchesHotkey(_ event: NSEvent, keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
+  event.keyCode == keyCode && event.modifierFlags.intersection(relevantModifiers) == modifiers
+}
+
 private func carbonKeyCode(for char: String) -> UInt16? {
   let map: [String: UInt16] = [
     "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7,

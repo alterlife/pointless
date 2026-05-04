@@ -12,32 +12,22 @@ extension KeyboardPlugin {
   func startScrollMonitors() {
     let nextCode = scrollNextCode
     let nextMods = scrollNextMods
-    scrollNextMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-      guard let self else { return }
-      let relevantFlags: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
-      let pressed = event.modifierFlags.intersection(relevantFlags)
-      guard event.keyCode == nextCode, pressed == nextMods else { return }
-      Task { @MainActor in self.handleScrollActivation(.next) }
-    }
     let prevCode = scrollPrevCode
     let prevMods = scrollPrevMods
-    scrollPrevMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+    scrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
       guard let self else { return }
-      let relevantFlags: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
-      let pressed = event.modifierFlags.intersection(relevantFlags)
-      guard event.keyCode == prevCode, pressed == prevMods else { return }
-      Task { @MainActor in self.handleScrollActivation(.prev) }
+      if eventMatchesHotkey(event, keyCode: nextCode, modifiers: nextMods) {
+        Task { @MainActor in self.handleScrollActivation(.next) }
+      } else if eventMatchesHotkey(event, keyCode: prevCode, modifiers: prevMods) {
+        Task { @MainActor in self.handleScrollActivation(.prev) }
+      }
     }
   }
 
   func stopScrollMonitors() {
-    if let monitor = scrollNextMonitor {
+    if let monitor = scrollMonitor {
       NSEvent.removeMonitor(monitor)
-      scrollNextMonitor = nil
-    }
-    if let monitor = scrollPrevMonitor {
-      NSEvent.removeMonitor(monitor)
-      scrollPrevMonitor = nil
+      scrollMonitor = nil
     }
   }
 
@@ -73,10 +63,7 @@ extension KeyboardPlugin {
         self.phase = .inactive
         return
       }
-      let sorted = viable.sorted { lhs, rhs in
-        if lhs.screenFrame.minY != rhs.screenFrame.minY { return lhs.screenFrame.minY > rhs.screenFrame.minY }
-        return lhs.screenFrame.minX < rhs.screenFrame.minX
-      }
+      let sorted = viable.sortedByPosition()
       let mousePos = NSEvent.mouseLocation
       let startIndex = sorted.firstIndex { $0.screenFrame.contains(mousePos) } ?? 0
       self.rebuildOverlayWindows()
@@ -95,12 +82,11 @@ extension KeyboardPlugin {
 
   @MainActor
   func handleScrollKey(_ event: NSEvent, targets: [DiscoveredElement], currentIndex: Int) {
-    let mods = event.modifierFlags.intersection([.command, .shift, .option, .control])
-    if event.keyCode == scrollNextCode, mods == scrollNextMods {
+    if eventMatchesHotkey(event, keyCode: scrollNextCode, modifiers: scrollNextMods) {
       cycleScrollTarget(targets: targets, from: currentIndex, direction: .next)
       return
     }
-    if event.keyCode == scrollPrevCode, mods == scrollPrevMods {
+    if eventMatchesHotkey(event, keyCode: scrollPrevCode, modifiers: scrollPrevMods) {
       cycleScrollTarget(targets: targets, from: currentIndex, direction: .prev)
       return
     }

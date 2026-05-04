@@ -57,10 +57,7 @@ extension KeyboardPlugin {
         showEmptyHint()
         return
       }
-      let sorted = elements.sorted { lhs, rhs in
-        if lhs.screenFrame.minY != rhs.screenFrame.minY { return lhs.screenFrame.minY > rhs.screenFrame.minY }
-        return lhs.screenFrame.minX < rhs.screenFrame.minX
-      }
+      let sorted = elements.sortedByPosition()
       let labeled = LabelGenerator.label(sorted)
       self.lastScanCount = elements.count
       self.labeledElements = labeled

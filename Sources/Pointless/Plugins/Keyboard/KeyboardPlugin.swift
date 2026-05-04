@@ -37,8 +37,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   var scrollNextMods: NSEvent.ModifierFlags = [.command, .shift]
   var scrollPrevCode: UInt16 = 40  // K
   var scrollPrevMods: NSEvent.ModifierFlags = [.command, .shift]
-  var scrollNextMonitor: Any?
-  var scrollPrevMonitor: Any?
+  var scrollMonitor: Any?
 
   // Internal so extensions can pattern-match and update phase
   enum OverlayPhase {
@@ -159,12 +158,17 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   }
 
   func suspend() {
-    Task { @MainActor in
-      switch self.phase {
-      case .active: self.dismissOverlay()
-      case .scrolling: self.exitScrollMode()
-      default: break
-      }
+    Task { @MainActor in self.cancelActiveMode() }
+  }
+
+  /// Dismiss whatever mode is active (click overlay or scroll mode). Shared by
+  /// suspend(), app-switch observer, and any other interruption path.
+  @MainActor
+  func cancelActiveMode() {
+    switch phase {
+    case .active: dismissOverlay()
+    case .scrolling: exitScrollMode()
+    default: break
     }
   }
 
@@ -189,10 +193,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
     let expectedCode = hotkeyCode
     let expectedMods = hotkeyModifiers
     activationMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-      guard let self else { return }
-      let relevantFlags: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
-      let pressed = event.modifierFlags.intersection(relevantFlags)
-      guard event.keyCode == expectedCode, pressed == expectedMods else { return }
+      guard let self, eventMatchesHotkey(event, keyCode: expectedCode, modifiers: expectedMods) else { return }
       Logger.info("KeyboardPlugin activation triggered", logger: Logger.pluginLifecycle)
       Task { @MainActor in self.handleActivation() }
     }
@@ -207,13 +208,7 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
       queue: .main
     ) { [weak self] _ in
       guard let self else { return }
-      Task { @MainActor in
-        switch self.phase {
-        case .active: self.dismissOverlay()
-        case .scrolling: self.exitScrollMode()
-        default: break
-        }
-      }
+      Task { @MainActor in self.cancelActiveMode() }
     }
 
     startScrollMonitors()
