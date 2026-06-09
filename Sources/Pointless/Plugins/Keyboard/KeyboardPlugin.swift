@@ -173,7 +173,12 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   }
 
   func resume() {
-    // Activation monitor is still running; nothing to restart
+    Task { @MainActor in
+      guard self.isEnabled else { return }
+      // Global event monitors can stop working after sleep/wake — reinstall them
+      self.stopActivationMonitor()
+      self.startActivationMonitor()
+    }
   }
 
   // MARK: - Settings → State
@@ -281,10 +286,14 @@ final class KeyboardPlugin: NSObject, ObservableObject, Plugin {
   private func activateElement(_ labeled: LabeledElement) {
     sessionJumpCount += 1
     dismissOverlay()
+    let axElement = labeled.element.element
     let center = labeled.element.screenFrame.center
     let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
     let cgPoint = CGPoint(x: center.x, y: primaryHeight - center.y)
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+      // AXPress is more reliable than a synthetic click (e.g. Terminal tabs ignore
+      // clicks at their frame center). Fall back to a click for elements without it.
+      if AXUIElementPerformAction(axElement, "AXPress" as CFString) == .success { return }
       CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
               mouseCursorPosition: cgPoint, mouseButton: .left)?.post(tap: .cghidEventTap)
       CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,

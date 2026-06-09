@@ -94,9 +94,13 @@ extension KeyboardPlugin {
     case 53:       // ESC
       exitScrollMode()
     case 38, 125:  // j / ↓ → scroll down
-      synthesizeScroll(deltaY: -3)
+      synthesizeScroll(deltaY: -Self.scrollStep)
     case 40, 126:  // k / ↑ → scroll up
-      synthesizeScroll(deltaY: 3)
+      synthesizeScroll(deltaY: Self.scrollStep)
+    case 2:        // d → half page down
+      synthesizeScroll(deltaY: -Self.scrollPage)
+    case 32:       // u → half page up
+      synthesizeScroll(deltaY: Self.scrollPage)
     default:
       exitScrollMode()
     }
@@ -116,11 +120,15 @@ extension KeyboardPlugin {
     phase = .scrolling(targets: targets, currentIndex: newIndex)
   }
 
+  private static let scrollStep: Int32 = 60
+  private static let scrollPage: Int32 = 400
+
   @MainActor
   private func synthesizeScroll(deltaY: Int32) {
-    // Scroll events go to the current cursor position
+    // Pixel-unit events scroll smoothly (line units jump in coarse steps).
+    // Scroll events go to the current cursor position.
     CGEvent(
-      scrollWheelEvent2Source: nil, units: .line,
+      scrollWheelEvent2Source: nil, units: .pixel,
       wheelCount: 1, wheel1: deltaY, wheel2: 0, wheel3: 0
     )?.post(tap: .cghidEventTap)
   }

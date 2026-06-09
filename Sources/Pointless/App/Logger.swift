@@ -73,9 +73,9 @@ enum Logger {
   // MARK: - Convenience Methods
 
   /// Log debug-level message (only shown if POINTLESS_LOG_LEVEL=debug)
-  static func debug(_ message: String, logger: os.Logger = pluginLifecycle) {
+  static func debug(_ message: @autoclosure () -> String, logger: os.Logger = pluginLifecycle) {
     guard minimumLevel <= .debug else { return }
-    let formatted = "🔍 \(message)"
+    let formatted = "🔍 \(message())"
     logger.debug("\(formatted, privacy: .public)")
     print(formatted)  // Debug mode always prints to console
   }

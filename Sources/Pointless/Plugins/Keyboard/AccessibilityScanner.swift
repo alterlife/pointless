@@ -88,21 +88,27 @@ final class AccessibilityScanner {
 
   func scan(mode: ScanMode = .interactive, completion: @escaping @MainActor ([DiscoveredElement]) -> Void) {
     isCancelled = false
+    // Capture screen info before leaving the main thread — NSScreen is AppKit API
+    let screens = NSScreen.screens
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       guard let self else {
         Task { @MainActor in completion([]) }
         return
       }
-      let elements = self.performScan(mode: mode)
+      let elements = self.performScan(mode: mode, screens: screens)
       Task { @MainActor in completion(elements) }
     }
   }
 
-  private func performScan(mode: ScanMode) -> [DiscoveredElement] {
+  private func performScan(mode: ScanMode, screens: [NSScreen]) -> [DiscoveredElement] {
     guard let app = NSWorkspace.shared.frontmostApplication else { return [] }
     let axApp = AXUIElementCreateApplication(app.processIdentifier)
+    // WebKit/Chromium only expose their full AX tree to assistive clients. Opt in
+    // explicitly, otherwise web content (Safari pages, Electron apps) has no children.
+    AXUIElementSetAttributeValue(axApp, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
     guard let window = focusedWindow(from: axApp) else { return [] }
-    let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+    let primaryHeight = screens.first?.frame.height ?? 0
     let windowFrame = axFrame(of: window, primaryHeight: primaryHeight)
     let roles: Set<String>
     switch mode {
@@ -110,21 +116,33 @@ final class AccessibilityScanner {
     case .scrollable: roles = Self.scrollableRoles
     }
 
+    let context = TraversalContext(
+      primaryHeight: primaryHeight, roles: roles, visibleRect: windowFrame, mode: mode, screens: screens
+    )
+
     // Primary: traverse from the focused window
     var results: [DiscoveredElement] = []
-    traverse(window, depth: 0, results: &results, primaryHeight: primaryHeight,
-             roles: roles, visibleRect: windowFrame)
+    var roleCount: [String: Int] = [:]
+    traverse(window, depth: 0, results: &results, roleCount: &roleCount, context: context)
 
     // Fallback: Firefox/Mullvad expose empty AXChildren on window containers but the
     // focused element API still reaches the full accessibility tree. Walk up from the
     // focused element to a content root and traverse from there.
     if results.count < Self.fallbackThreshold, let root = contentRoot(from: axApp) {
-      Logger.debug("AX scan: window had \(results.count) hits, falling back to focused element",
-                   logger: Logger.pluginLifecycle)
-      traverse(root, depth: 0, results: &results, primaryHeight: primaryHeight,
-               roles: roles, visibleRect: windowFrame)
+      Logger.info("AX scan: fallback — window had \(results.count) hits",
+                  logger: Logger.pluginLifecycle)
+      traverse(root, depth: 0, results: &results, roleCount: &roleCount, context: context)
+      // The fallback tree can overlap the window tree — drop duplicate elements
+      var seen = Set<String>()
+      results = results.filter { seen.insert("\($0.role)|\($0.screenFrame)").inserted }
     }
 
+    let total = roleCount.values.reduce(0, +)
+    Logger.debug(
+      "AX scan: \(results.count) matches, \(total) visited, " +
+      "roles=\(roleCount.sorted { $0.value > $1.value }.prefix(15))",
+      logger: Logger.pluginLifecycle
+    )
     return results
   }
 
@@ -171,24 +189,34 @@ final class AccessibilityScanner {
     return nil
   }
 
-  // swiftlint:disable:next function_parameter_count — recursive AX traversal needs all params
+  private struct TraversalContext {
+    let primaryHeight: CGFloat
+    let roles: Set<String>
+    let visibleRect: CGRect?
+    let mode: ScanMode
+    let screens: [NSScreen]
+  }
+
   private func traverse(
     _ element: AXUIElement,
     depth: Int,
     results: inout [DiscoveredElement],
-    primaryHeight: CGFloat,
-    roles: Set<String>,
-    visibleRect: CGRect?
+    roleCount: inout [String: Int],
+    context: TraversalContext
   ) {
     guard !isCancelled, depth <= Self.maxDepth, results.count < Self.maxElements else { return }
     guard !isHidden(element), isEnabled(element) else { return }
 
-    if let role = axRole(of: element), roles.contains(role),
-       let frame = axFrame(of: element, primaryHeight: primaryHeight),
-       frame.width >= 4, frame.height >= 4,
-       visibleRect.map({ $0.intersects(frame) }) ?? true {
-      if let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }) {
-        results.append(DiscoveredElement(element: element, screenFrame: frame, role: role, screen: screen))
+    if let role = axRole(of: element) {
+      roleCount[role, default: 0] += 1
+      let matched = context.roles.contains(role) || (context.mode == .interactive && hasPressAction(element))
+      if matched,
+         let frame = axFrame(of: element, primaryHeight: context.primaryHeight),
+         frame.width >= 4, frame.height >= 4,
+         context.visibleRect.map({ $0.intersects(frame) }) ?? true {
+        if let screen = context.screens.first(where: { $0.frame.intersects(frame) }) {
+          results.append(DiscoveredElement(element: element, screenFrame: frame, role: role, screen: screen))
+        }
       }
     }
 
@@ -200,8 +228,7 @@ final class AccessibilityScanner {
 
     for child in children {
       guard results.count < Self.maxElements else { break }
-      traverse(child, depth: depth + 1, results: &results, primaryHeight: primaryHeight,
-               roles: roles, visibleRect: visibleRect)
+      traverse(child, depth: depth + 1, results: &results, roleCount: &roleCount, context: context)
     }
   }
 
@@ -235,6 +262,15 @@ final class AccessibilityScanner {
 
   private func isEnabled(_ element: AXUIElement) -> Bool { axBool(element, attr: AXAttr.enabled, fallback: true) }
   private func isHidden(_ element: AXUIElement) -> Bool { axBool(element, attr: AXAttr.hidden, fallback: false) }
+
+  /// Whether the element supports the AXPress action (clickable regardless of role).
+  /// Used to discover interactive elements that use non-standard roles (e.g. Safari start page favorites).
+  private func hasPressAction(_ element: AXUIElement) -> Bool {
+    var names: CFArray?
+    guard AXUIElementCopyActionNames(element, &names) == .success,
+          let actions = names as? [String] else { return false }
+    return actions.contains("AXPress")
+  }
 
   private func axFrame(of element: AXUIElement, primaryHeight: CGFloat) -> CGRect? {
     var posRef: CFTypeRef?
