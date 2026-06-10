@@ -136,8 +136,9 @@ struct OverlayContentView: View {
   var body: some View {
     ZStack(alignment: .top) {
       Canvas { ctx, size in
+        var placedBadges: [CGRect] = []
         for labeled in state.labeledElements {
-          drawElement(labeled, in: &ctx, viewSize: size)
+          drawElement(labeled, in: &ctx, viewSize: size, placedBadges: &placedBadges)
         }
         if let target = state.scrollTargetFrame {
           drawScrollTarget(target, in: &ctx)
@@ -165,13 +166,22 @@ struct OverlayContentView: View {
   private func drawElement(
     _ labeled: LabeledElement,
     in context: inout GraphicsContext,
-    viewSize: CGSize
+    viewSize: CGSize,
+    placedBadges: inout [CGRect]
   ) {
     let anchor = anchorPoint(screenFrame: labeled.element.screenFrame, screenRect: screen.frame)
     let upperLabel = labeled.label.uppercased()
     let badgeSize = measureBadge(label: upperLabel, context: context)
     let origin = badgeOrigin(anchor: anchor, badgeSize: badgeSize, viewSize: viewSize)
-    let badgeRect = CGRect(origin: origin, size: badgeSize)
+    var badgeRect = CGRect(origin: origin, size: badgeSize)
+    // Nested/adjacent elements can anchor at nearly the same corner — nudge the badge
+    // down until it no longer covers an already-placed one, so labels never stack.
+    var nudges = 0
+    while nudges < 8, placedBadges.contains(where: { $0.insetBy(dx: -2, dy: -2).intersects(badgeRect) }) {
+      badgeRect.origin.y += badgeSize.height + 3
+      nudges += 1
+    }
+    placedBadges.append(badgeRect)
 
     let dimmed = !state.typedPrefix.isEmpty && !labeled.label.hasPrefix(state.typedPrefix)
     let alpha: Double = dimmed ? 0.2 : 1.0

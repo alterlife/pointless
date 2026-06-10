@@ -82,6 +82,14 @@ final class AccessibilityScanner {
 
   private var isCancelled = false
 
+  /// Frames (NSScreen coords) of childless AXOpaqueProviderGroups found during traversal
+  private var opaqueRegions: [CGRect] = []
+
+  /// Grid spacing for opaque-region hit-testing — small enough to land on every
+  /// favorites-sized tile, large enough to keep the probe count bounded.
+  private static let hitTestStep: CGFloat = 44
+  private static let maxHitTests = 1200
+
   func cancel() {
     isCancelled = true
   }
@@ -100,13 +108,26 @@ final class AccessibilityScanner {
     }
   }
 
+  /// WebKit/Chromium only expose their full AX tree to assistive clients — without this,
+  /// web content (Safari pages, Electron apps) is an AXOpaqueProviderGroup with no children.
+  /// The tree is built lazily after enabling, so when we just turned it on, give the app
+  /// a moment before traversing (we're on a background queue).
+  private func enableAssistiveAccess(for axApp: AXUIElement) {
+    var ref: CFTypeRef?
+    AXUIElementCopyAttributeValue(axApp, "AXEnhancedUserInterface" as CFString, &ref)
+    let alreadyEnabled = (ref as? NSNumber)?.boolValue ?? false
+    AXUIElementSetAttributeValue(axApp, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+    if !alreadyEnabled {
+      Logger.info("AX scan: enabled enhanced UI, waiting for AX tree", logger: Logger.pluginLifecycle)
+      usleep(300_000)
+    }
+  }
+
   private func performScan(mode: ScanMode, screens: [NSScreen]) -> [DiscoveredElement] {
     guard let app = NSWorkspace.shared.frontmostApplication else { return [] }
     let axApp = AXUIElementCreateApplication(app.processIdentifier)
-    // WebKit/Chromium only expose their full AX tree to assistive clients. Opt in
-    // explicitly, otherwise web content (Safari pages, Electron apps) has no children.
-    AXUIElementSetAttributeValue(axApp, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
-    AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+    enableAssistiveAccess(for: axApp)
     guard let window = focusedWindow(from: axApp) else { return [] }
     let primaryHeight = screens.first?.frame.height ?? 0
     let windowFrame = axFrame(of: window, primaryHeight: primaryHeight)
@@ -123,7 +144,19 @@ final class AccessibilityScanner {
     // Primary: traverse from the focused window
     var results: [DiscoveredElement] = []
     var roleCount: [String: Int] = [:]
+    opaqueRegions = []
     traverse(window, depth: 0, results: &results, roleCount: &roleCount, context: context)
+
+    // Safari's Start Page hides its content from traversal entirely (an opaque provider
+    // is present but no AXWebArea ever appears). Position hit-testing still resolves the
+    // hidden elements — grid-probe the whole window; dedup skips the chrome we already have.
+    if mode == .interactive, roleCount["AXWebArea"] == nil, !opaqueRegions.isEmpty,
+       let windowRegion = windowFrame, !isCancelled {
+      let hits = hitTestScan(region: windowRegion, axApp: axApp, context: context, existing: results)
+      Logger.debug("AX scan: window hit-test found \(hits.count) elements",
+                   logger: Logger.pluginLifecycle)
+      results.append(contentsOf: hits)
+    }
 
     // Fallback: Firefox/Mullvad expose empty AXChildren on window containers but the
     // focused element API still reaches the full accessibility tree. Walk up from the
@@ -144,6 +177,71 @@ final class AccessibilityScanner {
       logger: Logger.pluginLifecycle
     )
     return results
+  }
+
+  /// Probe a screen region on a grid with AXUIElementCopyElementAtPosition, which pierces
+  /// opaque provider boundaries, then climb from each hit to its clickable ancestor.
+  private func hitTestScan(
+    region: CGRect,
+    axApp: AXUIElement,
+    context: TraversalContext,
+    existing: [DiscoveredElement]
+  ) -> [DiscoveredElement] {
+    var found: [DiscoveredElement] = []
+    var seen = Set<String>(existing.map { "\($0.role)|\($0.screenFrame)" })
+    var probes = 0
+    var errors = 0
+    var hitRoles: [String: Int] = [:]
+    var nsY = region.minY + Self.hitTestStep / 2
+    while nsY < region.maxY {
+      var nsX = region.minX + Self.hitTestStep / 2
+      while nsX < region.maxX {
+        guard !isCancelled, probes < Self.maxHitTests, found.count < Self.maxElements else { break }
+        probes += 1
+        // AX hit-testing uses top-left-origin coordinates
+        let axY = context.primaryHeight - nsY
+        let probeX = nsX
+        nsX += Self.hitTestStep
+        var ref: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(axApp, Float(probeX), Float(axY), &ref) == .success,
+              let hit = ref else {
+          errors += 1
+          continue
+        }
+        hitRoles[axRole(of: hit) ?? "<no role>", default: 0] += 1
+        guard let target = clickableAncestor(of: hit, roles: context.roles),
+              let role = axRole(of: target),
+              let frame = axFrame(of: target, primaryHeight: context.primaryHeight),
+              frame.width >= 4, frame.height >= 4,
+              seen.insert("\(role)|\(frame)").inserted,
+              let screen = context.screens.first(where: { $0.frame.intersects(frame) })
+        else { continue }
+        found.append(DiscoveredElement(element: target, screenFrame: frame, role: role, screen: screen))
+      }
+      nsY += Self.hitTestStep
+    }
+    Logger.debug(
+      "AX hit-test: \(probes) probes, \(errors) errors, " +
+      "hit roles=\(hitRoles.sorted { $0.value > $1.value }.prefix(8))",
+      logger: Logger.pluginLifecycle
+    )
+    return found
+  }
+
+  /// Climb from a hit-test result (often a deep AXImage/AXStaticText) to the nearest
+  /// ancestor that is actually clickable.
+  private func clickableAncestor(of element: AXUIElement, roles: Set<String>) -> AXUIElement? {
+    var current = element
+    for _ in 0..<5 {
+      if let role = axRole(of: current), roles.contains(role) || hasPressAction(current) {
+        return current
+      }
+      var ref: CFTypeRef?
+      guard AXUIElementCopyAttributeValue(current, "AXParent" as CFString, &ref) == .success,
+            let raw = ref else { return nil }
+      current = unsafeBitCast(raw, to: AXUIElement.self)
+    }
+    return nil
   }
 
   /// Walk from AXFocusedUIElement up to a content root (AXWebArea, AXScrollArea) that
@@ -207,7 +305,8 @@ final class AccessibilityScanner {
     guard !isCancelled, depth <= Self.maxDepth, results.count < Self.maxElements else { return }
     guard !isHidden(element), isEnabled(element) else { return }
 
-    if let role = axRole(of: element) {
+    let elementRole = axRole(of: element)
+    if let role = elementRole {
       roleCount[role, default: 0] += 1
       let matched = context.roles.contains(role) || (context.mode == .interactive && hasPressAction(element))
       if matched,
@@ -221,6 +320,11 @@ final class AccessibilityScanner {
     }
 
     let rawArr = axChildren(of: element)
+    if elementRole == "AXOpaqueProviderGroup",
+       let frame = axFrame(of: element, primaryHeight: context.primaryHeight) {
+      opaqueRegions.append(frame)
+    }
+
     // swiftlint:disable:next empty_count
     guard rawArr.count > 0 else { return }
     // CFArray of AXUIElement objects — map via unsafeBitCast to avoid CF conditional cast error
