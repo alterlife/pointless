@@ -4,18 +4,22 @@ import ApplicationServices
 import CoreGraphics
 
 final class LabelGeneratorTests: XCTestCase {
-  private func element(groupingAncestor: GroupingAncestor, x: CGFloat = 0) -> DiscoveredElement {
+  private func element(
+    groupingAncestor: GroupingAncestor, x: CGFloat = 0, size: CGFloat = 10
+  ) -> DiscoveredElement {
     DiscoveredElement(
       element: AXElement(raw: AXUIElementCreateApplication(getpid())),
-      screenFrame: CGRect(x: x, y: 0, width: 10, height: 10),
+      screenFrame: CGRect(x: x, y: 0, width: size, height: size),
       role: "AXButton",
       screen: NSScreen.screens[0],
       groupingAncestor: groupingAncestor
     )
   }
 
-  private func makeElements(count: Int, groups: Int) -> [DiscoveredElement] {
-    (0..<count).map { element(groupingAncestor: .walkNode($0 % groups), x: CGFloat($0) * 20) }
+  private func makeElements(count: Int, groups: Int, size: CGFloat = 10) -> [DiscoveredElement] {
+    (0..<count).map {
+      element(groupingAncestor: .walkNode($0 % groups), x: CGFloat($0) * 20, size: size)
+    }
   }
 
   // MARK: Flat labeling
@@ -113,5 +117,49 @@ final class LabelGeneratorTests: XCTestCase {
     let first = labeled[0]
     XCTAssertNotNil(LabelGenerator.exactMatch(in: labeled, for: first.label))
     XCTAssertNil(LabelGenerator.exactMatch(in: labeled, for: first.label + "a"))
+  }
+
+  // MARK: Collapsed groups
+
+  func testDenseSmallGroupsCollapse() {
+    // 40 small elements in 4 groups of 10 — every group is a dense cluster.
+    let labeled = LabelGenerator.label(makeElements(count: 40, groups: 4))
+    let collapsed = LabelGenerator.collapsedGroups(in: labeled)
+    XCTAssertEqual(collapsed.count, 4)
+    XCTAssertEqual(collapsed[0].label, "a_ (10 items)")
+    XCTAssertEqual(collapsed[0].prefix, "a")
+  }
+
+  func testLargeMembersDoNotCollapse() {
+    let labeled = LabelGenerator.label(makeElements(count: 40, groups: 4, size: 100))
+    XCTAssertTrue(LabelGenerator.collapsedGroups(in: labeled).isEmpty)
+  }
+
+  func testClusterBelowThresholdDoesNotCollapse() {
+    // Group 0 has only 5 members — under the minimum; groups 1-3 are large.
+    var elements: [DiscoveredElement] = []
+    for i in 0..<40 {
+      let group = i < 5 ? 0 : (i - 5) % 3 + 1
+      elements.append(
+        element(groupingAncestor: .walkNode(group), x: CGFloat(i) * 20, size: group == 0 ? 10 : 100)
+      )
+    }
+    let labeled = LabelGenerator.label(elements)
+    XCTAssertTrue(LabelGenerator.collapsedGroups(in: labeled).isEmpty)
+  }
+
+  func testFlatLabelsNeverCollapse() {
+    // 20 small elements in one group — flat labels have no shared prefix.
+    let labeled = LabelGenerator.label(makeElements(count: 20, groups: 1))
+    XCTAssertTrue(LabelGenerator.collapsedGroups(in: labeled).isEmpty)
+  }
+
+  func testCollapsedGroupFrameUnionsMembers() {
+    let labeled = LabelGenerator.label(makeElements(count: 40, groups: 4))
+    let collapsed = LabelGenerator.collapsedGroups(in: labeled)
+    let firstGroup = collapsed.first { $0.prefix == "a" }!
+    // Group 0 members sit at x = 0,80,160,... (i%4==0 → every 4th slot)
+    XCTAssertEqual(firstGroup.frame.minX, 0, accuracy: 0.001)
+    XCTAssertGreaterThan(firstGroup.frame.width, 200)
   }
 }

@@ -86,6 +86,7 @@ final class NavigationSession {
       let labeled = LabelGenerator.label(elements.sortedByPosition())
       self.labeledElements = labeled
       self.overlayState.labeledElements = labeled
+      self.overlayState.collapsedGroups = LabelGenerator.collapsedGroups(in: labeled)
       self.overlayState.typedPrefix = ""
       self.mode = .click(typedSoFar: "")
       self.overlayWindows.forEach { $0.show(fadeDuration: self.config.fadeInDuration) }
@@ -337,6 +338,7 @@ final class NavigationSession {
     overlayWindows.forEach { $0.hide() }
     overlayWindows = []
     overlayState.labeledElements = []
+    overlayState.collapsedGroups = []
     overlayState.typedPrefix = ""
     overlayState.scrollTargetFrame = nil
     overlayState.showScrollHint = false

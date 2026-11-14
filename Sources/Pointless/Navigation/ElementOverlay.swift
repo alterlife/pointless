@@ -40,124 +40,31 @@ func showEmptyHint(_ text: String = "No interactive elements found") {
   }
 }
 
-// MARK: - CGRect helpers
+// MARK: - Badge alpha
 
-extension CGRect {
-  var center: CGPoint { CGPoint(x: midX, y: midY) }
-  init(center: CGPoint, size: CGSize) {
-    self.init(
-      x: center.x - size.width / 2,
-      y: center.y - size.height / 2,
-      width: size.width,
-      height: size.height
-    )
-  }
+/// Collapsed members stay faint until their group prefix is typed; once
+/// typing narrows, non-matching badges dim as usual.
+func badgeAlpha(label: String, isCollapsedMember: Bool, typedPrefix: String) -> Double {
+  if isCollapsedMember && typedPrefix.isEmpty { return 0.15 }
+  if !typedPrefix.isEmpty && !label.hasPrefix(typedPrefix) { return 0.2 }
+  return 1.0
 }
 
-// MARK: - Coordinate utilities (internal for testability)
-
-private let badgeAnchorInset: CGFloat = 10
-
-private func elementAnchor(screenFrame: CGRect) -> CGPoint {
-  CGPoint(x: anchorX(in: screenFrame), y: screenFrame.midY)
+/// nil once the prefix is fully typed — the signpost has done its job.
+func groupBadgeAlpha(prefix: String, typedPrefix: String) -> Double? {
+  if typedPrefix.isEmpty { return 1.0 }
+  if typedPrefix.count >= prefix.count, prefix.hasPrefix(typedPrefix) { return nil }
+  return prefix.hasPrefix(typedPrefix) ? 1.0 : 0.2
 }
-
-// Landscape controls center their content; everything else anchors left.
-private func anchorX(in frame: CGRect) -> CGFloat {
-  guard frame.width > frame.height else {
-    return frame.minX + min(badgeAnchorInset, frame.width / 4)
-  }
-  return frame.midX
-}
-
-internal func anchorPoint(screenFrame: CGRect, screenRect: CGRect) -> CGPoint {
-  let anchor = elementAnchor(screenFrame: screenFrame)
-  return CGPoint(x: anchor.x - screenRect.minX, y: screenRect.maxY - anchor.y)
-}
-
-/// Frame of the screen that draws an element's badge — the one holding its
-/// anchor, else the first it overlaps. Keeps each badge on exactly one overlay.
-internal func badgeScreen(for elementFrame: CGRect, among screenFrames: [CGRect]) -> CGRect? {
-  let anchor = elementAnchor(screenFrame: elementFrame)
-  return screenFrames.first { $0.contains(anchor) }
-    ?? screenFrames.first { $0.intersects(elementFrame) }
-}
-
-struct BadgeObstacles {
-  var anchorRects: [CGRect] = []
-  var placedBadges: [CGRect] = []
-}
-
-internal func placeBadges(
-  anchors: [CGPoint], badgeSizes: [CGSize], viewSize: CGSize,
-  topInset: CGFloat = 0, reservedRects: [CGRect] = []
-) -> [CGRect] {
-  var obstacles = BadgeObstacles(
-    anchorRects: anchors.map { CGRect(center: $0, size: CGSize(width: 8, height: 8)) },
-    placedBadges: reservedRects
-  )
-  return anchors.indices.map { index in
-    let rect = placeBadge(
-      anchor: anchors[index], badgeSize: badgeSizes[index], viewSize: viewSize,
-      obstacles: obstacles, ownAnchorIndex: index, topInset: topInset
-    )
-    obstacles.placedBadges.append(rect)
-    return rect
-  }
-}
-
-internal func placeBadge(
-  anchor: CGPoint,
-  badgeSize: CGSize,
-  viewSize: CGSize,
-  obstacles: BadgeObstacles,
-  ownAnchorIndex: Int,
-  topInset: CGFloat = 0
-) -> CGRect {
-  let candidates = [
-    CGPoint(x: anchor.x - badgeSize.width - 4, y: anchor.y - badgeSize.height - 6),
-    CGPoint(x: anchor.x + 4, y: anchor.y - badgeSize.height - 6),
-    CGPoint(x: anchor.x - badgeSize.width - 4, y: anchor.y + 10),
-    CGPoint(x: anchor.x + 4, y: anchor.y + 10)
-  ]
-
-  func clamped(_ origin: CGPoint) -> CGPoint {
-    CGPoint(
-      x: max(4, min(origin.x, viewSize.width - badgeSize.width - 4)),
-      y: max(topInset + 4, min(origin.y, viewSize.height - badgeSize.height - 4))
-    )
-  }
-
-  func collides(_ rect: CGRect) -> Bool {
-    let hitsAnchor = obstacles.anchorRects.enumerated().contains { index, anchorRect in
-      index != ownAnchorIndex && anchorRect.intersects(rect)
-    }
-    let hitsBadge = obstacles.placedBadges.contains { $0.insetBy(dx: -2, dy: -2).intersects(rect) }
-    return hitsAnchor || hitsBadge
-  }
-
-  for candidate in candidates {
-    let rect = CGRect(origin: clamped(candidate), size: badgeSize)
-    if !collides(rect) { return rect }
-  }
-
-  var rect = CGRect(origin: clamped(candidates[0]), size: badgeSize)
-  var nudges = 0
-  while nudges < 8, collides(rect) {
-    rect.origin.y = min(rect.origin.y + badgeSize.height + 3,
-                        max(4, viewSize.height - badgeSize.height - 4))
-    nudges += 1
-  }
-  return rect
-}
-
-// MARK: - Overlay state
 
 final class OverlayState: ObservableObject {
   @Published var labeledElements: [LabeledElement] = []
+  @Published var collapsedGroups: [CollapsedGroup] = []
   @Published var typedPrefix: String = ""
   @Published var scrollTargetFrame: CGRect?
   @Published var showScrollHint = false
+
+  var collapsedPrefixes: Set<String> { Set(collapsedGroups.map(\.prefix)) }
 
   var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
   var textColor = Color.black
@@ -224,10 +131,17 @@ struct OverlayContentView: View {
         let onScreen = state.labeledElements.filter {
           badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame
         }
+        let groupsOnScreen = state.collapsedGroups.filter {
+          badgeScreen(for: $0.frame, among: allScreenFrames) == screen.frame
+        }
         let anchors = onScreen.map {
           anchorPoint(screenFrame: $0.element.screenFrame, screenRect: screen.frame)
+        } + groupsOnScreen.map {
+          anchorPoint(screenFrame: $0.frame, screenRect: screen.frame)
         }
         let badgeSizes = onScreen.map {
+          measureBadge(label: $0.label, context: ctx)
+        } + groupsOnScreen.map {
           measureBadge(label: $0.label, context: ctx)
         }
         let badgeRects = placeBadges(
@@ -235,8 +149,17 @@ struct OverlayContentView: View {
           topInset: screen.safeAreaInsets.top,
           reservedRects: hint.map { [$0.frame.insetBy(dx: -4, dy: -4)] } ?? []
         )
+        for group in groupsOnScreen {
+          drawGroupFrame(group, in: &ctx)
+        }
         for (index, labeled) in onScreen.enumerated() {
           drawElement(labeled, badgeRect: badgeRects[index], anchor: anchors[index], in: &ctx)
+        }
+        for (index, group) in groupsOnScreen.enumerated() {
+          let badgeIndex = onScreen.count + index
+          drawGroupBadge(
+            group, badgeRect: badgeRects[badgeIndex], anchor: anchors[badgeIndex], in: &ctx
+          )
         }
         if let target = state.scrollTargetFrame {
           drawScrollTarget(target, in: &ctx)
@@ -311,8 +234,10 @@ struct OverlayContentView: View {
     anchor: CGPoint,
     in context: inout GraphicsContext
   ) {
-    let dimmed = !state.typedPrefix.isEmpty && !labeled.label.hasPrefix(state.typedPrefix)
-    let alpha: Double = dimmed ? 0.2 : 1.0
+    let isCollapsedMember = state.collapsedPrefixes.contains { labeled.label.hasPrefix($0) }
+    let alpha = badgeAlpha(
+      label: labeled.label, isCollapsedMember: isCollapsedMember, typedPrefix: state.typedPrefix
+    )
     let fillColor = state.badgeColor.opacity(alpha)
 
     drawConnector(anchor: anchor, center: badgeRect.center, alpha: alpha, context: &context)
@@ -358,6 +283,35 @@ struct OverlayContentView: View {
       .font(.system(size: state.badgeFontSize, weight: .bold, design: .monospaced))
       .foregroundColor(state.textColor.opacity(alpha))
     context.draw(textView, at: rect.center)
+  }
+
+  private func drawGroupFrame(_ group: CollapsedGroup, in context: inout GraphicsContext) {
+    guard let alpha = groupBadgeAlpha(prefix: group.prefix, typedPrefix: state.typedPrefix)
+    else { return }
+    let frame = group.frame
+    let canvasRect = CGRect(
+      x: frame.minX - screen.frame.minX,
+      y: screen.frame.maxY - frame.maxY,
+      width: frame.width,
+      height: frame.height
+    )
+    let path = Path(roundedRect: canvasRect.insetBy(dx: -3, dy: -3), cornerRadius: 8)
+    context.fill(path, with: .color(state.badgeColor.opacity(alpha * 0.06)))
+    context.stroke(path, with: .color(state.badgeColor.opacity(alpha * 0.5)), lineWidth: 1.5)
+  }
+
+  private func drawGroupBadge(
+    _ group: CollapsedGroup,
+    badgeRect: CGRect,
+    anchor: CGPoint,
+    in context: inout GraphicsContext
+  ) {
+    guard let alpha = groupBadgeAlpha(prefix: group.prefix, typedPrefix: state.typedPrefix)
+    else { return }
+    let fillColor = state.badgeColor.opacity(alpha)
+    drawConnector(anchor: anchor, center: badgeRect.center, alpha: alpha, context: &context)
+    drawDot(at: anchor, color: fillColor, context: &context)
+    drawBadge(rect: badgeRect, color: fillColor, label: group.label, alpha: alpha, context: &context)
   }
 
   private func drawScrollTarget(_ frame: CGRect, in context: inout GraphicsContext) {
