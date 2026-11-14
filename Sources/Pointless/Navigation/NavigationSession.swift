@@ -199,11 +199,39 @@ final class NavigationSession {
       // AXPress is more reliable than a synthetic click (e.g. Terminal tabs ignore
       // clicks at their frame center). Fall back to a click for elements without it.
       if element.performPress() { return }
-      CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
-              mouseCursorPosition: clickPoint, mouseButton: .left)?.post(tap: .cghidEventTap)
-      CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
-              mouseCursorPosition: clickPoint, mouseButton: .left)?.post(tap: .cghidEventTap)
+      Self.postClick(at: Self.unobscuredClickPoint(for: labeled.element) ?? clickPoint)
     }
+  }
+
+  private static func unobscuredClickPoint(for discovered: DiscoveredElement) -> CGPoint? {
+    guard let app = AXElement.frontmostApplication() else { return nil }
+    let frame = discovered.screenFrame
+    let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+    let candidates: [(CGFloat, CGFloat)] = [
+      (0.5, 0.5), (0.5, 0.3), (0.5, 0.7), (0.3, 0.5), (0.7, 0.5),
+      (0.3, 0.3), (0.7, 0.3), (0.3, 0.7), (0.7, 0.7)
+    ]
+    var centerPoint: CGPoint?
+    for (xFraction, yFraction) in candidates {
+      // AX hit-test and CGEvent both take top-left-origin global coords.
+      let point = CGPoint(
+        x: frame.minX + frame.width * xFraction,
+        y: primaryHeight - (frame.minY + frame.height * yFraction)
+      )
+      if centerPoint == nil { centerPoint = point }
+      guard let hit = app.elementAt(axX: point.x, axY: point.y) else { continue }
+      if hit.isSameElement(as: discovered.element) || hit.isDescendant(of: discovered.element) {
+        return point
+      }
+    }
+    return centerPoint
+  }
+
+  private static func postClick(at point: CGPoint) {
+    CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
+            mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+    CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
+            mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
   }
 
   // MARK: - Scrolling
@@ -239,7 +267,11 @@ final class NavigationSession {
 
   private func rebuildOverlayWindows() {
     overlayWindows.forEach { $0.hide() }
-    overlayWindows = NSScreen.screens.map { ElementOverlayWindow(screen: $0, state: overlayState) }
+    let screens = NSScreen.screens
+    let screenFrames = screens.map(\.frame)
+    overlayWindows = screens.map {
+      ElementOverlayWindow(screen: $0, allScreenFrames: screenFrames, state: overlayState)
+    }
   }
 
   // MARK: - Event tap

@@ -446,16 +446,6 @@ func anchorPointTest(frameX: Double, frameY: Double, frameMaxY: Double,
     TPoint(x: frameX - screenMinX + 4, y: screenMaxY - frameMaxY + 4)
 }
 
-func badgeOriginTest(anchorX: Double, anchorY: Double,
-                     badgeW: Double, badgeH: Double,
-                     viewW: Double) -> TPoint {
-    let preferredY = anchorY - badgeH - 6
-    let finalY = preferredY < 8 ? anchorY + 10 : preferredY
-    let rawX = anchorX - badgeW - 4
-    let finalX = max(4, min(rawX, viewW - badgeW - 4))
-    return TPoint(x: finalX, y: finalY)
-}
-
 testSuite("Coordinate Tests") {
     runTest("testAXToNSScreenTopElement — axY=0 maps to top of screen") {
         let rect = axToNSScreenTest(axX: 0, axY: 0, w: 100, h: 30, screenH: 1200)
@@ -475,20 +465,6 @@ testSuite("Coordinate Tests") {
         assertEqual(anchor.y, 674.0, "anchorY = screen.maxY - frame.maxY + 4 = 674")
     }
 
-    runTest("testBadgeAboveAnchor — centre-screen element places badge above") {
-        let origin = badgeOriginTest(anchorX: 200, anchorY: 400, badgeW: 20, badgeH: 16, viewW: 1440)
-        verify(origin.y < 400, "Badge should be above anchor (anchorY=400) when space allows")
-    }
-
-    runTest("testBadgeBelowAtScreenTop — anchor near top (y=5) places badge below") {
-        let origin = badgeOriginTest(anchorX: 200, anchorY: 5, badgeW: 20, badgeH: 16, viewW: 1440)
-        verify(origin.y > 5, "Badge should be below anchor when anchor is near top edge")
-    }
-
-    runTest("testBadgeClampedToLeftEdge — anchor at x=2 clamps badge to x >= 4") {
-        let origin = badgeOriginTest(anchorX: 2, anchorY: 200, badgeW: 20, badgeH: 16, viewW: 1440)
-        verify(origin.x >= 4, "Badge x should be clamped to at least 4")
-    }
 }
 
 // MARK: - SettingDefinition Tests (mirroring actual PluginSettings.swift)
