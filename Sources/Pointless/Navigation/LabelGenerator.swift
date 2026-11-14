@@ -58,13 +58,22 @@ enum LabelGenerator {
     let prefixes = combos(count: groups.count, length: prefixLength)
     var result = [LabeledElement?](repeating: nil, count: elements.count)
     for (groupIndex, cluster) in groups.enumerated() {
+      let prefix = prefixes[groupIndex]
       let suffixLength = comboLength(for: cluster.indices.count)
-      let suffixes = combos(count: cluster.indices.count, length: suffixLength)
-      for (itemIndex, elementIndex) in cluster.indices.enumerated() {
+      let candidates = sortedCombos(length: suffixLength)
+      var candidateIndex = 0
+      for elementIndex in cluster.indices {
+        // Banned words can span the prefix/suffix boundary ("a" + "ss"), so
+        // check the full label and skip offending suffixes.
+        while candidateIndex < candidates.count, isBanned(prefix + candidates[candidateIndex]) {
+          candidateIndex += 1
+        }
+        guard candidateIndex < candidates.count else { return flatLabel(elements) }
         result[elementIndex] = LabeledElement(
-          label: prefixes[groupIndex] + suffixes[itemIndex],
+          label: prefix + candidates[candidateIndex],
           element: elements[elementIndex]
         )
+        candidateIndex += 1
       }
     }
     return result.compactMap { $0 }
@@ -90,17 +99,23 @@ enum LabelGenerator {
 
   /// Combos using only home-row keys come first, then one non-home-row key, etc.
   private static func combos(count: Int, length: Int) -> [String] {
+    Array(sortedCombos(length: length).prefix(count))
+  }
+
+  /// Every combo of `length` chars in preference order, minus banned words.
+  private static func sortedCombos(length: Int) -> [String] {
     if length == 1 {
-      return priorityKeys.prefix(count).map(String.init)
+      return priorityKeys.map(String.init)
     }
     let keys = priorityKeys.map { String($0) }
-    var all: [String] = []
-    generateCombinations(keys: keys, length: length, current: "", into: &all, needed: .max)
+    var generated: [String] = []
+    generateCombinations(keys: keys, length: length, current: "", into: &generated, needed: .max)
+    let allowed = generated.filter { !isBanned($0) }
     let homeRowCount = 9
     let indexOf = Dictionary(uniqueKeysWithValues: priorityKeys.enumerated().map { ($0.element, $0.offset) })
     // Score packs (non-home-row count, priority-index sum) into one Int —
     // index sums stay under 10_000 for lengths ≤ 3.
-    let scored = all.enumerated().map { offset, combo -> (Int, Int) in
+    let scored = allowed.enumerated().map { offset, combo -> (Int, Int) in
       var nonHome = 0
       var indexSum = 0
       for char in combo {
@@ -112,7 +127,11 @@ enum LabelGenerator {
     }.sorted { lhs, rhs in
       lhs.0 != rhs.0 ? lhs.0 < rhs.0 : lhs.1 < rhs.1
     }
-    return scored.prefix(count).map { all[$0.1] }
+    return scored.map { allowed[$0.1] }
+  }
+
+  private static func isBanned(_ label: String) -> Bool {
+    BannedLabelWords.all.contains { label.contains($0) }
   }
 
   private static func generateCombinations(

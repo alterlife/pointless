@@ -90,6 +90,24 @@ final class LabelGeneratorTests: XCTestCase {
     XCTAssertTrue(filtered.allSatisfy { $0.label.hasPrefix("a") })
   }
 
+  func testNoLabelContainsBannedWord() {
+    // 30 elements in the first group → 2-char suffixes where "ss" lands early,
+    // which would spell "ass" under the "a" prefix without filtering.
+    var elements: [DiscoveredElement] = []
+    for i in 0..<40 {
+      elements.append(element(groupingAncestor: .walkNode(i < 30 ? 0 : 1), x: CGFloat(i) * 20))
+    }
+    let labeled = LabelGenerator.label(elements)
+
+    XCTAssertEqual(labeled.count, 40)
+    XCTAssertEqual(Set(labeled.map(\.label)).count, 40)
+    for l in labeled {
+      for word in BannedLabelWords.all {
+        XCTAssertFalse(l.label.contains(word), "'\(l.label)' contains '\(word)'")
+      }
+    }
+  }
+
   func testExactMatchStillWorks() {
     let labeled = LabelGenerator.label(makeElements(count: 40, groups: 4))
     let first = labeled[0]
