@@ -1,8 +1,13 @@
 import AppKit
 
-/// Elements sharing a group share a label prefix.
+/// Identity of the ancestor an element groups under for labeling — same value
+/// means shared label prefix. Not necessarily the direct AX parent: walk elements
+/// reference traversal node ids climbed to the nearest ancestor with multiple
+/// discoveries; hit-test elements reference their AXParent hash.
 enum GroupingAncestor: Hashable {
+  /// Traversal node id — indexes DiscoveryState.nodeParent/subtreeCount.
   case walkNode(Int)
+  /// CFHash of the element's AXParent AXUIElement.
   case hitTestParent(UInt)
 }
 
@@ -12,6 +17,7 @@ struct DiscoveredElement {
   let screenFrame: CGRect   // NSScreen coords (bottom-left origin)
   let role: String
   let screen: NSScreen
+  /// The ancestor this element groups under — not necessarily its AX parent.
   let groupingAncestor: GroupingAncestor
 
   /// Identity for deduplication across passes — two discoveries of the same
