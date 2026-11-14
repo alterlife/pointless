@@ -134,6 +134,22 @@ struct AXElement {
     AXUIElementPerformAction(raw, axPressAction as CFString) == .success
   }
 
+  /// CFHash is how the codebase already identifies AXUIElements
+  /// (see GroupingAncestor.hitTestParent).
+  func isSameElement(as other: AXElement) -> Bool {
+    CFHash(raw) == CFHash(other.raw)
+  }
+
+  func isDescendant(of ancestor: AXElement, maxHops: Int = 10) -> Bool {
+    var current = parent
+    for _ in 0..<maxHops {
+      guard let node = current else { return false }
+      if node.isSameElement(as: ancestor) { return true }
+      current = node.parent
+    }
+    return false
+  }
+
   // MARK: Hit testing
 
   /// The deepest element at a point in AX (top-left origin) coordinates.

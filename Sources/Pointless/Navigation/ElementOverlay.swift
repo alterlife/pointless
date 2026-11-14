@@ -78,10 +78,12 @@ struct BadgeObstacles {
 }
 
 internal func placeBadges(
-  anchors: [CGPoint], badgeSizes: [CGSize], viewSize: CGSize, topInset: CGFloat = 0
+  anchors: [CGPoint], badgeSizes: [CGSize], viewSize: CGSize,
+  topInset: CGFloat = 0, reservedRects: [CGRect] = []
 ) -> [CGRect] {
   var obstacles = BadgeObstacles(
-    anchorRects: anchors.map { CGRect(center: $0, size: CGSize(width: 8, height: 8)) }
+    anchorRects: anchors.map { CGRect(center: $0, size: CGSize(width: 8, height: 8)) },
+    placedBadges: reservedRects
   )
   return anchors.indices.map { index in
     let rect = placeBadge(
@@ -200,7 +202,8 @@ struct OverlayContentView: View {
   let allScreenFrames: [CGRect]
 
   var body: some View {
-    ZStack(alignment: .top) {
+    let hint = hintFrame()
+    return ZStack(alignment: .bottomTrailing) {
       Canvas { ctx, size in
         let onScreen = state.labeledElements.filter {
           badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame
@@ -213,7 +216,8 @@ struct OverlayContentView: View {
         }
         let badgeRects = placeBadges(
           anchors: anchors, badgeSizes: badgeSizes, viewSize: size,
-          topInset: screen.safeAreaInsets.top
+          topInset: screen.safeAreaInsets.top,
+          reservedRects: [hint.frame.insetBy(dx: -4, dy: -4)]
         )
         for (index, labeled) in onScreen.enumerated() {
           drawElement(labeled, badgeRect: badgeRects[index], anchor: anchors[index], in: &ctx)
@@ -225,15 +229,57 @@ struct OverlayContentView: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
       escHint
-        .padding(.top, 8)
+        .padding(.trailing, 12)
+        .padding(.bottom, 12 + screen.safeAreaInsets.bottom)
+        .offset(y: -hint.nudge)
     }
   }
 
-  private var escHint: some View {
-    let text = state.scrollTargetFrame != nil
+  private var hintText: String {
+    state.scrollTargetFrame != nil
       ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
       : "type a letter to jump  ·  ⌫ back  ·  ESC cancel"
-    return Text(text)
+  }
+
+  private var hintSize: CGSize {
+    let textSize = (hintText as NSString).size(
+      withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium)]
+    )
+    return CGSize(width: textSize.width + 20, height: textSize.height + 8)
+  }
+
+  private func viewRect(for screenFrame: CGRect) -> CGRect {
+    CGRect(
+      x: screenFrame.minX - screen.frame.minX,
+      y: screen.frame.maxY - screenFrame.maxY,
+      width: screenFrame.width,
+      height: screenFrame.height
+    )
+  }
+
+  private func hintFrame() -> (frame: CGRect, nudge: CGFloat) {
+    let margin: CGFloat = 12
+    var rect = CGRect(
+      x: screen.frame.width - hintSize.width - margin,
+      y: screen.frame.height - hintSize.height - margin - screen.safeAreaInsets.bottom,
+      width: hintSize.width,
+      height: hintSize.height
+    )
+    let topLimit = screen.safeAreaInsets.top + 8
+    let elementRects = state.labeledElements
+      .filter { badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame }
+      .map { viewRect(for: $0.element.screenFrame) }
+    var nudge: CGFloat = 0
+    while rect.minY - nudge > topLimit,
+          elementRects.contains(where: { rect.offsetBy(dx: 0, dy: -nudge).intersects($0) }) {
+      nudge += 8
+    }
+    rect.origin.y -= nudge
+    return (rect, nudge)
+  }
+
+  private var escHint: some View {
+    Text(hintText)
       .font(.system(size: 11, weight: .medium, design: .rounded))
       .foregroundColor(.white)
       .padding(.horizontal, 10)
