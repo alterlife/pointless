@@ -64,6 +64,14 @@ internal func anchorPoint(screenFrame: CGRect, screenRect: CGRect) -> CGPoint {
   )
 }
 
+/// Frame of the screen that draws an element's badge — the one holding its
+/// anchor, else the first it overlaps. Keeps each badge on exactly one overlay.
+internal func badgeScreen(for elementFrame: CGRect, among screenFrames: [CGRect]) -> CGRect? {
+  let anchor = CGPoint(x: elementFrame.minX + 4, y: elementFrame.maxY - 4)
+  return screenFrames.first { $0.contains(anchor) }
+    ?? screenFrames.first { $0.intersects(elementFrame) }
+}
+
 struct BadgeObstacles {
   var anchorRects: [CGRect] = []
   var placedBadges: [CGRect] = []
@@ -148,7 +156,7 @@ final class OverlayState: ObservableObject {
 // MARK: - Overlay window
 
 final class ElementOverlayWindow: NSWindow {
-  init(screen: NSScreen, state: OverlayState) {
+  init(screen: NSScreen, allScreenFrames: [CGRect], state: OverlayState) {
     super.init(
       contentRect: screen.frame,
       styleMask: .borderless,
@@ -162,7 +170,7 @@ final class ElementOverlayWindow: NSWindow {
     ignoresMouseEvents = true
     collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-    let view = OverlayContentView(state: state, screen: screen)
+    let view = OverlayContentView(state: state, screen: screen, allScreenFrames: allScreenFrames)
     contentView = NSHostingView(rootView: view)
     setFrame(screen.frame, display: false)
   }
@@ -186,18 +194,22 @@ final class ElementOverlayWindow: NSWindow {
 struct OverlayContentView: View {
   @ObservedObject var state: OverlayState
   let screen: NSScreen
+  let allScreenFrames: [CGRect]
 
   var body: some View {
     ZStack(alignment: .top) {
       Canvas { ctx, size in
-        let anchors = state.labeledElements.map {
+        let onScreen = state.labeledElements.filter {
+          badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame
+        }
+        let anchors = onScreen.map {
           anchorPoint(screenFrame: $0.element.screenFrame, screenRect: screen.frame)
         }
-        let badgeSizes = state.labeledElements.map {
+        let badgeSizes = onScreen.map {
           measureBadge(label: $0.label, context: ctx)
         }
         let badgeRects = placeBadges(anchors: anchors, badgeSizes: badgeSizes, viewSize: size)
-        for (index, labeled) in state.labeledElements.enumerated() {
+        for (index, labeled) in onScreen.enumerated() {
           drawElement(labeled, badgeRect: badgeRects[index], anchor: anchors[index], in: &ctx)
         }
         if let target = state.scrollTargetFrame {

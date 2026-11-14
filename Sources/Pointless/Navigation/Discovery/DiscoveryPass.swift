@@ -30,7 +30,6 @@ final class DiscoveryState {
 
   private(set) var nextNodeID = 0
   var nodeParent: [Int: Int] = [:]
-  var subtreeCount: [Int: Int] = [:]
 
   func makeNodeID() -> Int {
     nextNodeID += 1
@@ -70,7 +69,6 @@ struct ElementTreeWalker {
 
     let nodeID = state.makeNodeID()
     state.nodeParent[nodeID] = parentID
-    let discoveriesBefore = state.results.count
 
     let role = element.role
     if let role {
@@ -84,7 +82,7 @@ struct ElementTreeWalker {
          let screen = context.screens.first(where: { $0.frame.intersects(frame) }) {
         state.results.append(DiscoveredElement(
           element: element, screenFrame: frame, role: role, screen: screen,
-          groupingAncestor: .walkNode(parentID)
+          groupingAncestor: .walkNode(parentID), walkNodeID: nodeID
         ))
       }
     }
@@ -98,7 +96,5 @@ struct ElementTreeWalker {
       guard state.results.count < Self.maxElements else { break }
       visit(child, depth: depth + 1, parentID: nodeID, state: state, context: context)
     }
-
-    state.subtreeCount[nodeID] = state.results.count - discoveriesBefore
   }
 }

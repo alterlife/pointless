@@ -101,4 +101,28 @@ final class BadgePlacementTests: XCTestCase {
     let secondAnchorObstacle = CGRect(center: anchors[1], size: CGSize(width: 8, height: 8))
     XCTAssertFalse(rects[0].intersects(secondAnchorObstacle))
   }
+
+  // MARK: badgeScreen
+
+  private let lowerScreen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+  private let upperScreen = CGRect(x: 0, y: 900, width: 1440, height: 900)
+
+  func testBadgeDrawnOnlyOnScreenHoldingElement() {
+    let element = CGRect(x: 100, y: 1200, width: 50, height: 20)
+
+    XCTAssertEqual(badgeScreen(for: element, among: [lowerScreen, upperScreen]), upperScreen)
+  }
+
+  func testSpanningElementUsesScreenHoldingAnchor() {
+    // Top-left corner sits on the lower screen; body extends onto the upper one.
+    let element = CGRect(x: 100, y: 850, width: 50, height: 40)
+
+    XCTAssertEqual(badgeScreen(for: element, among: [upperScreen, lowerScreen]), lowerScreen)
+  }
+
+  func testAnchorOffAllScreensFallsBackToOverlappingScreen() {
+    let element = CGRect(x: -100, y: 200, width: 300, height: 40)
+
+    XCTAssertEqual(badgeScreen(for: element, among: [upperScreen, lowerScreen]), lowerScreen)
+  }
 }

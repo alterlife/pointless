@@ -3,7 +3,7 @@ import AppKit
 /// Identity of the ancestor for labeling. same value = shared label prefix
 /// Not necessarily the direct AX parent
 enum GroupingAncestor: Hashable {
-  /// Traversal node id - indexes DiscoveryState.nodeParent/subtreeCount.
+  /// Traversal node id - indexes DiscoveryState.nodeParent.
   case walkNode(Int)
   /// CFHash of the element's AXParent AXUIElement.
   case hitTestParent(UInt)
@@ -17,6 +17,8 @@ struct DiscoveredElement {
   let screen: NSScreen
   /// The ancestor this element groups under — not necessarily its AX parent.
   let groupingAncestor: GroupingAncestor
+  /// The element's own traversal node id — nil for elements found without a tree walk.
+  var walkNodeID: Int?
 
   /// Identity for deduplication across passes — two discoveries of the same
   /// role at the same frame are the same control.
@@ -46,5 +48,36 @@ extension Array where Element == DiscoveredElement {
         kept.append(element)
       }
     }
+  }
+
+  /// Chromium wraps controls in single-child AXGroups — climb past ancestors
+  /// holding only one surviving discovery so they don't get their own label prefix.
+  func regroupedForLabels(nodeParent: [Int: Int]) -> [DiscoveredElement] {
+    let counts = subtreeCounts(nodeParent: nodeParent)
+    return map { element in
+      guard case .walkNode(let groupID) = element.groupingAncestor else { return element }
+      var current = groupID
+      while counts[current] == 1, let parent = nodeParent[current], parent != 0 {
+        current = parent
+      }
+      return DiscoveredElement(
+        element: element.element, screenFrame: element.screenFrame, role: element.role,
+        screen: element.screen, groupingAncestor: .walkNode(current), walkNodeID: element.walkNodeID
+      )
+    }
+  }
+
+  /// Discoveries in each walk node's subtree (inclusive), counting only these
+  /// elements — dedup and anchor merging drop elements the walk already saw.
+  private func subtreeCounts(nodeParent: [Int: Int]) -> [Int: Int] {
+    var counts: [Int: Int] = [:]
+    for element in self {
+      var node = element.walkNodeID
+      while let current = node, current != 0 {
+        counts[current, default: 0] += 1
+        node = nodeParent[current]
+      }
+    }
+    return counts
   }
 }

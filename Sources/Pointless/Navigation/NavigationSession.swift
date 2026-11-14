@@ -239,7 +239,11 @@ final class NavigationSession {
 
   private func rebuildOverlayWindows() {
     overlayWindows.forEach { $0.hide() }
-    overlayWindows = NSScreen.screens.map { ElementOverlayWindow(screen: $0, state: overlayState) }
+    let screens = NSScreen.screens
+    let screenFrames = screens.map(\.frame)
+    overlayWindows = screens.map {
+      ElementOverlayWindow(screen: $0, allScreenFrames: screenFrames, state: overlayState)
+    }
   }
 
   // MARK: - Event tap
