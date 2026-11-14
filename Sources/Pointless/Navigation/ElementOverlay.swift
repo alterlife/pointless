@@ -64,13 +64,67 @@ internal func anchorPoint(screenFrame: CGRect, screenRect: CGRect) -> CGPoint {
   )
 }
 
-/// Badge origin (top-left) — prefers above-left of anchor, falls back below if near screen top
-internal func badgeOrigin(anchor: CGPoint, badgeSize: CGSize, viewSize: CGSize) -> CGPoint {
-  let preferredY = anchor.y - badgeSize.height - 6
-  let finalY = preferredY < 8 ? anchor.y + 10 : preferredY
-  let rawX = anchor.x - badgeSize.width - 4
-  let finalX = max(4, min(rawX, viewSize.width - badgeSize.width - 4))
-  return CGPoint(x: finalX, y: finalY)
+struct BadgeObstacles {
+  var anchorRects: [CGRect] = []
+  var placedBadges: [CGRect] = []
+}
+
+internal func placeBadges(anchors: [CGPoint], badgeSizes: [CGSize], viewSize: CGSize) -> [CGRect] {
+  var obstacles = BadgeObstacles(
+    anchorRects: anchors.map { CGRect(center: $0, size: CGSize(width: 8, height: 8)) }
+  )
+  return anchors.indices.map { index in
+    let rect = placeBadge(
+      anchor: anchors[index], badgeSize: badgeSizes[index], viewSize: viewSize,
+      obstacles: obstacles, ownAnchorIndex: index
+    )
+    obstacles.placedBadges.append(rect)
+    return rect
+  }
+}
+
+internal func placeBadge(
+  anchor: CGPoint,
+  badgeSize: CGSize,
+  viewSize: CGSize,
+  obstacles: BadgeObstacles,
+  ownAnchorIndex: Int
+) -> CGRect {
+  let candidates = [
+    CGPoint(x: anchor.x - badgeSize.width - 4, y: anchor.y - badgeSize.height - 6),
+    CGPoint(x: anchor.x + 4, y: anchor.y - badgeSize.height - 6),
+    CGPoint(x: anchor.x - badgeSize.width - 4, y: anchor.y + 10),
+    CGPoint(x: anchor.x + 4, y: anchor.y + 10)
+  ]
+
+  func clamped(_ origin: CGPoint) -> CGPoint {
+    CGPoint(
+      x: max(4, min(origin.x, viewSize.width - badgeSize.width - 4)),
+      y: max(4, min(origin.y, viewSize.height - badgeSize.height - 4))
+    )
+  }
+
+  func collides(_ rect: CGRect) -> Bool {
+    let hitsAnchor = obstacles.anchorRects.enumerated().contains { index, anchorRect in
+      index != ownAnchorIndex && anchorRect.intersects(rect)
+    }
+    let hitsBadge = obstacles.placedBadges.contains { $0.insetBy(dx: -2, dy: -2).intersects(rect) }
+    return hitsAnchor || hitsBadge
+  }
+
+  for candidate in candidates {
+    let rect = CGRect(origin: clamped(candidate), size: badgeSize)
+    if !collides(rect) { return rect }
+  }
+
+  var rect = CGRect(origin: clamped(candidates[0]), size: badgeSize)
+  var nudges = 0
+  while nudges < 8, collides(rect) {
+    rect.origin.y = min(rect.origin.y + badgeSize.height + 3,
+                        max(4, viewSize.height - badgeSize.height - 4))
+    nudges += 1
+  }
+  return rect
 }
 
 // MARK: - Overlay state
@@ -136,9 +190,15 @@ struct OverlayContentView: View {
   var body: some View {
     ZStack(alignment: .top) {
       Canvas { ctx, size in
-        var placedBadges: [CGRect] = []
-        for labeled in state.labeledElements {
-          drawElement(labeled, in: &ctx, viewSize: size, placedBadges: &placedBadges)
+        let anchors = state.labeledElements.map {
+          anchorPoint(screenFrame: $0.element.screenFrame, screenRect: screen.frame)
+        }
+        let badgeSizes = state.labeledElements.map {
+          measureBadge(label: $0.label, context: ctx)
+        }
+        let badgeRects = placeBadges(anchors: anchors, badgeSizes: badgeSizes, viewSize: size)
+        for (index, labeled) in state.labeledElements.enumerated() {
+          drawElement(labeled, badgeRect: badgeRects[index], anchor: anchors[index], in: &ctx)
         }
         if let target = state.scrollTargetFrame {
           drawScrollTarget(target, in: &ctx)
@@ -165,31 +225,17 @@ struct OverlayContentView: View {
 
   private func drawElement(
     _ labeled: LabeledElement,
-    in context: inout GraphicsContext,
-    viewSize: CGSize,
-    placedBadges: inout [CGRect]
+    badgeRect: CGRect,
+    anchor: CGPoint,
+    in context: inout GraphicsContext
   ) {
-    let anchor = anchorPoint(screenFrame: labeled.element.screenFrame, screenRect: screen.frame)
-    let upperLabel = labeled.label.uppercased()
-    let badgeSize = measureBadge(label: upperLabel, context: context)
-    let origin = badgeOrigin(anchor: anchor, badgeSize: badgeSize, viewSize: viewSize)
-    var badgeRect = CGRect(origin: origin, size: badgeSize)
-    // Nested/adjacent elements can anchor at nearly the same corner — nudge the badge
-    // down until it no longer covers an already-placed one, so labels never stack.
-    var nudges = 0
-    while nudges < 8, placedBadges.contains(where: { $0.insetBy(dx: -2, dy: -2).intersects(badgeRect) }) {
-      badgeRect.origin.y += badgeSize.height + 3
-      nudges += 1
-    }
-    placedBadges.append(badgeRect)
-
     let dimmed = !state.typedPrefix.isEmpty && !labeled.label.hasPrefix(state.typedPrefix)
     let alpha: Double = dimmed ? 0.2 : 1.0
     let fillColor = state.badgeColor.opacity(alpha)
 
     drawConnector(anchor: anchor, center: badgeRect.center, alpha: alpha, context: &context)
     drawDot(at: anchor, color: fillColor, context: &context)
-    drawBadge(rect: badgeRect, color: fillColor, label: upperLabel, alpha: alpha, context: &context)
+    drawBadge(rect: badgeRect, color: fillColor, label: labeled.label, alpha: alpha, context: &context)
   }
 
   private func measureBadge(label: String, context: GraphicsContext) -> CGSize {

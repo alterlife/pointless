@@ -28,6 +28,15 @@ final class DiscoveryState {
   /// regions whose content is hidden from traversal (e.g. Safari's Start Page).
   var opaqueRegions: [CGRect] = []
 
+  private(set) var nextNodeID = 0
+  var nodeParent: [Int: Int] = [:]
+  var subtreeCount: [Int: Int] = [:]
+
+  func makeNodeID() -> Int {
+    nextNodeID += 1
+    return nextNodeID
+  }
+
   var sawWebArea: Bool { roleCount[AXRoleName.webArea] != nil }
 }
 
@@ -48,13 +57,20 @@ struct ElementTreeWalker {
   static let maxElements = 500
 
   func walk(from root: AXElement, state: DiscoveryState, context: DiscoveryContext) {
-    visit(root, depth: 0, state: state, context: context)
+    visit(root, depth: 0, parentID: 0, state: state, context: context)
   }
 
-  private func visit(_ element: AXElement, depth: Int, state: DiscoveryState, context: DiscoveryContext) {
+  private func visit(
+    _ element: AXElement, depth: Int, parentID: Int,
+    state: DiscoveryState, context: DiscoveryContext
+  ) {
     guard !context.isCancelled(), depth <= Self.maxDepth,
           state.results.count < Self.maxElements else { return }
     guard !element.isHidden, element.isEnabled else { return }
+
+    let nodeID = state.makeNodeID()
+    state.nodeParent[nodeID] = parentID
+    let discoveriesBefore = state.results.count
 
     let role = element.role
     if let role {
@@ -66,7 +82,10 @@ struct ElementTreeWalker {
          frame.width >= 4, frame.height >= 4,
          context.windowFrame.map({ $0.intersects(frame) }) ?? true,
          let screen = context.screens.first(where: { $0.frame.intersects(frame) }) {
-        state.results.append(DiscoveredElement(element: element, screenFrame: frame, role: role, screen: screen))
+        state.results.append(DiscoveredElement(
+          element: element, screenFrame: frame, role: role, screen: screen,
+          group: .walkNode(parentID)
+        ))
       }
     }
 
@@ -77,7 +96,9 @@ struct ElementTreeWalker {
 
     for child in element.children {
       guard state.results.count < Self.maxElements else { break }
-      visit(child, depth: depth + 1, state: state, context: context)
+      visit(child, depth: depth + 1, parentID: nodeID, state: state, context: context)
     }
+
+    state.subtreeCount[nodeID] = state.results.count - discoveriesBefore
   }
 }

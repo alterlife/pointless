@@ -71,7 +71,16 @@ final class ElementDiscovery {
     }
 
     var seen = Set<String>()
-    let unique = state.results.filter { seen.insert($0.dedupKey).inserted }
+    var unique = state.results.filter { seen.insert($0.dedupKey).inserted }
+
+    let beforeCollapse = unique.count
+    unique = unique.mergeSharedAnchors()
+    if unique.count < beforeCollapse {
+      Logger.debug("Discovery: dropped \(beforeCollapse - unique.count) same-anchor elements",
+                   logger: Logger.pluginLifecycle)
+    }
+
+    unique = regroupForLabels(unique, state: state)
 
     let visited = state.roleCount.values.reduce(0, +)
     Logger.debug(
@@ -80,5 +89,21 @@ final class ElementDiscovery {
       logger: Logger.pluginLifecycle
     )
     return unique
+  }
+
+  /// Chromium wraps controls in single-child AXGroups — climb past ancestors
+  /// holding only one discovery so they don't get their own label prefix.
+  private func regroupForLabels(_ elements: [DiscoveredElement], state: DiscoveryState) -> [DiscoveredElement] {
+    elements.map { element in
+      guard case .walkNode(let groupID) = element.group else { return element }
+      var current = groupID
+      while state.subtreeCount[current] == 1, let parent = state.nodeParent[current], parent != 0 {
+        current = parent
+      }
+      return DiscoveredElement(
+        element: element.element, screenFrame: element.screenFrame,
+        role: element.role, screen: element.screen, group: .walkNode(current)
+      )
+    }
   }
 }
