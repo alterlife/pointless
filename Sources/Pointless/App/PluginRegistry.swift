@@ -10,7 +10,7 @@ class PluginRegistry: ObservableObject {
   @Published private(set) var plugins: [AnyPlugin] = []
   private var cancellables = Set<AnyCancellable>()
 
-  private init() {}
+  init() {}
 
   /// Register a plugin — wraps it for type erasure and adds it to the list
   func register<P: Plugin>(_ plugin: P) {
@@ -34,6 +34,7 @@ class PluginRegistry: ObservableObject {
     .store(in: &cancellables)
 
     plugins.append(plugin)
+    WidgetRegistry.shared.registerSource(plugin)
     Logger.info("Registered plugin: \(plugin.name) (\(plugin.id))", logger: Logger.pluginRegistry)
   }
 

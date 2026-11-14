@@ -56,7 +56,7 @@ struct MenuBarContentView: View {
                 .font(.system(size: 12))
             }
 
-            ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
+            ObservableWidgetView(widgetId: widget.id, ownerId: widget.ownerId) {
               widget.viewBuilder()
             }
           }

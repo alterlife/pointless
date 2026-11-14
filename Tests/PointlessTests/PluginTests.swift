@@ -8,7 +8,6 @@ class MockPlugin: ObservableObject, Plugin {
   let id: String
   let name: String
 
-  @Published var menuBarText = "MOCK"
   @Published var isEnabled = true
   @Published var updateInterval: TimeInterval = 5.0
 
@@ -28,7 +27,7 @@ class MockPlugin: ObservableObject, Plugin {
     ])
   }
 
-  func configure(_ values: [String: Any]) {
+  func configure(with values: [String: Any]) {
     configuredValues = values
     if let interval = values["interval"] as? TimeInterval {
       updateInterval = interval
@@ -45,19 +44,15 @@ class MockPlugin: ObservableObject, Plugin {
   func stop() {
     stopCalled = true
   }
-
-  func detailView() -> AnyView {
-    AnyView(Text("Mock Detail"))
-  }
 }
 
+@MainActor
 final class PluginProtocolTests: XCTestCase {
   func testPluginProperties() {
     let plugin = MockPlugin()
 
     XCTAssertEqual(plugin.id, "test.mock")
     XCTAssertEqual(plugin.name, "Mock Plugin")
-    XCTAssertEqual(plugin.menuBarText, "MOCK")
   }
 
   func testPluginLifecycle() {
@@ -76,15 +71,10 @@ final class PluginProtocolTests: XCTestCase {
   func testPluginConfiguration() {
     let plugin = MockPlugin()
 
-    plugin.configure(["interval": 3.0, "enabled": false])
+    plugin.configure(with: ["interval": 3.0, "enabled": false])
 
     XCTAssertEqual(plugin.configuredValues["interval"] as? Double, 3.0)
     XCTAssertEqual(plugin.configuredValues["enabled"] as? Bool, false)
-  }
-
-  func testDefaultMenuBarView() {
-    let plugin = MockPlugin()
-    XCTAssertNil(plugin.menuBarView())
   }
 
   func testAnyPluginWrapper() {
@@ -93,7 +83,6 @@ final class PluginProtocolTests: XCTestCase {
 
     XCTAssertEqual(wrapped.id, plugin.id)
     XCTAssertEqual(wrapped.name, plugin.name)
-    XCTAssertEqual(wrapped.menuBarText, plugin.menuBarText)
   }
 
   func testAnyPluginForwardsActions() {
@@ -107,7 +96,7 @@ final class PluginProtocolTests: XCTestCase {
     wrapped.stop()
     XCTAssertTrue(plugin.stopCalled)
 
-    wrapped.configure(["test": "value"])
+    wrapped.configure(with: ["test": "value"])
     XCTAssertEqual(plugin.configuredValues["test"] as? String, "value")
   }
 }
@@ -182,10 +171,10 @@ final class PluginHelpersTests: XCTestCase {
     let plugin = MockPlugin()
     XCTAssertTrue(plugin.isEnabled)
 
-    plugin.configure(["enabled": false])
+    plugin.configure(with: ["enabled": false])
     XCTAssertFalse(plugin.isEnabled)
 
-    plugin.configure(["enabled": true])
+    plugin.configure(with: ["enabled": true])
     XCTAssertTrue(plugin.isEnabled)
   }
 
@@ -193,7 +182,7 @@ final class PluginHelpersTests: XCTestCase {
     let plugin = MockPlugin()
     XCTAssertEqual(plugin.updateInterval, 5.0)
 
-    plugin.configure(["interval": 10.0])
+    plugin.configure(with: ["interval": 10.0])
     XCTAssertEqual(plugin.updateInterval, 10.0)
   }
 

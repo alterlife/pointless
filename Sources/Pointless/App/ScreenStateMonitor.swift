@@ -10,11 +10,13 @@ class ScreenStateMonitor {
 
   func start() {
     observe(NSWorkspace.screensDidSleepNotification) {
-      Logger.info("Screen slept — suspending plugins")
+      Logger.info("Screen slept — suspending")
+      KeyboardNavigation.shared.suspend()
       PluginRegistry.shared.suspendAll()
     }
     observe(NSWorkspace.screensDidWakeNotification) {
-      Logger.info("Screen woke — resuming plugins")
+      Logger.info("Screen woke — resuming")
+      KeyboardNavigation.shared.resume()
       PluginRegistry.shared.resumeAll()
     }
   }

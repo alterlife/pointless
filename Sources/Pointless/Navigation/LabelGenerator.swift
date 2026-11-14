@@ -1,6 +1,6 @@
 import Foundation
 
-// NOTE: DiscoveredElement is defined in AccessibilityScanner.swift (same module)
+// NOTE: DiscoveredElement is defined in Discovery/DiscoveredElement.swift (same module)
 
 struct LabeledElement {
   let label: String
@@ -38,7 +38,7 @@ enum LabelGenerator {
 
   /// All labels have the same length — determined by how many elements need labelling.
   /// This eliminates prefix ambiguity (e.g. "a" vs "as").
-  ///  /re ≤27 elements  → 1 char  (a, s, d, ...)
+  ///   ≤27 elements  → 1 char  (a, s, d, ...)
   ///   ≤729 elements → 2 chars (aa, as, ad, ...)
   ///   >729 elements → 3 chars (aaa, aas, ...)
   private static func makeLabels(count: Int) -> [String] {

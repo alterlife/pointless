@@ -36,35 +36,35 @@ extension SettingsView {
 
 extension SettingsView {
   @ViewBuilder
-  func settingView(for definition: SettingDefinition, plugin: AnyPlugin) -> some View {
+  func settingView(for definition: SettingDefinition, host: any SettingsHost) -> some View {
     switch definition {
     case .slider(let key, let label, let range, let defaultValue, let step):
       sliderSettingView(
         label: label,
-        value: binding(for: plugin.id, key: key, default: defaultValue),
-        displayValue: getValue(for: plugin.id, key: key, default: defaultValue) as? Double ?? defaultValue,
+        value: binding(for: host.id, key: key, default: defaultValue),
+        displayValue: getValue(for: host.id, key: key, default: defaultValue) as? Double ?? defaultValue,
         range: range,
         step: step
       )
 
     case .toggle(let key, let label, let defaultValue):
-      Toggle(label, isOn: binding(for: plugin.id, key: key, default: defaultValue))
+      Toggle(label, isOn: binding(for: host.id, key: key, default: defaultValue))
 
     case .text(let key, let label, let defaultValue):
       VStack(alignment: .leading) {
         Text(label).font(.subheadline)
-        TextField("", text: binding(for: plugin.id, key: key, default: defaultValue))
+        TextField("", text: binding(for: host.id, key: key, default: defaultValue))
           .textFieldStyle(.roundedBorder)
       }
 
     case .dropdown(let key, let label, let options, let defaultValue):
-      let showCores = getValue(for: plugin.id, key: "showCores", default: false) as? Bool ?? false
+      let showCores = getValue(for: host.id, key: "showCores", default: false) as? Bool ?? false
       if key == "coreLayout" && !showCores {
         EmptyView()
       } else {
         VStack(alignment: .leading) {
           Text(label).font(.subheadline)
-          Picker("", selection: binding(for: plugin.id, key: key, default: defaultValue)) {
+          Picker("", selection: binding(for: host.id, key: key, default: defaultValue)) {
             ForEach(options, id: \.self) { option in
               Text(option.capitalized).tag(option)
             }
@@ -76,20 +76,20 @@ extension SettingsView {
     case .hotkey(let key, let label, let defaultValue):
       ShortcutRecorderView(
         label: label,
-        shortcutString: binding(for: plugin.id, key: key, default: defaultValue)
+        shortcutString: binding(for: host.id, key: key, default: defaultValue)
       )
 
     case .color(let key, let label, let defaultValue):
-      // Only gate on colorMode when the plugin explicitly declares it.
-      // Plugins without a colorMode setting always show their color pickers.
-      let hasColorMode = plugin.settings().definitions.contains { $0.key == "colorMode" }
-      let colorMode = getValue(for: plugin.id, key: "colorMode", default: "dynamic") as? String ?? "dynamic"
+      // Only gate on colorMode when the host explicitly declares it.
+      // Hosts without a colorMode setting always show their color pickers.
+      let hasColorMode = host.settings().definitions.contains { $0.key == "colorMode" }
+      let colorMode = getValue(for: host.id, key: "colorMode", default: "dynamic") as? String ?? "dynamic"
       if !hasColorMode || colorMode == "custom" {
         VStack(alignment: .leading) {
           Text(label).font(.subheadline)
           ColorPicker(
             "",
-            selection: colorBinding(for: plugin.id, key: key, default: defaultValue),
+            selection: colorBinding(for: host.id, key: key, default: defaultValue),
             supportsOpacity: false
           )
         }
@@ -169,21 +169,19 @@ extension SettingsView {
     }
     values[pluginID]?[key] = value
     saveSettings(for: pluginID)
-    if let plugin = pluginRegistry.plugins.first(where: { $0.id == pluginID }) {
-      plugin.configure(with: values[pluginID] ?? [:])
-    }
+    settingsHost(for: pluginID)?.configure(with: values[pluginID] ?? [:])
   }
 
   func loadSettings() {
-    for plugin in pluginRegistry.plugins {
-      if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(plugin.id)") {
-        values[plugin.id] = saved
+    for host in allSettingsHosts {
+      if let saved = UserDefaults.standard.dictionary(forKey: "plugin.\(host.id)") {
+        values[host.id] = saved
       } else {
         var defaults: [String: Any] = [:]
-        for definition in plugin.settings().definitions {
+        for definition in host.settings().definitions {
           defaults[definition.key] = definition.defaultValue
         }
-        values[plugin.id] = defaults
+        values[host.id] = defaults
       }
     }
   }

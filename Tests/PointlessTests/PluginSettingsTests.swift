@@ -14,14 +14,16 @@ final class PluginSettingsTests: XCTestCase {
 
     XCTAssertEqual(settings.definitions.count, 1)
 
-    if case .slider(let key, let label, let range, let defaultValue) = settings.definitions.first! {
-      XCTAssertEqual(key, "volume")
-      XCTAssertEqual(label, "Volume")
-      XCTAssertEqual(range, 0.0...100.0)
-      XCTAssertEqual(defaultValue, 50.0)
-    } else {
+    guard let first = settings.definitions.first,
+          case .slider(let key, let label, let range, let defaultValue, _) = first else {
       XCTFail("Expected slider definition")
+      return
     }
+
+    XCTAssertEqual(key, "volume")
+    XCTAssertEqual(label, "Volume")
+    XCTAssertEqual(range, 0.0...100.0)
+    XCTAssertEqual(defaultValue, 50.0)
   }
 
   func testToggleSetting() {
@@ -31,13 +33,15 @@ final class PluginSettingsTests: XCTestCase {
 
     XCTAssertEqual(settings.definitions.count, 1)
 
-    if case .toggle(let key, let label, let defaultValue) = settings.definitions.first! {
-      XCTAssertEqual(key, "enabled")
-      XCTAssertEqual(label, "Enabled")
-      XCTAssertEqual(defaultValue, true)
-    } else {
+    guard let first = settings.definitions.first,
+          case .toggle(let key, let label, let defaultValue) = first else {
       XCTFail("Expected toggle definition")
+      return
     }
+
+    XCTAssertEqual(key, "enabled")
+    XCTAssertEqual(label, "Enabled")
+    XCTAssertEqual(defaultValue, true)
   }
 
   func testTextSetting() {
@@ -45,13 +49,15 @@ final class PluginSettingsTests: XCTestCase {
       .text(key: "name", label: "Name", defaultValue: "John")
     ])
 
-    if case .text(let key, let label, let defaultValue) = settings.definitions.first! {
-      XCTAssertEqual(key, "name")
-      XCTAssertEqual(label, "Name")
-      XCTAssertEqual(defaultValue, "John")
-    } else {
+    guard let first = settings.definitions.first,
+          case .text(let key, let label, let defaultValue) = first else {
       XCTFail("Expected text definition")
+      return
     }
+
+    XCTAssertEqual(key, "name")
+    XCTAssertEqual(label, "Name")
+    XCTAssertEqual(defaultValue, "John")
   }
 
   func testDropdownSetting() {
@@ -59,14 +65,16 @@ final class PluginSettingsTests: XCTestCase {
       .dropdown(key: "theme", label: "Theme", options: ["Light", "Dark"], defaultValue: "Light")
     ])
 
-    if case .dropdown(let key, let label, let options, let defaultValue) = settings.definitions.first! {
-      XCTAssertEqual(key, "theme")
-      XCTAssertEqual(label, "Theme")
-      XCTAssertEqual(options, ["Light", "Dark"])
-      XCTAssertEqual(defaultValue, "Light")
-    } else {
+    guard let first = settings.definitions.first,
+          case .dropdown(let key, let label, let options, let defaultValue) = first else {
       XCTFail("Expected dropdown definition")
+      return
     }
+
+    XCTAssertEqual(key, "theme")
+    XCTAssertEqual(label, "Theme")
+    XCTAssertEqual(options, ["Light", "Dark"])
+    XCTAssertEqual(defaultValue, "Light")
   }
 
   func testHotkeySetting() {
@@ -74,13 +82,15 @@ final class PluginSettingsTests: XCTestCase {
       .hotkey(key: "shortcut", label: "Keyboard Shortcut", defaultValue: "Cmd+Shift+K")
     ])
 
-    if case .hotkey(let key, let label, let defaultValue) = settings.definitions.first! {
-      XCTAssertEqual(key, "shortcut")
-      XCTAssertEqual(label, "Keyboard Shortcut")
-      XCTAssertEqual(defaultValue, "Cmd+Shift+K")
-    } else {
+    guard let first = settings.definitions.first,
+          case .hotkey(let key, let label, let defaultValue) = first else {
       XCTFail("Expected hotkey definition")
+      return
     }
+
+    XCTAssertEqual(key, "shortcut")
+    XCTAssertEqual(label, "Keyboard Shortcut")
+    XCTAssertEqual(defaultValue, "Cmd+Shift+K")
   }
 
   func testSettingDefinitionID() {
@@ -95,13 +105,15 @@ final class PluginSettingsTests: XCTestCase {
       .color(key: "customColor", label: "Custom Color", defaultValue: "#007AFF")
     ])
 
-    if case .color(let key, let label, let defaultValue) = settings.definitions.first! {
-      XCTAssertEqual(key, "customColor")
-      XCTAssertEqual(label, "Custom Color")
-      XCTAssertEqual(defaultValue, "#007AFF")
-    } else {
+    guard let first = settings.definitions.first,
+          case .color(let key, let label, let defaultValue) = first else {
       XCTFail("Expected color definition")
+      return
     }
+
+    XCTAssertEqual(key, "customColor")
+    XCTAssertEqual(label, "Custom Color")
+    XCTAssertEqual(defaultValue, "#007AFF")
   }
 
   func testMultipleSettings() {

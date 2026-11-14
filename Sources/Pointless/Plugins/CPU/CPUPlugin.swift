@@ -9,8 +9,8 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
   let name = "CPU"
   let icon = "cpu"
 
-  @Published var menuBarText: String = "CPU --"
-  @Published var isEnabled: Bool = true
+  // Monitoring is secondary to navigation — plugins ship disabled until the user opts in
+  @Published var isEnabled: Bool = false
   @Published var updateInterval: TimeInterval = 2.0
   @Published var displayMode: String = "both"
   @Published var showIcon: Bool = true
@@ -80,7 +80,7 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
       .toggle(
         key: "enabled",
         label: "Enabled",
-        defaultValue: true
+        defaultValue: false
       ),
       .slider(
         key: "updateInterval",
@@ -100,8 +100,6 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
     let cpuData = currentUsage()
     totalUsage = cpuData.total
     coreUsages = cpuData.perCore
-
-    menuBarText = String(format: "CPU %.0f%%", totalUsage * 100)
 
     history.append(totalUsage)
     if history.count > maxHistorySize {
@@ -159,7 +157,7 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
     [
       MenuBarWidget(
         id: "\(id).menubar",
-        pluginId: id,
+        ownerId: id,
         name: "CPU Status",
         priority: 10
       ) {
@@ -178,14 +176,10 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
 
   func menuWidgets() -> [MenuWidget] {
     [
-      MenuWidget(id: "\(id).detail", pluginId: id, name: "CPU Details", priority: 10) {
+      MenuWidget(id: "\(id).detail", ownerId: id, name: "CPU Details", priority: 10) {
         self.detailContentView()
       }
     ]
-  }
-
-  func detailView() -> AnyView {
-    AnyView(detailContentView())
   }
 
   @ViewBuilder

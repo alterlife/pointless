@@ -4,42 +4,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Pointless is a minimal, plugin-driven macOS menu bar app for system monitoring. The core philosophy is "everything is a plugin" — even built-in metrics like CPU are implemented as plugins that the app shell loads and displays.
+Pointless is a macOS app for cursor-free navigation. The app also has a plugin system for monitoring widgets.
 
 ## Design Philosophy
 
-### High-Quality Code & Consistent Design
+### Lint enforced Code, Consistent Design
 
 1. **Follow Your Own Rules**
-   - SwiftLint errors (`force_unwrapping`, `force_cast`) are non-negotiable — fix violations immediately
-   - If a rule exists, the code must comply. No exceptions without documented justification.
-   - **Always run `swiftlint` before committing code** — 0 violations required
+   - SwiftLint errors are non-negotiable - If a rule exists, the code must comply. 
+   - Exceptions MUST be approved by the developer.
+   - **Always run `swiftlint` before committing code** - 0 violations required
 
-2. **Swift Naming Conventions**
-   - Avoid vague suffixes: `Manager`, `Helper`, `Utility`, `Handler`
-   - Be specific about what something IS, not what it DOES
+2. **Naming Conventions**
+   - Avoid vague suffixes: `Manager`, `Helper`, `Utility`, `Handler`.
    - Follow Apple's patterns: `URLSession` not `URLSessionManager`
    - Type erasure wrappers use `Any` prefix: `AnyPlugin`, `AnyView`
 
-3. **Trust the Framework**
+3. **Don't manually do what the framework already does** For example:
    - SwiftUI `@Published` + `@ObservedObject` handles reactivity — don't fight it with manual updates
-   - Combine subscriptions must be properly managed (stored and cancelled)
    - Let the type system work for you — avoid unnecessary casts
 
-4. **No Duplication**
-   - DRY principle: same logic should only exist once
-   - Consolidate similar code paths before they diverge
-   - Shared behavior goes into protocol extensions or helpers
+   Do not implement custom solutions before you have researched the framework's capabilities.
 
-5. **Memory Safety**
-   - All Combine subscriptions must be stored in `cancellables` and properly cleaned up
-   - Weak references (`[weak self]`) in closures that outlive their owner
-   - Timer invalidation in `stop()` or `deinit`
+4. **No Duplication**
+   - Code must be SOLID and DRY
+
+5. **Lifetime Management**
+   - Store Combine subscriptions in `cancellables`; clean them up
+   - Use `[weak self]` in closures that outlive their owner
+   - Invalidate timers, remove event monitors, and unregister
+     notification/AX observers in `stop()`/`deinit`/`end()`
 
 6. **Declarative Over Imperative**
-   - Settings, UI, and plugin definitions should be data, not code
-   - Let the system generate behavior from declarations
-   - Reduce manual wiring and state synchronization
+   - Settings, widgets, and plugin behavior are data declarations, not code.
+     New settings go in `declareSettings([...])`, new display goes in
+     `menuBarWidgets()`/`menuWidgets()` — never hand-wired UI or manual
+     state syncing in the app shell
 
 ## Build & Run
 
@@ -62,7 +62,7 @@ swiftlint --fix
 
 **IMPORTANT:** Always run `swiftlint` before committing. The project must have **0 violations**.
 
-**Note on Testing**: Due to Swift 6.2 + Command Line Tools limitations, XCTest is not available. A standalone test runner (`Tests/run-tests.swift`) is provided that works without XCTest. For full XCTest support, install Xcode.
+**Note on Testing**: `swift test` runs the XCTest suite in `Tests/PointlessTests/` (requires Xcode, not just Command Line Tools). `swift Tests/run-tests.swift` is a supplementary standalone runner with self-contained mock-based tests — it does not compile `Sources/`.
 
 ## Logging
 
@@ -140,11 +140,18 @@ Logger.debug("Update triggered", logger: Logger.pluginLifecycle)
 
 ## Architecture
 
-### Core Design Pattern: Autonomous Plugins
+### Core Feature: Cursor-Free Navigation
 
-Plugins are **fully autonomous** — they manage their own timers, data fetching, and state. The app shell only provides:
+Navigation is a core feature. Since it's not a plugin, don't register it in
+`PluginRegistry` or make it conform to `Plugin`. See `Navigation/`:
+`KeyboardNavigation` handles hotkeys and settings; each activation runs a
+`NavigationSession`.
+
+### Plugin System
+
+Plugins manage their own timers, data fetching, and state. The app shell provides:
 1. **Registration** via `PluginRegistry`
-2. **Display infrastructure** (menu bar + menu)
+2. **Display infrastructure** (menu bar + menu via `WidgetRegistry`)
 3. **Settings persistence** (UserDefaults)
 
 ### Plugin Lifecycle
@@ -154,11 +161,11 @@ Registration → Configuration → Start → [Running] → Stop
 ```
 
 **On app launch** (`AppDelegate.swift`):
-1. Register built-in plugins (hardcoded instances)
-2. Load external plugins from `~/Library/Application Support/Pointless/Plugins/*.bundle`
-3. Configure plugins with saved settings from UserDefaults
+1. Start `KeyboardNavigation` (hotkeys, permission onboarding) and register its widgets
+2. Register built-in plugins (hardcoded instances)
+3. Load external plugins from `~/Library/Application Support/Pointless/Plugins/*.bundle`
 4. Start all plugins (each plugin starts its own update timer)
-5. Setup menu bar UI
+5. Setup menu bar UI and screen sleep/wake monitoring
 
 ### Plugin Protocol (`Plugin.swift`)
 
@@ -168,56 +175,37 @@ All plugins conform to the `Plugin` protocol:
 protocol Plugin: ObservableObject {
   var id: String { get }              // Unique ID (e.g., "pointless.cpu")
   var name: String { get }            // Display name
-  var menuBarText: String { get }     // Fallback text for menu bar
-  var settings: PluginSettings { get }
+  var icon: String { get }            // SF Symbol for settings tab
+  var isEnabled: Bool { get set }     // Plugins ship disabled by default
 
-  func menuBarView() -> NSView?       // Custom menu bar view (optional)
-  func detailView() -> AnyView        // SwiftUI view for menu display
-  func configure(_ values: [String: Any])
+  func initialize()                   // One-time setup in init
+  func settings() -> PluginSettings   // Declarative settings definitions
+  func configure(with values: [String: Any])
   func start()                        // Start plugin's update timer
   func stop()
+  func suspend()                      // Screen sleep
+  func resume()                       // Screen wake
+  func menuBarWidgets() -> [MenuBarWidget]
+  func menuWidgets() -> [MenuWidget]
 }
 ```
 
 **Key points:**
 - Plugins use `@Published` properties to trigger UI updates
-- `menuBarView()` returns `nil` to fall back to `menuBarText`
 - Plugins are wrapped in `AnyPlugin` for type erasure
-- Each plugin manages its own `Timer` for updates
+- Each plugin manages its own `Timer` for updates via `PluginLifecycle`
+- Display goes through `menuBarWidgets()`/`menuWidgets()` — the widget registry
+  owns ordering, visibility, and drag-to-reorder in Settings
 
 ### CRITICAL: Plugin Observation in SwiftUI
 
 **Problem:** SwiftUI's `@ObservedObject` does NOT automatically observe objects inside arrays/collections.
 
-**Wrong approach (will not update):**
-```swift
-ForEach(registry.plugins, id: \.id) { plugin in
-  plugin.detailView()  // ❌ No observation binding - UI freezes!
-}
-```
-
-**Correct approach (updates work):**
-```swift
-ForEach(registry.plugins, id: \.id) { plugin in
-  ObservablePluginView(plugin: plugin) { p in  // ✅ Creates @ObservedObject binding
-    p.detailView()
-  }
-}
-```
-
-**Why this matters:**
-- When a plugin updates (e.g., CPU percentage changes), it fires `objectWillChange`
-- WITHOUT `ObservablePluginView`: SwiftUI never receives the notification → UI stays frozen
-- WITH `ObservablePluginView`: SwiftUI receives the notification → UI updates automatically
-
-**Rule:** Any SwiftUI view that displays plugin data MUST wrap it in `ObservablePluginView`.
+**Rule:** Any SwiftUI view that displays plugin data MUST be wrapped in `ObservableWidgetView` (menu bar and menu widgets) or `ObservablePluginView` (direct plugin content). Without an observation binding, the UI freezes after the initial render.
 
 ### Plugin Views
 
-**Menu Bar:**
-- Plugins can provide custom SwiftUI views via `menuBarView()` (see `CPUPlugin` for example)
-- Views are hosted in `NSHostingView` and displayed in the status bar button
-- `MenuBarCombinedView` horizontally combines all plugin views with separators
+All plugin display goes through widgets — `menuBarWidgets()` for the status bar, `menuWidgets()` for the dropdown menu. Views are SwiftUI, hosted in `NSHostingView`; `MenuBarCombinedView` lays out menu bar widgets horizontally with separators.
 
 **CRITICAL: Menu Bar Sizing**
 
@@ -239,7 +227,7 @@ This tells NSStatusItem how wide the view needs to be, allowing it to auto-size 
 - **CRITICAL:** Use `NSMenu` for plugin details, NOT `NSPopover`
 - **Why:** Apple's HIG specifies NSMenu for menu bar extras (standard macOS pattern)
 - **Reference apps:** iStat Menus, Stats use NSMenu with embedded SwiftUI views
-- Each plugin's `detailView()` is embedded in NSMenuItem via NSHostingView
+- Each `MenuWidget`'s view is embedded in an NSMenuItem via NSHostingView
 - **All graphics preserved:** Icons, colors, charts, custom layouts work perfectly in menu items
 - Standard menu structure:
   ```
@@ -254,7 +242,7 @@ This tells NSStatusItem how wide the view needs to be, allowing it to auto-size 
 ### Plugin Settings
 
 Settings are defined declaratively via `PluginSettings`:
-- `slider`, `toggle`, `hotkey`, `text`, `dropdown`
+- `slider`, `toggle`, `hotkey`, `text`, `dropdown`, `color`, `section`
 - Settings are stored in UserDefaults with key `plugin.<id>`
 - Changes trigger `configure()` which can restart timers with new values
 
@@ -274,28 +262,66 @@ The `PluginRegistry.loadExternalPlugins()` method:
 
 ## Project Structure
 
+The core product is cursor-free navigation ("pointless" = pointer-less). It lives in
+`Navigation/` as an app-level feature, NOT a plugin. The plugin system carries optional
+monitoring widgets only, and plugins ship disabled by default.
+
 ```
 Sources/Pointless/
 ├── App/
-│   ├── PointlessApp.swift       # SwiftUI app entry point
-│   ├── AppDelegate.swift        # Plugin registration & startup
-│   └── PluginRegistry.swift     # Plugin storage & loading
-├── Plugins/
-│   ├── Plugin.swift             # Protocol + AnyPlugin wrapper
-│   ├── PluginSettings.swift     # Settings definitions
-│   └── CPU/
-│       └── CPUPlugin.swift      # Built-in CPU monitor
+│   ├── AppDelegate.swift            # Starts navigation, registers plugins
+│   ├── PluginRegistry.swift         # Plugin storage & external bundle loading
+│   ├── ScreenStateMonitor.swift     # Sleep/wake suspend-resume
+│   └── Logger.swift                 # os.Logger wrappers
+├── AX/
+│   └── AXElement.swift              # Typed facade over AXUIElement — ALL raw AX
+│                                    #   calls and CF cast workarounds live here
+├── Navigation/                      # CORE FEATURE: cursor-free navigation
+│   ├── KeyboardNavigation.swift     # Controller: hotkeys, settings, monitors
+│   ├── NavigationSession.swift      # One activation: scan→overlay→input→click
+│   ├── ElementOverlay.swift         # Overlay windows + badge rendering
+│   ├── LabelGenerator.swift         # Letter-label assignment (pure)
+│   ├── ShortcutParsing.swift        # Hotkey string parsing (pure)
+│   ├── KeyboardOnboarding.swift     # AX + Input Monitoring permissions
+│   ├── NavigationMenuWidgetView.swift
+│   └── Discovery/                   # Element discovery pass pipeline
+│       ├── ElementDiscovery.swift   # Orchestrator + cross-pass dedup
+│       ├── DiscoveryPass.swift      # Pass protocol + shared tree walker
+│       ├── TreeWalkPass.swift       # Normal AX traversal
+│       ├── FocusedElementFallbackPass.swift  # Broken window trees (Firefox)
+│       ├── HitTestPass.swift        # Opaque web content (Safari Start Page)
+│       └── DiscoveredElement.swift
+├── Core/
+│   ├── SettingsHost.swift           # Settings abstraction (navigation + plugins)
+│   ├── Widget.swift                 # MenuBarWidget / MenuWidget
+│   └── WidgetRegistry.swift
+├── Plugins/                         # OPTIONAL monitoring (off by default)
+│   ├── Plugin.swift                 # Protocol + AnyPlugin wrapper
+│   ├── PluginSettings.swift         # Declarative settings definitions
+│   ├── PluginLifecycle.swift        # Timer/suspend lifecycle
+│   ├── PluginDefaultImplementations.swift  # declareSettings/setupPeriodicUpdate
+│   └── CPU/                         # Built-in CPU monitor
 └── UI/
-    ├── MenuBar.swift            # NSStatusItem + NSMenu management
-    ├── MenuBarCombinedView.swift # Combines plugin menu bar views
-    └── SettingsView.swift       # App settings window
+    ├── MenuBar.swift                # NSStatusItem + NSMenu management
+    ├── MenuBarCombinedView.swift
+    ├── SettingsView.swift           # Renders SettingsHost definitions
+    ├── SettingsViewHelpers.swift    # Setting renderers + persistence
+    ├── SettingsWindowManager.swift  # Single settings window
+    ├── WidgetDragDelegates.swift    # Drag-to-reorder drop delegates
+    ├── ObservableWidgetView.swift
+    └── ColorExtensions.swift        # Hex color helpers
 ```
+
+**New app quirks in element discovery become new `DiscoveryPass` implementations,
+not edits to existing passes.** Raw `AXUIElement` calls outside `AX/AXElement.swift`
+are forbidden — extend the facade instead.
 
 ## Adding a New Plugin
 
 1. **Create plugin class** conforming to `Plugin` protocol
-2. **Implement required properties**: `id`, `name`, `menuBarText`
-3. **Implement views**: `menuBarView()` (optional) and `detailView()`
+2. **Implement required properties**: `id`, `name`, `isEnabled` (`icon` has a default)
+3. **Implement display**: `menuBarWidgets()` and/or `menuWidgets()` — return
+   `MenuBarWidget`/`MenuWidget` with SwiftUI view builders
 4. **Use lifecycle helpers**: `declareSettings()` and `setupPeriodicUpdate()` for automatic management
 5. **Register in AppDelegate**: Add to `plugins` array in `applicationDidFinishLaunching`
 
@@ -308,12 +334,10 @@ class MyPlugin: NSObject, ObservableObject, Plugin {
   let id = "pointless.myplugin"
   let name = "My Plugin"
 
-  @Published var menuBarText = "..."
-  @Published var isEnabled = true
+  @Published var isEnabled = false  // plugins ship disabled
   @Published var updateInterval: TimeInterval = 5.0
 
   func initialize() {
-    // Declare settings
     declareSettings([
       .slider(
         key: "updateInterval",
@@ -323,21 +347,30 @@ class MyPlugin: NSObject, ObservableObject, Plugin {
       )
     ])
 
-    // Setup periodic updates
     setupPeriodicUpdate(interval: \.updateInterval) {
       self.refresh()
     }
   }
 
-  private func refresh() {
-    // Update plugin data
-    menuBarText = "Updated!"
+  func configure(with values: [String: Any]) {
+    if let enabled = values["enabled"] as? Bool { isEnabled = enabled }
+    if let interval = values["updateInterval"] as? TimeInterval { updateInterval = interval }
+    saveSettings(values)
   }
 
-  func detailView() -> AnyView {
-    AnyView(Text("Plugin detail view"))
+  private func refresh() {
+    // Update plugin data
+  }
+
+  func menuBarWidgets() -> [MenuBarWidget] {
+    [
+      MenuBarWidget(id: "\(id).menubar", ownerId: id, name: "My Plugin", priority: 100) {
+        Text("MP")
+      }
+    ]
   }
 }
+```
 ```
 
 **Key points:**
@@ -349,21 +382,8 @@ class MyPlugin: NSObject, ObservableObject, Plugin {
 
 ## Code Style
 
-SwiftLint is enforced (see `.swiftlint.yml`). Key rules to follow:
-
-**Strictly Enforced (errors):**
-- **No force unwrapping** (`!`) - use optional binding or nil coalescing
-- **No force casting** (`as!`) - use conditional casting (`as?`)
-- **Line length:** 120 chars (warning), 150 chars (error)
-
-**Best Practices (warnings):**
-- Use `isEmpty` instead of `count == 0`
-- Prefer type inference over explicit `.init()`
-- No tuples with more than 2 members - use a struct instead
-- Remove unused imports
-- No duplicate imports
+SwiftLint is enforced (see `.swiftlint.yml`).
 
 ## Design Documents
 
-- `DESIGN.md`: Detailed architecture, plugin loading flow, future plans
-- `CUSTOM_VIEWS.md`: Examples of custom menu bar views for plugins
+- `IMPROVEMENTS.md`: Improvement plan — UX, code cleanliness, maintenance proposals

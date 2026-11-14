@@ -7,18 +7,17 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     Task { @MainActor in
       Logger.info("Pointless starting up")
 
-      let plugins: [any Plugin] = [KeyboardPlugin(), CPUPlugin()]
+      // Core feature: cursor-free navigation
+      KeyboardNavigation.shared.start()
+      WidgetRegistry.shared.registerSource(KeyboardNavigation.shared)
+
+      // Optional monitoring plugins (disabled by default, enabled in Settings)
+      let plugins: [any Plugin] = [CPUPlugin()]
       PluginRegistry.shared.register(plugins)
       PluginRegistry.shared.loadExternalPlugins()
 
       Logger.info("Starting \(PluginRegistry.shared.plugins.count) plugin(s)")
       PluginRegistry.shared.plugins.forEach { $0.start() }
-
-      Logger.info("Registering widgets")
-      PluginRegistry.shared.plugins.forEach { plugin in
-        WidgetRegistry.shared.registerMenuBarWidgets(plugin.menuBarWidgets())
-        WidgetRegistry.shared.registerMenuWidgets(plugin.menuWidgets())
-      }
 
       MenuBar.shared.setup()
       ScreenStateMonitor.shared.start()
