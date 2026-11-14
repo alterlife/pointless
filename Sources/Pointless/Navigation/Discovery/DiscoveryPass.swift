@@ -9,7 +9,6 @@ enum ScanMode {
 
 // MARK: - Pipeline context & state
 
-/// Immutable inputs shared by every pass in one scan.
 struct DiscoveryContext {
   let app: AXElement
   let window: AXElement
@@ -21,7 +20,6 @@ struct DiscoveryContext {
   let isCancelled: () -> Bool
 }
 
-/// Mutable state accumulated as passes run.
 final class DiscoveryState {
   var results: [DiscoveredElement] = []
   var roleCount: [String: Int] = [:]
@@ -35,9 +33,6 @@ final class DiscoveryState {
 
 // MARK: - Pass protocol
 
-/// One discovery strategy. The pipeline runs each pass in order; a pass declares
-/// whether the current state warrants running it. New app quirks become new passes,
-/// not edits to existing ones.
 protocol DiscoveryPass {
   var name: String { get }
   func shouldRun(state: DiscoveryState, context: DiscoveryContext) -> Bool
@@ -46,9 +41,10 @@ protocol DiscoveryPass {
 
 // MARK: - Shared tree walker
 
-/// Recursive AX tree traversal shared by the tree-walk and fallback passes.
 struct ElementTreeWalker {
-  static let maxDepth = 25
+  // Chromium/Electron DOMs nest AXGroup chains 30+ levels deep — native apps
+  // rarely exceed ~15.
+  static let maxDepth = 100
   static let maxElements = 500
 
   func walk(from root: AXElement, state: DiscoveryState, context: DiscoveryContext) {

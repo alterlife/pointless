@@ -29,13 +29,6 @@ private func navigationSessionEventCallback(
 
 // MARK: - NavigationSession
 
-/// One navigation activation, from scan to teardown:
-///
-///     scan → overlay → key input → activate element / scroll → end
-///
-/// The session owns everything with that lifetime — the discovery scan, the overlay
-/// windows, the labeled elements, and the event tap. `KeyboardNavigation` creates a
-/// session on activation and drops it when the session ends.
 @MainActor
 final class NavigationSession {
   enum Mode {
@@ -106,7 +99,6 @@ final class NavigationSession {
   func beginScroll() {
     discovery.scan(mode: .scrollable) { [weak self] elements in
       guard let self, !self.ended else { return }
-      // Filter out scroll areas with broken frames (zero size or off-screen)
       let screenBounds = NSScreen.screens.reduce(CGRect.null) { $0.union($1.frame) }
       let viable = elements.filter { elem in
         let frame = elem.screenFrame
@@ -121,7 +113,6 @@ final class NavigationSession {
       let mousePos = NSEvent.mouseLocation
       let startIndex = sorted.firstIndex { $0.screenFrame.contains(mousePos) } ?? 0
       self.rebuildOverlayWindows()
-      // For multiple targets, warp cursor to selected area
       if sorted.count > 1 {
         self.warpCursor(to: sorted[startIndex])
       }
