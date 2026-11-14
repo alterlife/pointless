@@ -17,9 +17,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: norio-nomura/action-swiftlint@3.2.1
-        with:
-          args: --strict
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint --strict
 
   build-and-test:
     name: Build & Test
