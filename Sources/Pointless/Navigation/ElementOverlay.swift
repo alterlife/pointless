@@ -77,14 +77,16 @@ struct BadgeObstacles {
   var placedBadges: [CGRect] = []
 }
 
-internal func placeBadges(anchors: [CGPoint], badgeSizes: [CGSize], viewSize: CGSize) -> [CGRect] {
+internal func placeBadges(
+  anchors: [CGPoint], badgeSizes: [CGSize], viewSize: CGSize, topInset: CGFloat = 0
+) -> [CGRect] {
   var obstacles = BadgeObstacles(
     anchorRects: anchors.map { CGRect(center: $0, size: CGSize(width: 8, height: 8)) }
   )
   return anchors.indices.map { index in
     let rect = placeBadge(
       anchor: anchors[index], badgeSize: badgeSizes[index], viewSize: viewSize,
-      obstacles: obstacles, ownAnchorIndex: index
+      obstacles: obstacles, ownAnchorIndex: index, topInset: topInset
     )
     obstacles.placedBadges.append(rect)
     return rect
@@ -96,7 +98,8 @@ internal func placeBadge(
   badgeSize: CGSize,
   viewSize: CGSize,
   obstacles: BadgeObstacles,
-  ownAnchorIndex: Int
+  ownAnchorIndex: Int,
+  topInset: CGFloat = 0
 ) -> CGRect {
   let candidates = [
     CGPoint(x: anchor.x - badgeSize.width - 4, y: anchor.y - badgeSize.height - 6),
@@ -108,7 +111,7 @@ internal func placeBadge(
   func clamped(_ origin: CGPoint) -> CGPoint {
     CGPoint(
       x: max(4, min(origin.x, viewSize.width - badgeSize.width - 4)),
-      y: max(4, min(origin.y, viewSize.height - badgeSize.height - 4))
+      y: max(topInset + 4, min(origin.y, viewSize.height - badgeSize.height - 4))
     )
   }
 
@@ -208,7 +211,10 @@ struct OverlayContentView: View {
         let badgeSizes = onScreen.map {
           measureBadge(label: $0.label, context: ctx)
         }
-        let badgeRects = placeBadges(anchors: anchors, badgeSizes: badgeSizes, viewSize: size)
+        let badgeRects = placeBadges(
+          anchors: anchors, badgeSizes: badgeSizes, viewSize: size,
+          topInset: screen.safeAreaInsets.top
+        )
         for (index, labeled) in onScreen.enumerated() {
           drawElement(labeled, badgeRect: badgeRects[index], anchor: anchors[index], in: &ctx)
         }

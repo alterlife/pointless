@@ -91,6 +91,18 @@ final class BadgePlacementTests: XCTestCase {
     XCTAssertEqual(rect.height, badgeSize.height, accuracy: 0.001)
   }
 
+  func testTopInsetKeepsBadgeBelowNotchStrip() {
+    // Notched screens report safeAreaInsets.top = 32 — badges must not enter it.
+    let anchor = CGPoint(x: 250, y: 20)
+    let rect = placeBadge(
+      anchor: anchor, badgeSize: badgeSize, viewSize: viewSize,
+      obstacles: BadgeObstacles(anchorRects: [anchorRect(anchor)]),
+      ownAnchorIndex: 0, topInset: 32
+    )
+
+    XCTAssertGreaterThanOrEqual(rect.minY, 36)
+  }
+
   func testPlaceBadgesAssignsSequentialObstacles() {
     // Two anchors close together: the second badge must not cover the first's anchor.
     let anchors = [CGPoint(x: 250, y: 250), CGPoint(x: 236, y: 236)]
