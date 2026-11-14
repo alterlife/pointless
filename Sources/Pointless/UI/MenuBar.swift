@@ -47,7 +47,7 @@ class MenuBar {
     for widget in WidgetRegistry.shared.orderedMenuWidgets {
       let menuItem = NSMenuItem()
 
-      let contentView = ObservableWidgetView(widgetId: widget.id, pluginId: widget.pluginId) {
+      let contentView = ObservableWidgetView(widgetId: widget.id, ownerId: widget.ownerId) {
         widget.viewBuilder()
       }
       .frame(width: 360)

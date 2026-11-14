@@ -2,7 +2,8 @@ import Combine
 import Foundation
 import OSLog
 
-/// Registry for managing and ordering widgets
+/// Registry for managing and ordering widgets provided by `WidgetSource`s
+/// (plugins and the core navigation feature).
 @MainActor
 class WidgetRegistry: ObservableObject {
   static let shared = WidgetRegistry()
@@ -16,69 +17,86 @@ class WidgetRegistry: ObservableObject {
 
   private var allMenuBarWidgets: [MenuBarWidget] = []
   private var allMenuWidgets: [MenuWidget] = []
+  private var sources: [WeakWidgetSource] = []
   private var cancellables = Set<AnyCancellable>()
 
   private let configKey = "pointless.widgetConfigs"
 
-  private init() {
+  init() {
     loadConfigs()
+  }
 
-    // Observe PluginRegistry and rebuild widgets when plugins change
-    PluginRegistry.shared.objectWillChange.sink { [weak self] _ in
-      Task { @MainActor in
-        self?.rebuildAllWidgets()
-      }
+  // MARK: - Sources
+
+  /// Register a widget source. The registry rebuilds its widget lists now and
+  /// again whenever the source publishes a change.
+  func registerSource<S: WidgetSource & ObservableObject>(_ source: S) {
+    guard !sources.contains(where: { $0.source?.id == source.id }) else {
+      Logger.warning("Widget source '\(source.id)' already registered. Skipping.")
+      return
     }
-    .store(in: &cancellables)
+
+    sources.append(WeakWidgetSource(source))
+
+    // objectWillChange fires in willSet, before the property updates — defer
+    // one run-loop turn so rebuilds read the new values (same as PluginLifecycle).
+    source.objectWillChange
+      .sink { [weak self] _ in
+        Task { @MainActor in self?.rebuildAllWidgets() }
+      }
+      .store(in: &cancellables)
+
+    Logger.info("Registered widget source: \(source.id)")
+    rebuildAllWidgets()
+  }
+
+  private var liveSources: [any WidgetSource] {
+    sources.compactMap(\.source)
+  }
+
+  /// Whether the source with this id is enabled. Unknown ids report disabled.
+  func sourceIsEnabled(_ ownerId: String) -> Bool {
+    liveSources.first { $0.id == ownerId }?.isEnabled ?? false
+  }
+
+  /// SF Symbol icon for the source with this id, if registered.
+  func sourceIcon(_ ownerId: String) -> String? {
+    liveSources.first { $0.id == ownerId }?.icon
   }
 
   private func rebuildAllWidgets() {
-    // Get fresh widgets from all plugins
-    allMenuBarWidgets.removeAll()
-    allMenuWidgets.removeAll()
+    var menuBar: [MenuBarWidget] = []
+    var menu: [MenuWidget] = []
 
-    for plugin in PluginRegistry.shared.plugins {
-      allMenuBarWidgets.append(contentsOf: plugin.menuBarWidgets())
-      allMenuWidgets.append(contentsOf: plugin.menuWidgets())
-    }
-
-    rebuildOrderedMenuBarWidgets()
-    rebuildOrderedMenuWidgets()
-  }
-
-  // MARK: - Registration
-
-  func registerMenuBarWidgets(_ widgets: [MenuBarWidget]) {
-    addWidgets(widgets, to: &allMenuBarWidgets, kind: "MenuBarWidget")
-    rebuildOrderedMenuBarWidgets()
-  }
-
-  func registerMenuWidgets(_ widgets: [MenuWidget]) {
-    addWidgets(widgets, to: &allMenuWidgets, kind: "MenuWidget")
-    rebuildOrderedMenuWidgets()
-  }
-
-  private func addWidgets<W: WidgetProtocol>(_ incoming: [W], to list: inout [W], kind: String) {
-    for widget in incoming {
-      if list.contains(where: { $0.id == widget.id }) {
-        Logger.warning("\(kind) with ID '\(widget.id)' already registered. Skipping.")
-        continue
+    for source in liveSources {
+      for widget in source.menuBarWidgets() where !menuBar.contains(where: { $0.id == widget.id }) {
+        menuBar.append(widget)
       }
-      list.append(widget)
-      Logger.info("Registered \(kind): \(widget.name) (\(widget.id))")
+      for widget in source.menuWidgets() where !menu.contains(where: { $0.id == widget.id }) {
+        menu.append(widget)
+      }
     }
+
+    allMenuBarWidgets = menuBar
+    allMenuWidgets = menu
+
+    rebuildOrderedMenuBarWidgets()
+    rebuildOrderedMenuWidgets()
+
+    Logger.debug("Menu bar widgets: \(orderedMenuBarWidgets.map(\.id))")
+    Logger.debug("Menu widgets: \(orderedMenuWidgets.map(\.id))")
   }
 
-  // MARK: - Per-Plugin Queries
+  // MARK: - Per-Source Queries
 
-  /// All menu bar widgets registered by a specific plugin
-  func menuBarWidgets(forPlugin pluginId: String) -> [MenuBarWidget] {
-    allMenuBarWidgets.filter { $0.pluginId == pluginId }
+  /// All menu bar widgets provided by a specific source
+  func menuBarWidgets(forSource sourceId: String) -> [MenuBarWidget] {
+    allMenuBarWidgets.filter { $0.ownerId == sourceId }
   }
 
-  /// All menu widgets registered by a specific plugin
-  func menuWidgets(forPlugin pluginId: String) -> [MenuWidget] {
-    allMenuWidgets.filter { $0.pluginId == pluginId }
+  /// All menu widgets provided by a specific source
+  func menuWidgets(forSource sourceId: String) -> [MenuWidget] {
+    allMenuWidgets.filter { $0.ownerId == sourceId }
   }
 
   // MARK: - Reordering
@@ -98,9 +116,8 @@ class WidgetRegistry: ObservableObject {
   /// Reorder all menu bar widgets (visible + hidden), then rebuild visible list
   func reorderAllMenuBar(from source: IndexSet, to destination: Int) {
     sortedAllMenuBarWidgets.move(fromOffsets: source, toOffset: destination)
-    let enabledPlugins = Set(PluginRegistry.shared.plugins.filter { $0.isEnabled }.map { $0.id })
     orderedMenuBarWidgets = sortedAllMenuBarWidgets.filter { widget in
-      enabledPlugins.contains(widget.pluginId) && isMenuBarWidgetVisible(widget.id)
+      sourceIsEnabled(widget.ownerId) && isMenuBarWidgetVisible(widget.id)
     }
     saveConfigs()
   }
@@ -108,9 +125,8 @@ class WidgetRegistry: ObservableObject {
   /// Reorder all menu widgets (visible + hidden), then rebuild visible list
   func reorderAllMenu(from source: IndexSet, to destination: Int) {
     sortedAllMenuWidgets.move(fromOffsets: source, toOffset: destination)
-    let enabledPlugins = Set(PluginRegistry.shared.plugins.filter { $0.isEnabled }.map { $0.id })
     orderedMenuWidgets = sortedAllMenuWidgets.filter { widget in
-      enabledPlugins.contains(widget.pluginId) && isMenuWidgetVisible(widget.id)
+      sourceIsEnabled(widget.ownerId) && isMenuWidgetVisible(widget.id)
     }
     saveConfigs()
   }
@@ -158,7 +174,7 @@ class WidgetRegistry: ObservableObject {
     forcedVisibility: [String: Bool]
   ) -> (sorted: [W], ordered: [W]) {
     let configs = loadConfigsDict()
-    let enabledPlugins = Set(PluginRegistry.shared.plugins.filter { $0.isEnabled }.map { $0.id })
+    let enabledOwners = Set(liveSources.filter { $0.isEnabled }.map(\.id))
 
     // Sort by saved position (or widget priority as default)
     let sorted = widgets.sorted { lhs, rhs in
@@ -168,8 +184,8 @@ class WidgetRegistry: ObservableObject {
     }
 
     let ordered = sorted.filter { widget in
-      let pluginEnabled = enabledPlugins.contains(widget.pluginId)
-      return pluginEnabled && (forcedVisibility[widget.id] ?? configs[widget.id]?.isVisible ?? true)
+      let ownerEnabled = enabledOwners.contains(widget.ownerId)
+      return ownerEnabled && (forcedVisibility[widget.id] ?? configs[widget.id]?.isVisible ?? true)
     }
 
     return (sorted: sorted, ordered: ordered)
@@ -220,5 +236,17 @@ class WidgetRegistry: ObservableObject {
       UserDefaults.standard.set(data, forKey: configKey)
       Logger.debug("Saved \(configs.count) widget configs")
     }
+  }
+}
+
+// MARK: - Weak source box
+
+/// Weak reference box so the registry doesn't keep sources alive —
+/// `PluginRegistry` owns plugins, `KeyboardNavigation` is a singleton.
+private struct WeakWidgetSource {
+  weak var source: (any WidgetSource)?
+
+  init(_ source: any WidgetSource) {
+    self.source = source
   }
 }

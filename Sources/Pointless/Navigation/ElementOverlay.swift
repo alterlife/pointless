@@ -153,7 +153,7 @@ struct OverlayContentView: View {
 
   private var escHint: some View {
     let text = state.scrollTargetFrame != nil
-      ? "j/k scroll  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
+      ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
       : "type a letter to jump  ·  ⌫ back  ·  ESC cancel"
     return Text(text)
       .font(.system(size: 11, weight: .medium, design: .rounded))

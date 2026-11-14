@@ -17,9 +17,6 @@ protocol Plugin: ObservableObject {
   /// SF Symbol for the settings tab icon, e.g. `"cpu"`, `"keyboard"`
   var icon: String { get }
 
-  /// Fallback text for the menu bar when `menuBarView()` returns nil
-  var menuBarText: String { get }
-
   /// Whether this plugin is currently active
   var isEnabled: Bool { get set }
 
@@ -29,12 +26,6 @@ protocol Plugin: ObservableObject {
 
   /// The settings this plugin exposes in the Settings UI
   func settings() -> PluginSettings
-
-  /// Optional custom NSView for the menu bar. Return nil to use `menuBarText`.
-  func menuBarView() -> NSView?
-
-  /// The view shown inside the dropdown menu for this plugin
-  func detailView() -> AnyView
 
   /// Apply a settings dictionary to this plugin's `@Published` properties
   func configure(with values: [String: Any])
@@ -52,8 +43,6 @@ protocol Plugin: ObservableObject {
 
 extension Plugin {
   var icon: String { "puzzlepiece" }
-  func menuBarView() -> NSView? { nil }
-  func detailView() -> AnyView { AnyView(Text(name)) }
   func initialize() {}
   func menuBarWidgets() -> [MenuBarWidget] { [] }
   func menuWidgets() -> [MenuWidget] { [] }
@@ -63,15 +52,13 @@ extension Plugin {
 
 /// A type-erased `Plugin` that forwards all calls to the underlying concrete plugin.
 /// Used so heterogeneous plugins can live in a single array.
+@MainActor
 class AnyPlugin: ObservableObject {
   let id: String
   let name: String
   let icon: String
 
-  private let _menuBarText: () -> String
   private let _isEnabled: () -> Bool
-  private let _menuBarView: () -> NSView?
-  private let _detailView: () -> AnyView
   private let _settings: () -> PluginSettings
   private let _configure: ([String: Any]) -> Void
   private let _start: () -> Void
@@ -88,10 +75,7 @@ class AnyPlugin: ObservableObject {
     name = plugin.name
     icon = plugin.icon
 
-    _menuBarText    = { plugin.menuBarText }
     _isEnabled      = { plugin.isEnabled }
-    _menuBarView    = { plugin.menuBarView() }
-    _detailView     = { plugin.detailView() }
     _settings       = { plugin.settings() }
     _configure      = { plugin.configure(with: $0) }
     _start          = { plugin.start() }
@@ -108,12 +92,9 @@ class AnyPlugin: ObservableObject {
     .store(in: &cancellables)
   }
 
-  var menuBarText: String { _menuBarText() }
   var isEnabled: Bool { _isEnabled() }
 
   func settings() -> PluginSettings { _settings() }
-  func menuBarView() -> NSView? { _menuBarView() }
-  func detailView() -> AnyView { _detailView() }
   func configure(with values: [String: Any]) { _configure(values) }
   func start() { _start() }
   func stop() { _stop() }
@@ -122,6 +103,8 @@ class AnyPlugin: ObservableObject {
   func menuBarWidgets() -> [MenuBarWidget] { _menuBarWidgets() }
   func menuWidgets() -> [MenuWidget] { _menuWidgets() }
 }
+
+extension AnyPlugin: WidgetSource {}
 
 // MARK: - Observable Plugin View
 

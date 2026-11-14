@@ -1,31 +1,33 @@
 import SwiftUI
 
-/// Auto-generated settings UI from plugin definitions
+/// Auto-generated settings UI: the core navigation feature first,
+/// optional plugins and widgets behind it.
 public struct SettingsView: View {
   public init() {}
 
   @ObservedObject var pluginRegistry = PluginRegistry.shared
   @ObservedObject var widgetRegistry = WidgetRegistry.shared
+  @ObservedObject var navigation = KeyboardNavigation.shared
   @State var values: [String: [String: Any]] = [:]
-  @State private var selectedTab: String = "pointless.keyboard"
+  @State private var selectedTab: String = KeyboardNavigation.shared.id
   @State private var draggedMenuBarWidgetId: String?
   @State private var draggedMenuWidgetId: String?
 
   public var body: some View {
     TabView(selection: $selectedTab) {
-      // Pointless tab (keyboard plugin settings — always visible)
-      keyboardSettingsTab()
+      // Pointless tab — the core navigation settings, always first
+      settingsTab(for: navigation)
         .tabItem { Label("Pointless", systemImage: "keyboard") }
-        .tag("pointless.keyboard")
+        .tag(navigation.id)
 
       // Plugins tab — card layout with per-widget toggles
       pluginsTab()
         .tabItem { Label("Plugins", systemImage: "puzzlepiece.extension") }
         .tag("plugins")
 
-      // Conditional per-plugin settings tabs (only when enabled, not keyboard)
-      ForEach(enabledNonKeyboardPlugins, id: \.id) { plugin in
-        pluginSettingsTab(for: plugin)
+      // Conditional per-plugin settings tabs (only when enabled)
+      ForEach(enabledPlugins, id: \.id) { plugin in
+        settingsTab(for: plugin)
           .tabItem { Label(plugin.name, systemImage: plugin.icon) }
           .tag(plugin.id)
       }
@@ -36,20 +38,17 @@ public struct SettingsView: View {
     }
   }
 
-  private var enabledNonKeyboardPlugins: [AnyPlugin] {
-    pluginRegistry.plugins.filter { $0.isEnabled && $0.id != "pointless.keyboard" }
+  private var enabledPlugins: [AnyPlugin] {
+    pluginRegistry.plugins.filter { $0.isEnabled }
   }
 
-  // MARK: - Pointless Tab (Keyboard Settings)
+  /// Everything whose settings this view renders and persists.
+  var allSettingsHosts: [any SettingsHost] {
+    [navigation] + pluginRegistry.plugins.map { $0 as any SettingsHost }
+  }
 
-  @ViewBuilder
-  private func keyboardSettingsTab() -> some View {
-    if let keyboard = pluginRegistry.plugins.first(where: { $0.id == "pointless.keyboard" }) {
-      pluginSettingsTab(for: keyboard)
-    } else {
-      Text("Keyboard plugin not found")
-        .foregroundColor(.secondary)
-    }
+  func settingsHost(for id: String) -> (any SettingsHost)? {
+    allSettingsHosts.first { $0.id == id }
   }
 
   // MARK: - Plugins Tab
@@ -84,6 +83,10 @@ public struct SettingsView: View {
         .font(.headline)
         .foregroundColor(.secondary)
 
+      Text("Optional monitoring widgets. Pointless itself works without any of them.")
+        .font(.caption)
+        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+
       VStack(spacing: 0) {
         ForEach(Array(pluginRegistry.plugins.enumerated()), id: \.element.id) { index, plugin in
           if index > 0 {
@@ -109,9 +112,9 @@ public struct SettingsView: View {
 
       Spacer()
 
-      if plugin.isEnabled && pluginHasSettings(plugin) {
+      if plugin.isEnabled && !plugin.settings().definitions.isEmpty {
         Button("Configure") {
-          selectedTab = plugin.id == "pointless.keyboard" ? "pointless.keyboard" : plugin.id
+          selectedTab = plugin.id
         }
         .buttonStyle(.borderless)
         .font(.caption)
@@ -125,10 +128,6 @@ public struct SettingsView: View {
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
-  }
-
-  private func pluginHasSettings(_ plugin: AnyPlugin) -> Bool {
-    plugin.id == "pointless.keyboard" || !plugin.settings().definitions.isEmpty
   }
 
   // MARK: - Widget List Sections
@@ -186,7 +185,7 @@ public struct SettingsView: View {
           widgetRow(
             widget: widget,
             isVisible: visibilityBinding(widget.id),
-            isPluginEnabled: pluginEnabled(for: widget.pluginId)
+            isPluginEnabled: sourceEnabled(for: widget.ownerId)
           )
           .onDrag {
             draggedId.wrappedValue = widget.id
@@ -208,7 +207,7 @@ public struct SettingsView: View {
     isVisible: Binding<Bool>,
     isPluginEnabled: Bool
   ) -> some View {
-    let pluginIcon = pluginRegistry.plugins.first { $0.id == widget.pluginId }?.icon ?? "puzzlepiece"
+    let pluginIcon = widgetRegistry.sourceIcon(widget.ownerId) ?? "puzzlepiece"
 
     HStack(spacing: 10) {
       Image(systemName: "line.3.horizontal")
@@ -236,29 +235,29 @@ public struct SettingsView: View {
     .opacity(isPluginEnabled ? 1.0 : 0.5)
   }
 
-  private func pluginEnabled(for pluginId: String) -> Bool {
-    pluginRegistry.plugins.first { $0.id == pluginId }?.isEnabled ?? false
+  private func sourceEnabled(for ownerId: String) -> Bool {
+    widgetRegistry.sourceIsEnabled(ownerId)
   }
 
-  // MARK: - Plugin Settings Tab
+  // MARK: - Settings Tab (navigation or plugin)
 
   @ViewBuilder
-  private func pluginSettingsTab(for plugin: AnyPlugin) -> some View {
+  private func settingsTab(for host: any SettingsHost) -> some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        Text("\(plugin.name) Settings")
+        Text("\(host.name) Settings")
           .font(.title)
           .fontWeight(.bold)
 
         Divider()
 
-        if plugin.settings().definitions.isEmpty {
+        if host.settings().definitions.isEmpty {
           Text("No settings available")
             .font(.caption)
             .foregroundColor(.secondary)
         } else {
-          ForEach(plugin.settings().definitions) { definition in
-            settingView(for: definition, plugin: plugin)
+          ForEach(host.settings().definitions) { definition in
+            settingView(for: definition, host: host)
           }
         }
       }

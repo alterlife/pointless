@@ -1,7 +1,7 @@
 import SwiftUI
 
-struct KeyboardMenuWidgetView: View {
-  @ObservedObject var plugin: KeyboardPlugin
+struct NavigationMenuWidgetView: View {
+  @ObservedObject var navigation: KeyboardNavigation
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -16,14 +16,14 @@ struct KeyboardMenuWidgetView: View {
     HStack {
       Image(systemName: "cursorarrow.click.2")
         .font(.title2)
-        .foregroundColor(plugin.isEnabled ? .accentColor : .secondary)
+        .foregroundColor(navigation.isEnabled ? .accentColor : .secondary)
 
       VStack(alignment: .leading, spacing: 2) {
         HStack {
           Text("Pointless")
             .font(.headline)
           Spacer()
-          Text(plugin.shortcutDisplay)
+          Text(navigation.shortcutDisplay)
             .font(.caption)
             .foregroundColor(.secondary)
             .padding(.horizontal, 6)
@@ -39,12 +39,12 @@ struct KeyboardMenuWidgetView: View {
 
   private var statusText: some View {
     HStack(spacing: 4) {
-      if plugin.isEnabled {
+      if navigation.isEnabled {
         Text("Ready")
           .foregroundColor(.secondary)
-        if plugin.sessionJumpCount > 0 {
+        if navigation.sessionJumpCount > 0 {
           Text("·").foregroundColor(.secondary)
-          Text("\(plugin.sessionJumpCount) jumps").foregroundColor(.secondary)
+          Text("\(navigation.sessionJumpCount) jumps").foregroundColor(.secondary)
         }
       } else {
         Text("Disabled")
@@ -59,20 +59,20 @@ struct KeyboardMenuWidgetView: View {
       Button {
         MenuBar.dismissMenu()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-          NotificationCenter.default.post(name: KeyboardPlugin.activateNotification, object: nil)
+          NotificationCenter.default.post(name: KeyboardNavigation.activateNotification, object: nil)
         }
       } label: {
         Label("Activate", systemImage: "keyboard")
           .font(.caption)
       }
       .buttonStyle(.borderless)
-      .disabled(!plugin.isEnabled)
+      .disabled(!navigation.isEnabled)
 
       Spacer()
 
       Toggle("", isOn: Binding(
-        get: { plugin.isEnabled },
-        set: { plugin.configure(with: ["enabled": $0]) }
+        get: { navigation.isEnabled },
+        set: { navigation.configure(with: ["enabled": $0]) }
       ))
       .toggleStyle(.switch)
       .controlSize(.small)
