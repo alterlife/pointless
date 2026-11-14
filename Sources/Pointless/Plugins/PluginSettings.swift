@@ -12,7 +12,7 @@ struct PluginSettings {
 /// Definition of a single setting
 enum SettingDefinition: Identifiable {
   case slider(key: String, label: String, range: ClosedRange<Double>, defaultValue: Double, step: Double = 0.1)
-  case toggle(key: String, label: String, defaultValue: Bool)
+  case toggle(key: String, label: String, defaultValue: Bool, description: String? = nil)
   case hotkey(key: String, label: String, defaultValue: String)
   case text(key: String, label: String, defaultValue: String)
   case dropdown(key: String, label: String, options: [String], defaultValue: String)
@@ -31,7 +31,7 @@ enum SettingDefinition: Identifiable {
   var key: String {
     switch self {
     case .slider(let key, _, _, _, _),
-         .toggle(let key, _, _),
+         .toggle(let key, _, _, _),
          .hotkey(let key, _, _),
          .text(let key, _, _),
          .dropdown(let key, _, _, _),
@@ -45,7 +45,7 @@ enum SettingDefinition: Identifiable {
   var label: String {
     switch self {
     case .slider(_, let label, _, _, _),
-         .toggle(_, let label, _),
+         .toggle(_, let label, _, _),
          .hotkey(_, let label, _),
          .text(_, let label, _),
          .dropdown(_, let label, _, _),
@@ -60,7 +60,7 @@ enum SettingDefinition: Identifiable {
     switch self {
     case .slider(_, _, _, let defaultValue, _):
       return defaultValue
-    case .toggle(_, _, let defaultValue):
+    case .toggle(_, _, let defaultValue, _):
       return defaultValue
     case .hotkey(_, _, let defaultValue):
       return defaultValue

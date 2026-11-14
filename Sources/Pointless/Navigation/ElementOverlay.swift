@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Empty-scan hint
 
 @MainActor
-func showEmptyHint() {
+func showEmptyHint(_ text: String = "No interactive elements found") {
   let win = NSWindow(
     contentRect: NSRect(x: 0, y: 0, width: 260, height: 36),
     styleMask: .borderless,
@@ -19,7 +19,7 @@ func showEmptyHint() {
   win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
   let label = NSHostingView(rootView:
-    Text("No interactive elements found")
+    Text(text)
       .font(.system(size: 12, weight: .medium, design: .rounded))
       .foregroundColor(.white)
       .padding(.horizontal, 14)
@@ -56,18 +56,29 @@ extension CGRect {
 
 // MARK: - Coordinate utilities (internal for testability)
 
-/// Anchor point in SwiftUI canvas coords (top-left origin) for a discovered element
+private let badgeAnchorInset: CGFloat = 10
+
+private func elementAnchor(screenFrame: CGRect) -> CGPoint {
+  CGPoint(x: anchorX(in: screenFrame), y: screenFrame.midY)
+}
+
+// Landscape controls center their content; everything else anchors left.
+private func anchorX(in frame: CGRect) -> CGFloat {
+  guard frame.width > frame.height else {
+    return frame.minX + min(badgeAnchorInset, frame.width / 4)
+  }
+  return frame.midX
+}
+
 internal func anchorPoint(screenFrame: CGRect, screenRect: CGRect) -> CGPoint {
-  CGPoint(
-    x: screenFrame.minX - screenRect.minX + 4,
-    y: screenRect.maxY - screenFrame.maxY + 4
-  )
+  let anchor = elementAnchor(screenFrame: screenFrame)
+  return CGPoint(x: anchor.x - screenRect.minX, y: screenRect.maxY - anchor.y)
 }
 
 /// Frame of the screen that draws an element's badge — the one holding its
 /// anchor, else the first it overlaps. Keeps each badge on exactly one overlay.
 internal func badgeScreen(for elementFrame: CGRect, among screenFrames: [CGRect]) -> CGRect? {
-  let anchor = CGPoint(x: elementFrame.minX + 4, y: elementFrame.maxY - 4)
+  let anchor = elementAnchor(screenFrame: elementFrame)
   return screenFrames.first { $0.contains(anchor) }
     ?? screenFrames.first { $0.intersects(elementFrame) }
 }
@@ -146,6 +157,7 @@ final class OverlayState: ObservableObject {
   @Published var labeledElements: [LabeledElement] = []
   @Published var typedPrefix: String = ""
   @Published var scrollTargetFrame: CGRect?
+  @Published var showScrollHint = false
 
   var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
   var textColor = Color.black
@@ -201,8 +213,12 @@ struct OverlayContentView: View {
   let screen: NSScreen
   let allScreenFrames: [CGRect]
 
+  private var hintVisible: Bool {
+    state.scrollTargetFrame == nil || state.showScrollHint
+  }
+
   var body: some View {
-    let hint = hintFrame()
+    let hint = hintVisible ? hintFrame() : nil
     return ZStack(alignment: .bottomTrailing) {
       Canvas { ctx, size in
         let onScreen = state.labeledElements.filter {
@@ -217,7 +233,7 @@ struct OverlayContentView: View {
         let badgeRects = placeBadges(
           anchors: anchors, badgeSizes: badgeSizes, viewSize: size,
           topInset: screen.safeAreaInsets.top,
-          reservedRects: [hint.frame.insetBy(dx: -4, dy: -4)]
+          reservedRects: hint.map { [$0.frame.insetBy(dx: -4, dy: -4)] } ?? []
         )
         for (index, labeled) in onScreen.enumerated() {
           drawElement(labeled, badgeRect: badgeRects[index], anchor: anchors[index], in: &ctx)
@@ -228,10 +244,12 @@ struct OverlayContentView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-      escHint
-        .padding(.trailing, 12)
-        .padding(.bottom, 12 + screen.safeAreaInsets.bottom)
-        .offset(y: -hint.nudge)
+      if let hint {
+        escHint
+          .padding(.trailing, 12)
+          .padding(.bottom, 12 + screen.safeAreaInsets.bottom)
+          .offset(y: -hint.nudge)
+      }
     }
   }
 

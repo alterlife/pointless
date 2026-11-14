@@ -34,7 +34,7 @@ final class PluginSettingsTests: XCTestCase {
     XCTAssertEqual(settings.definitions.count, 1)
 
     guard let first = settings.definitions.first,
-          case .toggle(let key, let label, let defaultValue) = first else {
+          case .toggle(let key, let label, let defaultValue, _) = first else {
       XCTFail("Expected toggle definition")
       return
     }

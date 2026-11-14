@@ -19,6 +19,7 @@ enum AXRoleName {
   static let incrementor = "AXIncrementor"
   static let slider = "AXSlider"
   static let scrollArea = "AXScrollArea"
+  static let scrollBar = "AXScrollBar"
   static let webArea = "AXWebArea"
   static let browser = "AXBrowser"
   static let application = "AXApplication"
@@ -120,6 +121,16 @@ struct AXElement {
   }
 
   // MARK: Actions
+
+  var hasScrollIndicators: Bool {
+    var names: CFArray?
+    guard AXUIElementCopyAttributeNames(raw, &names) == .success,
+          let attrs = names as? [String],
+          attrs.contains(where: { $0.contains("ScrollBar") }) else {
+      return children.contains { $0.role == AXRoleName.scrollBar }
+    }
+    return true
+  }
 
   /// Whether the element supports the AXPress action (clickable regardless of role)
   var supportsPress: Bool {

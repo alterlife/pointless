@@ -42,22 +42,10 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
         options: ["text", "graph", "both"],
         defaultValue: "both"
       ),
-      .toggle(
-        key: "showIcon",
-        label: "Show Icon",
-        defaultValue: true
-      ),
-      .toggle(
-        key: "showUpdateText",
-        label: "Show Update Interval",
-        defaultValue: true
-      ),
+      .toggle(key: "showIcon", label: "Show Icon", defaultValue: true),
+      .toggle(key: "showUpdateText", label: "Show Update Interval", defaultValue: true),
       .section(label: "CPU Cores"),
-      .toggle(
-        key: "showCores",
-        label: "Show Individual Cores",
-        defaultValue: false
-      ),
+      .toggle(key: "showCores", label: "Show Individual Cores", defaultValue: false),
       .dropdown(
         key: "coreLayout",
         label: "Core Layout",
@@ -77,11 +65,7 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
         defaultValue: "#007AFF"
       ),
       .section(label: "General"),
-      .toggle(
-        key: "enabled",
-        label: "Enabled",
-        defaultValue: false
-      ),
+      .toggle(key: "enabled", label: "Enabled", defaultValue: false),
       .slider(
         key: "updateInterval",
         label: "Update Interval (seconds)",

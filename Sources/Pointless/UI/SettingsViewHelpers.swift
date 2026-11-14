@@ -47,8 +47,15 @@ extension SettingsView {
         step: step
       )
 
-    case .toggle(let key, let label, let defaultValue):
-      Toggle(label, isOn: binding(for: host.id, key: key, default: defaultValue))
+    case .toggle(let key, let label, let defaultValue, let description):
+      VStack(alignment: .leading, spacing: 2) {
+        Toggle(label, isOn: binding(for: host.id, key: key, default: defaultValue))
+        if let description {
+          Text(description)
+            .font(.caption)
+            .foregroundColor(Color(NSColor.tertiaryLabelColor))
+        }
+      }
 
     case .text(let key, let label, let defaultValue):
       VStack(alignment: .leading) {

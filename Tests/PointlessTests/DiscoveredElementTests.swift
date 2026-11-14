@@ -48,14 +48,14 @@ final class DiscoveredElementTests: XCTestCase {
     XCTAssertEqual([tall, short].mergeSharedAnchors().count, 2)
   }
 
-  // MARK: consolidate
+  // MARK: deduplicateAndRegroup
 
   func testScrollScanKeepsSameAnchorAreas() {
     // Inner area is below beginScroll's 50pt minimum — merging must not drop the outer one.
     let outer = element(CGRect(x: 100, y: 100, width: 600, height: 400), role: "AXScrollArea")
     let inner = element(CGRect(x: 100, y: 400, width: 40, height: 100), role: "AXScrollArea")
 
-    let result = ElementDiscovery.consolidate([outer, inner], mode: .scrollable, nodeParent: [:])
+    let result = ElementDiscovery.deduplicateAndRegroup([outer, inner], mode: .scrollable, nodeParent: [:])
 
     XCTAssertEqual(result.count, 2)
   }
@@ -64,7 +64,7 @@ final class DiscoveredElementTests: XCTestCase {
     let container = element(CGRect(x: 100, y: 300, width: 200, height: 200))
     let control = element(CGRect(x: 100, y: 480, width: 40, height: 20))
 
-    let result = ElementDiscovery.consolidate([container, control], mode: .interactive, nodeParent: [:])
+    let result = ElementDiscovery.deduplicateAndRegroup([container, control], mode: .interactive, nodeParent: [:])
 
     XCTAssertEqual(result.count, 1)
   }
@@ -87,7 +87,7 @@ final class DiscoveredElementTests: XCTestCase {
       ))
     }
 
-    let result = ElementDiscovery.consolidate(elements, mode: .interactive, nodeParent: nodeParent)
+    let result = ElementDiscovery.deduplicateAndRegroup(elements, mode: .interactive, nodeParent: nodeParent)
 
     XCTAssertEqual(result.count, 28)
     XCTAssertTrue(result.allSatisfy { $0.groupingAncestor == .walkNode(1) })

@@ -1,7 +1,7 @@
 import AppKit
 
-/// Identity of the ancestor for labeling. same value = shared label prefix
-/// Not necessarily the direct AX parent
+/// Ancestor identity for label grouping — equal values share a label prefix.
+/// Not necessarily the direct AX parent.
 enum GroupingAncestor: Hashable {
   /// Traversal node id - indexes DiscoveryState.nodeParent.
   case walkNode(Int)
@@ -20,13 +20,11 @@ struct DiscoveredElement {
   /// The element's own traversal node id — nil for elements found without a tree walk.
   var walkNodeID: Int?
 
-  /// Identity for deduplication across passes — two discoveries of the same
-  /// role at the same frame are the same control.
   var dedupKey: String { "\(role)|\(screenFrame)" }
 }
 
 extension Array where Element == DiscoveredElement {
-  /// Sort top-to-bottom (highest Y first in NSScreen coords), left-to-right within each row.
+  /// Top-to-bottom in NSScreen coords (highest minY first), left-to-right.
   func sortedByPosition() -> [DiscoveredElement] {
     sorted { lhs, rhs in
       if lhs.screenFrame.minY != rhs.screenFrame.minY { return lhs.screenFrame.minY > rhs.screenFrame.minY }
@@ -50,8 +48,8 @@ extension Array where Element == DiscoveredElement {
     }
   }
 
-  /// Chromium wraps controls in single-child AXGroups — climb past ancestors
-  /// holding only one surviving discovery so they don't get their own label prefix.
+  // Chromium wraps controls in single-child AXGroups — climb past ancestors
+  // holding only one surviving discovery.
   func regroupedForLabels(nodeParent: [Int: Int]) -> [DiscoveredElement] {
     let counts = subtreeCounts(nodeParent: nodeParent)
     return map { element in
@@ -67,8 +65,7 @@ extension Array where Element == DiscoveredElement {
     }
   }
 
-  /// Discoveries in each walk node's subtree (inclusive), counting only these
-  /// elements — dedup and anchor merging drop elements the walk already saw.
+  /// Post-dedup discovery counts per walk-node subtree.
   private func subtreeCounts(nodeParent: [Int: Int]) -> [Int: Int] {
     var counts: [Int: Int] = [:]
     for element in self {
