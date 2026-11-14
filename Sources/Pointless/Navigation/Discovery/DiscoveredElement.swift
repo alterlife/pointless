@@ -1,11 +1,9 @@
 import AppKit
 
-/// Identity of the ancestor an element groups under for labeling — same value
-/// means shared label prefix. Not necessarily the direct AX parent: walk elements
-/// reference traversal node ids climbed to the nearest ancestor with multiple
-/// discoveries; hit-test elements reference their AXParent hash.
+/// Identity of the ancestor for labeling. same value = shared label prefix
+/// Not necessarily the direct AX parent
 enum GroupingAncestor: Hashable {
-  /// Traversal node id — indexes DiscoveryState.nodeParent/subtreeCount.
+  /// Traversal node id - indexes DiscoveryState.nodeParent/subtreeCount.
   case walkNode(Int)
   /// CFHash of the element's AXParent AXUIElement.
   case hitTestParent(UInt)
