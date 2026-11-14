@@ -43,7 +43,7 @@ struct HitTestPass: DiscoveryPass {
         let parent = target.parent
         let element = DiscoveredElement(
           element: target, screenFrame: frame, role: role, screen: screen,
-          group: .hitTestParent(CFHash(parent?.raw ?? target.raw))
+          groupingAncestor: .hitTestParent(CFHash(parent?.raw ?? target.raw))
         )
         guard seen.insert(element.dedupKey).inserted else { continue }
         state.results.append(element)

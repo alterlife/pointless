@@ -10,7 +10,7 @@ final class DiscoveredElementTests: XCTestCase {
       screenFrame: frame,
       role: role,
       screen: NSScreen.screens[0],
-      group: .walkNode(1)
+      groupingAncestor: .walkNode(1)
     )
   }
 

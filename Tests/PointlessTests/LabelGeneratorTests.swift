@@ -4,18 +4,18 @@ import ApplicationServices
 import CoreGraphics
 
 final class LabelGeneratorTests: XCTestCase {
-  private func element(group: DiscoveryGroup, x: CGFloat = 0) -> DiscoveredElement {
+  private func element(groupingAncestor: GroupingAncestor, x: CGFloat = 0) -> DiscoveredElement {
     DiscoveredElement(
       element: AXElement(raw: AXUIElementCreateApplication(getpid())),
       screenFrame: CGRect(x: x, y: 0, width: 10, height: 10),
       role: "AXButton",
       screen: NSScreen.screens[0],
-      group: group
+      groupingAncestor: groupingAncestor
     )
   }
 
   private func makeElements(count: Int, groups: Int) -> [DiscoveredElement] {
-    (0..<count).map { element(group: .walkNode($0 % groups), x: CGFloat($0) * 20) }
+    (0..<count).map { element(groupingAncestor: .walkNode($0 % groups), x: CGFloat($0) * 20) }
   }
 
   // MARK: Flat labeling
@@ -40,7 +40,7 @@ final class LabelGeneratorTests: XCTestCase {
     let labeled = LabelGenerator.label(makeElements(count: 40, groups: 4))
     XCTAssertEqual(labeled.count, 40)
 
-    let byGroup = Dictionary(grouping: labeled, by: { $0.element.group })
+    let byGroup = Dictionary(grouping: labeled, by: { $0.element.groupingAncestor })
     XCTAssertEqual(byGroup.count, 4)
     for (_, members) in byGroup {
       let prefixes = Set(members.map { String($0.label.prefix(1)) })
@@ -71,7 +71,7 @@ final class LabelGeneratorTests: XCTestCase {
     var elements: [DiscoveredElement] = []
     for i in 0..<60 {
       let group = i < 40 ? 0 : (i - 40) % 4 + 1
-      elements.append(element(group: .walkNode(group), x: CGFloat(i) * 20))
+      elements.append(element(groupingAncestor: .walkNode(group), x: CGFloat(i) * 20))
     }
     let labeled = LabelGenerator.label(elements)
     let labels = labeled.map(\.label)

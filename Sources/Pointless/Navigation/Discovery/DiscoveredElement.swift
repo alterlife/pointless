@@ -1,7 +1,7 @@
 import AppKit
 
 /// Elements sharing a group share a label prefix.
-enum DiscoveryGroup: Hashable {
+enum GroupingAncestor: Hashable {
   case walkNode(Int)
   case hitTestParent(UInt)
 }
@@ -12,7 +12,7 @@ struct DiscoveredElement {
   let screenFrame: CGRect   // NSScreen coords (bottom-left origin)
   let role: String
   let screen: NSScreen
-  let group: DiscoveryGroup
+  let groupingAncestor: GroupingAncestor
 
   /// Identity for deduplication across passes — two discoveries of the same
   /// role at the same frame are the same control.

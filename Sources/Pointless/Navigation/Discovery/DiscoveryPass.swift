@@ -84,7 +84,7 @@ struct ElementTreeWalker {
          let screen = context.screens.first(where: { $0.frame.intersects(frame) }) {
         state.results.append(DiscoveredElement(
           element: element, screenFrame: frame, role: role, screen: screen,
-          group: .walkNode(parentID)
+          groupingAncestor: .walkNode(parentID)
         ))
       }
     }

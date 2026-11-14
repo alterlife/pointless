@@ -32,15 +32,17 @@ enum LabelGenerator {
   }
 
   /// First-appearance order — earlier groups get the home-row prefixes.
-  private static func labelGroups(for elements: [DiscoveredElement]) -> [(group: DiscoveryGroup, indices: [Int])]? {
-    var order: [DiscoveryGroup] = []
-    var indexByGroup: [DiscoveryGroup: [Int]] = [:]
+  private static func labelGroups(
+    for elements: [DiscoveredElement]
+  ) -> [(ancestor: GroupingAncestor, indices: [Int])]? {
+    var order: [GroupingAncestor] = []
+    var indexByGroup: [GroupingAncestor: [Int]] = [:]
     for (index, element) in elements.enumerated() {
-      if indexByGroup[element.group] == nil { order.append(element.group) }
-      indexByGroup[element.group, default: []].append(index)
+      if indexByGroup[element.groupingAncestor] == nil { order.append(element.groupingAncestor) }
+      indexByGroup[element.groupingAncestor, default: []].append(index)
     }
     guard order.count > 1 else { return nil }
-    return order.map { (group: $0, indices: indexByGroup[$0] ?? []) }
+    return order.map { (ancestor: $0, indices: indexByGroup[$0] ?? []) }
   }
 
   private static func flatLabel(_ elements: [DiscoveredElement]) -> [LabeledElement] {
@@ -50,15 +52,15 @@ enum LabelGenerator {
 
   private static func hierarchicalLabel(
     _ elements: [DiscoveredElement],
-    groups: [(group: DiscoveryGroup, indices: [Int])]
+    groups: [(ancestor: GroupingAncestor, indices: [Int])]
   ) -> [LabeledElement] {
     let prefixLength = comboLength(for: groups.count)
     let prefixes = combos(count: groups.count, length: prefixLength)
     var result = [LabeledElement?](repeating: nil, count: elements.count)
-    for (groupIndex, group) in groups.enumerated() {
-      let suffixLength = comboLength(for: group.indices.count)
-      let suffixes = combos(count: group.indices.count, length: suffixLength)
-      for (itemIndex, elementIndex) in group.indices.enumerated() {
+    for (groupIndex, cluster) in groups.enumerated() {
+      let suffixLength = comboLength(for: cluster.indices.count)
+      let suffixes = combos(count: cluster.indices.count, length: suffixLength)
+      for (itemIndex, elementIndex) in cluster.indices.enumerated() {
         result[elementIndex] = LabeledElement(
           label: prefixes[groupIndex] + suffixes[itemIndex],
           element: elements[elementIndex]
