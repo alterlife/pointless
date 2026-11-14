@@ -12,15 +12,12 @@ final class ElementDiscovery {
   // Browsers expose no AXScrollArea — AXWebArea is the scroll container.
   private static let scrollableRoles: Set<String> = [AXRoleName.scrollArea, AXRoleName.webArea]
 
-  // Gecko puts AXPress on nearly every element — past this ratio it's all noise.
-  private static let maxPressableRatio = 0.5
-  private static let minSampleForPressCheck = 30
-
   // WebKit/Chromium build the AX tree lazily once assistive access is enabled.
   private static let assistiveAccessSettleMicroseconds: UInt32 = 300_000
 
   private let passes: [DiscoveryPass] = [
     TreeWalkPass(),
+    PressFallbackPass(),
     FocusedElementFallbackPass(),
     HitTestPass()
   ]
@@ -74,17 +71,7 @@ final class ElementDiscovery {
                    logger: Logger.pluginLifecycle)
     }
 
-    let pressFallbackIsTrustworthy = state.visitedCount < Self.minSampleForPressCheck
-      || state.pressableRatio <= Self.maxPressableRatio
-    if !pressFallbackIsTrustworthy, !state.pressFallbackCandidates.isEmpty {
-      Logger.debug("Discovery: skipped \(state.pressFallbackCandidates.count) press-fallback elements " +
-                   "(\(Int(state.pressableRatio * 100))% of UI is pressable)",
-                   logger: Logger.pluginLifecycle)
-    }
-    let candidates = pressFallbackIsTrustworthy
-      ? state.results + state.pressFallbackCandidates
-      : state.results
-    let unique = Self.deduplicateAndRegroup(candidates, mode: mode, nodeParent: state.nodeParent)
+    let unique = Self.deduplicateAndRegroup(state.results, mode: mode, nodeParent: state.nodeParent)
 
     Logger.debug(
       "Discovery: \(unique.count) elements, \(state.visitedCount) visited, " +

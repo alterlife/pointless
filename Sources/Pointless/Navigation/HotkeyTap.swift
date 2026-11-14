@@ -31,8 +31,9 @@ final class HotkeyTap {
     self.onHotkey = onHotkey
   }
 
-  func start() {
-    guard tap == nil else { return }
+  @discardableResult
+  func start() -> Bool {
+    guard tap == nil else { return true }
     let mask = CGEventMask(1) << CGEventType.keyDown.rawValue
     let selfPtr = Unmanaged.passUnretained(self).toOpaque()
     guard let newTap = CGEvent.tapCreate(
@@ -45,13 +46,14 @@ final class HotkeyTap {
     ) else {
       Logger.error("Failed to create hotkey event tap — Input Monitoring permission may be missing",
                    logger: Logger.pluginLifecycle)
-      return
+      return false
     }
     tap = newTap
     if let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, newTap, 0) {
       CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
     }
     CGEvent.tapEnable(tap: newTap, enable: true)
+    return true
   }
 
   func stop() {

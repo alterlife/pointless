@@ -27,6 +27,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
   @Published var sessionJumpCount = 0
   @Published var lastScanCount = 0
   private var captureShortcuts = true
+  var isCapturingShortcut = false
 
   // Appearance settings
   @Published var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
@@ -136,8 +137,9 @@ final class KeyboardNavigation: NSObject, ObservableObject {
       guard let self else { return }
       Task { @MainActor in self.handleActivation() }
     }
-    KeyboardOnboardingController.shared.showIfNeeded {
+    KeyboardOnboardingController.shared.showIfNeeded { [weak self] in
       Logger.info("KeyboardNavigation permissions granted", logger: Logger.pluginLifecycle)
+      self?.reinstallMonitors()
     }
   }
 
@@ -233,7 +235,10 @@ final class KeyboardNavigation: NSObject, ObservableObject {
       activation: activationHotkey,
       scrollNext: scrollNextHotkey,
       scrollPrev: scrollPrevHotkey,
-      shouldCapture: { [weak self] in self?.session == nil },
+      shouldCapture: { [weak self] in
+        guard let self else { return false }
+        return self.session == nil && !self.isCapturingShortcut
+      },
       onHotkey: { [weak self] hotkey in
         switch hotkey {
         case .activate: self?.handleActivation()
@@ -241,7 +246,10 @@ final class KeyboardNavigation: NSObject, ObservableObject {
         }
       }
     )
-    tap.start()
+    guard tap.start() else {
+      installGlobalMonitors()
+      return
+    }
     hotkeyTap = tap
   }
 
