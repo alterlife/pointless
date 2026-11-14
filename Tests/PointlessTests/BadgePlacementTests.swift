@@ -114,10 +114,11 @@ final class BadgePlacementTests: XCTestCase {
   }
 
   func testSpanningElementUsesScreenHoldingAnchor() {
-    // Top-left corner sits on the lower screen; body extends onto the upper one.
-    let element = CGRect(x: 100, y: 850, width: 50, height: 40)
+    // Visual top-left (maxY 950) sits on the upper screen; body extends down onto
+    // the lower one, which is listed first so a plain overlap check would pick it.
+    let element = CGRect(x: 100, y: 850, width: 50, height: 100)
 
-    XCTAssertEqual(badgeScreen(for: element, among: [upperScreen, lowerScreen]), lowerScreen)
+    XCTAssertEqual(badgeScreen(for: element, among: [lowerScreen, upperScreen]), upperScreen)
   }
 
   func testAnchorOffAllScreensFallsBackToOverlappingScreen() {
