@@ -1,14 +1,6 @@
 import AppKit
 import OSLog
 
-/// Finds interactive (or scrollable) elements in the frontmost window by running
-/// a pipeline of discovery passes, each covering a class of app behavior:
-///
-/// 1. `TreeWalkPass` — normal AX tree traversal from the focused window
-/// 2. `FocusedElementFallbackPass` — apps with broken window trees (Firefox)
-/// 3. `HitTestPass` — content invisible to traversal (Safari Start Page)
-///
-/// Results are deduplicated across passes before delivery.
 final class ElementDiscovery {
   private static let interactiveRoles: Set<String> = [
     AXRoleName.button, AXRoleName.link, AXRoleName.textField, AXRoleName.textArea,
