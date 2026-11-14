@@ -19,7 +19,8 @@ final class ElementDiscovery {
     TreeWalkPass(),
     PressFallbackPass(),
     FocusedElementFallbackPass(),
-    HitTestPass()
+    HitTestPass(),
+    OcclusionPass()
   ]
 
   private var cancelled = false
