@@ -61,7 +61,7 @@ final class LabelGeneratorTests: XCTestCase {
   func testTextLabelsComeFromElementText() {
     let labeled = LabelGenerator.label(
       [textElement("Save", x: 0), textElement("Cancel", x: 20)],
-      strategy: .clickableElementText
+      strategy: .useClickableElementText
     )
     XCTAssertEqual(labeled[0].label, "s")
     XCTAssertEqual(labeled[1].label, "c")
@@ -74,7 +74,7 @@ final class LabelGeneratorTests: XCTestCase {
         textElement("New Session", x: 0), textElement("New Settings", x: 20),
         textElement("New Song", x: 40)
       ],
-      strategy: .clickableElementText
+      strategy: .useClickableElementText
     )
     XCTAssertEqual(labeled[0].label, "ns")
     XCTAssertEqual(labeled[1].label, "ne")
@@ -85,7 +85,7 @@ final class LabelGeneratorTests: XCTestCase {
     // "sav" prefixes "sa" — the second Save can't extend into a conflict.
     let labeled = LabelGenerator.label(
       [textElement("Save", x: 0), textElement("Save", x: 20)],
-      strategy: .clickableElementText
+      strategy: .useClickableElementText
     )
     XCTAssertEqual(labeled[0].label, "sa")
     XCTAssertFalse(labeled[1].label.hasPrefix("sa"))
@@ -96,7 +96,7 @@ final class LabelGeneratorTests: XCTestCase {
     // "Ne" claims "n"; "Neuroport" can't take "ne"/"neu" — prefix ambiguity.
     let labeled = LabelGenerator.label(
       [textElement("Ne", x: 0), textElement("Neuroport", x: 20)],
-      strategy: .clickableElementText
+      strategy: .useClickableElementText
     )
     XCTAssertEqual(labeled[0].label, "ne")
     XCTAssertFalse(labeled[1].label.hasPrefix("ne"))
@@ -105,14 +105,14 @@ final class LabelGeneratorTests: XCTestCase {
   func testTextStrategyStaysFlatAboveGroupThreshold() {
     // 30 elements would normally go hierarchical — text strategy stays flat.
     let elements = (0..<30).map { textElement("Item \($0)", x: CGFloat($0) * 20) }
-    let labeled = LabelGenerator.label(elements, strategy: .clickableElementText)
+    let labeled = LabelGenerator.label(elements, strategy: .useClickableElementText)
     XCTAssertTrue(labeled.allSatisfy { !$0.label.contains("_") })
     XCTAssertEqual(labeled[0].label, "it")
   }
 
   func testShortTextGetsShortHint() {
     let labeled = LabelGenerator.label(
-      [textElement("OK", x: 0)], strategy: .clickableElementText
+      [textElement("OK", x: 0)], strategy: .useClickableElementText
     )
     XCTAssertEqual(labeled[0].label, "o")
   }
@@ -120,7 +120,7 @@ final class LabelGeneratorTests: XCTestCase {
   func testEmptyTextFallsBackToKeys() {
     let labeled = LabelGenerator.label(
       [element(groupingAncestor: .walkNode(0), x: 0)],
-      strategy: .clickableElementText
+      strategy: .useClickableElementText
     )
     XCTAssertEqual(labeled[0].label, "a")
   }

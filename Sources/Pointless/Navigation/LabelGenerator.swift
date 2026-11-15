@@ -33,8 +33,8 @@ enum LabelGenerator {
   private static let flatLabelLimit = 27
 
   enum LabelStrategy {
-    case homerowKeys
-    case clickableElementText
+    case useHomeRowKeys
+    case useClickableElementText
   }
 
   private static let collapsedClusterMinCount = 6
@@ -42,11 +42,11 @@ enum LabelGenerator {
 
   /// Assign labels to pre-sorted elements
   static func label(
-    _ elements: [NavigationTarget], strategy: LabelStrategy = .homerowKeys
+    _ elements: [NavigationTarget], strategy: LabelStrategy = .useHomeRowKeys
   ) -> [LabeledElement] {
     // Text hints are self-describing — group prefixes add nothing, so the
     // text strategy stays flat at any count.
-    guard strategy == .homerowKeys,
+    guard strategy == .useHomeRowKeys,
           elements.count > flatLabelLimit,
           let groups = labelGroups(for: elements)
     else {
@@ -108,21 +108,8 @@ enum LabelGenerator {
   ) -> [LabeledElement] {
     var labels = [String?](repeating: nil, count: elements.count)
     var used = Set<String>()
-    if strategy == .clickableElementText {
-      var initialCounts: [Character: Int] = [:]
-      for element in elements {
-        if let initial = firstLetter(in: element.text) {
-          initialCounts[initial, default: 0] += 1
-        }
-      }
-      for (index, element) in elements.enumerated() {
-        let initial = firstLetter(in: element.text)
-        let singleAllowed = initial.flatMap { initialCounts[$0] == 1 } ?? false
-        if let hint = textHint(for: element.text, singleAllowed: singleAllowed, avoiding: used) {
-          labels[index] = hint
-          used.insert(hint)
-        }
-      }
+    if strategy == .useClickableElementText {
+      assignTextHints(to: &labels, used: &used, elements: elements)
     }
     var pool = sortedCombos(length: comboLength(for: elements.count))
       .filter { !labelConflicts($0, with: used) }
@@ -132,6 +119,25 @@ enum LabelGenerator {
     }
     return zip(elements, labels.compactMap { $0 }).map { elem, lbl in
       LabeledElement(label: lbl, element: elem)
+    }
+  }
+
+  private static func assignTextHints(
+    to labels: inout [String?], used: inout Set<String>, elements: [NavigationTarget]
+  ) {
+    var initialCounts: [Character: Int] = [:]
+    for element in elements {
+      if let initial = firstLetter(in: element.text) {
+        initialCounts[initial, default: 0] += 1
+      }
+    }
+    for (index, element) in elements.enumerated() {
+      let initial = firstLetter(in: element.text)
+      let singleAllowed = initial.flatMap { initialCounts[$0] == 1 } ?? false
+      if let hint = textHint(for: element.text, singleAllowed: singleAllowed, avoiding: used) {
+        labels[index] = hint
+        used.insert(hint)
+      }
     }
   }
 

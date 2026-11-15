@@ -212,7 +212,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
         fadeInDuration: fadeInDuration,
         scrollSpeed: scrollSpeed,
         labelStrategy: labelStrategy == "Element Text"
-          ? .clickableElementText : .homerowKeys,
+          ? .useClickableElementText : .useHomeRowKeys,
         scrollNext: scrollNextHotkey,
         scrollPrev: scrollPrevHotkey
       ),
