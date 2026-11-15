@@ -88,6 +88,48 @@ final class DiscoveryFixtureTests: XCTestCase {
     XCTAssertEqual(state.results.count, 1)
   }
 
+  // MARK: outline rows
+
+  func testOutlineRowsBecomeTargets() {
+    let window = FixtureAXNode(role: "AXWindow", frame: windowFrame)
+    let outline = FixtureAXNode(role: "AXOutline", frame: windowFrame)
+    let row = FixtureAXNode(role: "AXRow", frame: CGRect(x: 10, y: 10, width: 200, height: 30))
+    outline.add(row)
+    window.add(outline)
+    let (state, _) = scan(window: window)
+    XCTAssertTrue(state.results.contains { $0.element.isSameElement(as: row) })
+  }
+
+  func testRowOutsideOutlineIsNotATarget() {
+    let window = FixtureAXNode(role: "AXWindow", frame: windowFrame)
+    let group = FixtureAXNode(role: "AXGroup", frame: windowFrame)
+    group.add(FixtureAXNode(role: "AXRow", frame: CGRect(x: 10, y: 10, width: 200, height: 30)))
+    window.add(group)
+    let (state, _) = scan(window: window)
+    XCTAssertTrue(state.results.isEmpty)
+  }
+
+  func testOutlineRowsIgnoredInScrollMode() {
+    let window = FixtureAXNode(role: "AXWindow", frame: windowFrame)
+    let outline = FixtureAXNode(role: "AXOutline", frame: windowFrame)
+    outline.add(FixtureAXNode(role: "AXRow", frame: CGRect(x: 10, y: 10, width: 200, height: 30)))
+    window.add(outline)
+    let app = FixtureAXNode(role: "AXApplication")
+    let ctx = context(app: app, window: window, mode: .scrollable)
+    let state = DiscoveryState()
+    TreeWalkPass().run(state: state, context: ctx)
+    XCTAssertTrue(state.results.isEmpty)
+  }
+
+  func testScrollBarContentsAreNotTargets() {
+    let window = FixtureAXNode(role: "AXWindow", frame: windowFrame)
+    let scrollBar = FixtureAXNode(role: "AXScrollBar", frame: windowFrame)
+    scrollBar.add(button(CGRect(x: 980, y: 10, width: 16, height: 16)))
+    window.add(scrollBar)
+    let (state, _) = scan(window: window)
+    XCTAssertTrue(state.results.isEmpty)
+  }
+
   // MARK: press fallback
 
   func testSparsePressableGroupIsAdopted() {
