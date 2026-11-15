@@ -7,6 +7,10 @@ import OSLog
 struct OcclusionPass: DiscoveryPass {
   let name = "occlusion"
 
+  /// Visually-hidden and hover-only controls are small; large surfaces are
+  /// almost never fully invisible, so probing them is wasted AX calls.
+  private static let probeMaxExtent: CGFloat = 200
+
   func shouldRun(state: DiscoveryState, context: DiscoveryContext) -> Bool {
     context.mode == .interactive && !state.results.isEmpty
   }
@@ -30,6 +34,7 @@ struct OcclusionPass: DiscoveryPass {
 
   private func isReachable(_ discovered: NavigationTarget, context: DiscoveryContext) -> Bool {
     let frame = discovered.screenFrame
+    guard frame.width <= Self.probeMaxExtent, frame.height <= Self.probeMaxExtent else { return true }
     let points = [
       CGPoint(x: frame.midX, y: frame.midY),
       CGPoint(x: frame.minX + frame.width * 0.25, y: frame.minY + frame.height * 0.25),
@@ -42,7 +47,7 @@ struct OcclusionPass: DiscoveryPass {
         axX: point.x, axY: context.primaryScreenHeight - point.y
       ) else { return false }
       return hit.isSameElement(as: discovered.element)
-        || hit.isDescendant(of: discovered.element, maxHops: 20)
+        || hit.isDescendant(of: discovered.element, maxHops: 10)
     }
   }
 }

@@ -14,7 +14,7 @@ struct PressFallbackPass: DiscoveryPass {
   }
 
   func run(state: DiscoveryState, context: DiscoveryContext) {
-    let trustworthy = state.visitedCount < Self.minSampleForPressCheck
+    let trustworthy = state.fallbackEligibleCount < Self.minSampleForPressCheck
       || state.pressableRatio <= Self.maxPressableRatio
     if trustworthy {
       state.results.append(contentsOf: state.pressFallbackCandidates)
