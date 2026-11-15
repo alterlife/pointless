@@ -3,37 +3,36 @@ import AppKit
 /// Ancestor identity for label grouping — equal values share a label prefix.
 /// Not necessarily the direct AX parent.
 enum GroupingAncestor: Hashable {
-  /// Traversal node id - indexes DiscoveryState.nodeParent.
+  /// Traversal node id.
   case walkNode(Int)
   /// CFHash of the element's AXParent AXUIElement.
   case hitTestParent(UInt)
 }
 
 /// An interactive (or scrollable) on-screen element found by a discovery pass.
-struct DiscoveredElement {
+struct NavigationTarget {
   let element: AXElement
   let screenFrame: CGRect   // NSScreen coords (bottom-left origin)
   let role: String
   let screen: NSScreen
   /// The ancestor this element groups under — not necessarily its AX parent.
-  let groupingAncestor: GroupingAncestor
-  /// The element's own traversal node id — nil for elements found without a tree walk.
-  var walkNodeID: Int?
+  var groupingAncestor: GroupingAncestor
+  let node: AXTreeNode?
 
   var dedupKey: String { "\(role)|\(screenFrame)" }
 }
 
-extension Array where Element == DiscoveredElement {
+extension Array where Element == NavigationTarget {
   /// Top-to-bottom in NSScreen coords (highest minY first), left-to-right.
-  func sortedByPosition() -> [DiscoveredElement] {
+  func sortedByPosition() -> [NavigationTarget] {
     sorted { lhs, rhs in
       if lhs.screenFrame.minY != rhs.screenFrame.minY { return lhs.screenFrame.minY > rhs.screenFrame.minY }
       return lhs.screenFrame.minX < rhs.screenFrame.minX
     }
   }
 
-  func mergeSharedAnchors(tolerance: CGFloat = 2) -> [DiscoveredElement] {
-    reduce(into: [DiscoveredElement]()) { kept, element in
+  func mergeSharedAnchors(tolerance: CGFloat = 2) -> [NavigationTarget] {
+    reduce(into: [NavigationTarget]()) { kept, element in
       if let index = kept.firstIndex(where: {
         abs($0.screenFrame.minX - element.screenFrame.minX) <= tolerance
           && abs($0.screenFrame.maxY - element.screenFrame.maxY) <= tolerance
@@ -50,29 +49,28 @@ extension Array where Element == DiscoveredElement {
 
   // Chromium wraps controls in single-child AXGroups — climb past ancestors
   // holding only one surviving discovery.
-  func regroupedForLabels(nodeParent: [Int: Int]) -> [DiscoveredElement] {
-    let counts = subtreeCounts(nodeParent: nodeParent)
+  func regroupedForLabels() -> [NavigationTarget] {
+    let counts = subtreeCounts()
     return map { element in
-      guard case .walkNode(let groupID) = element.groupingAncestor else { return element }
-      var current = groupID
-      while counts[current] == 1, let parent = nodeParent[current], parent != 0 {
+      guard let group = element.node?.parent else { return element }
+      var current = group
+      while counts[current.id] == 1, let parent = current.parent {
         current = parent
       }
-      return DiscoveredElement(
-        element: element.element, screenFrame: element.screenFrame, role: element.role,
-        screen: element.screen, groupingAncestor: .walkNode(current), walkNodeID: element.walkNodeID
-      )
+      var regrouped = element
+      regrouped.groupingAncestor = .walkNode(current.id)
+      return regrouped
     }
   }
 
-  /// Post-dedup discovery counts per walk-node subtree.
-  private func subtreeCounts(nodeParent: [Int: Int]) -> [Int: Int] {
+  /// Post-dedup discovery counts per walked subtree.
+  private func subtreeCounts() -> [Int: Int] {
     var counts: [Int: Int] = [:]
     for element in self {
-      var node = element.walkNodeID
-      while let current = node, current != 0 {
-        counts[current, default: 0] += 1
-        node = nodeParent[current]
+      var node = element.node
+      while let current = node {
+        counts[current.id, default: 0] += 1
+        node = current.parent
       }
     }
     return counts

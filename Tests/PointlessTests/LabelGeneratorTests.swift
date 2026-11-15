@@ -6,17 +6,18 @@ import CoreGraphics
 final class LabelGeneratorTests: XCTestCase {
   private func element(
     groupingAncestor: GroupingAncestor, x: CGFloat = 0, size: CGFloat = 10
-  ) -> DiscoveredElement {
-    DiscoveredElement(
+  ) -> NavigationTarget {
+    NavigationTarget(
       element: AXElement(raw: AXUIElementCreateApplication(getpid())),
       screenFrame: CGRect(x: x, y: 0, width: size, height: size),
       role: "AXButton",
       screen: NSScreen.screens[0],
-      groupingAncestor: groupingAncestor
+      groupingAncestor: groupingAncestor,
+      node: nil
     )
   }
 
-  private func makeElements(count: Int, groups: Int, size: CGFloat = 10) -> [DiscoveredElement] {
+  private func makeElements(count: Int, groups: Int, size: CGFloat = 10) -> [NavigationTarget] {
     (0..<count).map {
       element(groupingAncestor: .walkNode($0 % groups), x: CGFloat($0) * 20, size: size)
     }
@@ -72,7 +73,7 @@ final class LabelGeneratorTests: XCTestCase {
   func testUnevenGroupsKeepPrefixSafety() {
     // One big group (40 → 2-char suffixes) + four small (5 → 1-char suffixes).
     // Mixed total lengths must still never produce prefix collisions.
-    var elements: [DiscoveredElement] = []
+    var elements: [NavigationTarget] = []
     for i in 0..<60 {
       let group = i < 40 ? 0 : (i - 40) % 4 + 1
       elements.append(element(groupingAncestor: .walkNode(group), x: CGFloat(i) * 20))
@@ -97,7 +98,7 @@ final class LabelGeneratorTests: XCTestCase {
   func testNoLabelContainsBannedWord() {
     // 30 elements in the first group → 2-char suffixes where "ss" lands early,
     // which would spell "ass" under the "a" prefix without filtering.
-    var elements: [DiscoveredElement] = []
+    var elements: [NavigationTarget] = []
     for i in 0..<40 {
       elements.append(element(groupingAncestor: .walkNode(i < 30 ? 0 : 1), x: CGFloat(i) * 20))
     }
@@ -137,7 +138,7 @@ final class LabelGeneratorTests: XCTestCase {
 
   func testClusterBelowThresholdDoesNotCollapse() {
     // Group 0 has only 5 members — under the minimum; groups 1-3 are large.
-    var elements: [DiscoveredElement] = []
+    var elements: [NavigationTarget] = []
     for i in 0..<40 {
       let group = i < 5 ? 0 : (i - 5) % 3 + 1
       elements.append(

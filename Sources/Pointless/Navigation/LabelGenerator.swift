@@ -1,11 +1,11 @@
 import CoreGraphics
 import Foundation
 
-// NOTE: DiscoveredElement is defined in Discovery/DiscoveredElement.swift (same module)
+// NOTE: NavigationTarget is defined in Discovery/NavigationTarget.swift (same module)
 
 struct LabeledElement {
   let label: String
-  let element: DiscoveredElement
+  let element: NavigationTarget
 }
 
 /// A dense cluster of small siblings collapsed into one signpost badge.
@@ -36,7 +36,7 @@ enum LabelGenerator {
   private static let collapsedClusterMaxExtent: CGFloat = 56
 
   /// Assign labels to pre-sorted elements
-  static func label(_ elements: [DiscoveredElement]) -> [LabeledElement] {
+  static func label(_ elements: [NavigationTarget]) -> [LabeledElement] {
     guard elements.count > flatLabelLimit, let groups = labelGroups(for: elements) else {
       return flatLabel(elements)
     }
@@ -79,7 +79,7 @@ enum LabelGenerator {
 
   /// First-appearance order — earlier groups get the home-row prefixes.
   private static func labelGroups(
-    for elements: [DiscoveredElement]
+    for elements: [NavigationTarget]
   ) -> [(ancestor: GroupingAncestor, indices: [Int])]? {
     var order: [GroupingAncestor] = []
     var indexByGroup: [GroupingAncestor: [Int]] = [:]
@@ -91,13 +91,13 @@ enum LabelGenerator {
     return order.map { (ancestor: $0, indices: indexByGroup[$0] ?? []) }
   }
 
-  private static func flatLabel(_ elements: [DiscoveredElement]) -> [LabeledElement] {
+  private static func flatLabel(_ elements: [NavigationTarget]) -> [LabeledElement] {
     let labels = combos(count: elements.count, length: comboLength(for: elements.count))
     return zip(elements, labels).map { elem, lbl in LabeledElement(label: lbl, element: elem) }
   }
 
   private static func hierarchicalLabel(
-    _ elements: [DiscoveredElement],
+    _ elements: [NavigationTarget],
     groups: [(ancestor: GroupingAncestor, indices: [Int])]
   ) -> [LabeledElement] {
     let prefixLength = comboLength(for: groups.count)

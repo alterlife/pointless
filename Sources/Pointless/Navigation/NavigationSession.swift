@@ -34,7 +34,7 @@ final class NavigationSession {
   enum Mode {
     case scanning
     case click(typedSoFar: String)
-    case scrolling(targets: [DiscoveredElement], currentIndex: Int)
+    case scrolling(targets: [NavigationTarget], currentIndex: Int)
   }
 
   struct Config {
@@ -162,7 +162,7 @@ final class NavigationSession {
     }
   }
 
-  private func handleScrollKey(_ event: NSEvent, targets: [DiscoveredElement], currentIndex: Int) {
+  private func handleScrollKey(_ event: NSEvent, targets: [NavigationTarget], currentIndex: Int) {
     scheduleScrollHint()
     if eventMatchesHotkey(event, keyCode: config.scrollNext.keyCode, modifiers: config.scrollNext.modifiers) {
       cycleScrollTarget(targets: targets, from: currentIndex, offset: 1)
@@ -209,7 +209,7 @@ final class NavigationSession {
     }
   }
 
-  private static func unobscuredClickPoint(for discovered: DiscoveredElement) -> CGPoint? {
+  private static func unobscuredClickPoint(for discovered: NavigationTarget) -> CGPoint? {
     guard let app = AXElement.frontmostApplication() else { return nil }
     let frame = discovered.screenFrame
     let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
@@ -260,7 +260,7 @@ final class NavigationSession {
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.scrollHintDelay, execute: work)
   }
 
-  private func cycleScrollTarget(targets: [DiscoveredElement], from index: Int, offset: Int) {
+  private func cycleScrollTarget(targets: [NavigationTarget], from index: Int, offset: Int) {
     guard !targets.isEmpty else { return }
     let newIndex = (index + offset + targets.count) % targets.count
     warpCursor(to: targets[newIndex])
@@ -277,7 +277,7 @@ final class NavigationSession {
     )?.post(tap: .cghidEventTap)
   }
 
-  private func warpCursor(to element: DiscoveredElement) {
+  private func warpCursor(to element: NavigationTarget) {
     let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
     let cgPoint = CGPoint(x: element.screenFrame.midX, y: primaryHeight - element.screenFrame.midY)
     CGWarpMouseCursorPosition(cgPoint)

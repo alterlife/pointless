@@ -12,7 +12,7 @@ struct OcclusionPass: DiscoveryPass {
   }
 
   func run(state: DiscoveryState, context: DiscoveryContext) {
-    var kept: [DiscoveredElement] = []
+    var kept: [NavigationTarget] = []
     var dropped = 0
     for element in state.results {
       if context.isCancelled() { break }
@@ -28,7 +28,7 @@ struct OcclusionPass: DiscoveryPass {
     }
   }
 
-  private func isReachable(_ discovered: DiscoveredElement, context: DiscoveryContext) -> Bool {
+  private func isReachable(_ discovered: NavigationTarget, context: DiscoveryContext) -> Bool {
     let frame = discovered.screenFrame
     let points = [
       CGPoint(x: frame.midX, y: frame.midY),

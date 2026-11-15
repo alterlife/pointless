@@ -41,9 +41,10 @@ struct HitTestPass: DiscoveryPass {
               let screen = context.screens.first(where: { $0.frame.intersects(frame) })
         else { continue }
         let parent = target.parent
-        let element = DiscoveredElement(
+        let element = NavigationTarget(
           element: target, screenFrame: frame, role: role, screen: screen,
-          groupingAncestor: .hitTestParent(CFHash(parent?.raw ?? target.raw))
+          groupingAncestor: .hitTestParent(CFHash(parent?.raw ?? target.raw)),
+          node: nil
         )
         guard seen.insert(element.dedupKey).inserted else { continue }
         state.results.append(element)

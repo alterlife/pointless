@@ -29,7 +29,7 @@ final class ElementDiscovery {
     cancelled = true
   }
 
-  func scan(mode: ScanMode = .interactive, completion: @escaping @MainActor ([DiscoveredElement]) -> Void) {
+  func scan(mode: ScanMode = .interactive, completion: @escaping @MainActor ([NavigationTarget]) -> Void) {
     cancelled = false
     // NSScreen is main-thread-only — capture screens before hopping to the scan queue.
     let screens = NSScreen.screens
@@ -43,7 +43,7 @@ final class ElementDiscovery {
     }
   }
 
-  private func performScan(mode: ScanMode, screens: [NSScreen]) -> [DiscoveredElement] {
+  private func performScan(mode: ScanMode, screens: [NSScreen]) -> [NavigationTarget] {
     guard let app = AXElement.frontmostApplication() else { return [] }
     if app.enableAssistiveAccess() {
       Logger.debug("Discovery: enabled assistive access, waiting for AX tree",
@@ -64,15 +64,22 @@ final class ElementDiscovery {
       isCancelled: { [weak self] in self?.cancelled ?? true }
     )
 
+    let scanStart = Date()
     let state = DiscoveryState()
     for pass in passes where !cancelled && pass.shouldRun(state: state, context: context) {
+      let passStart = Date()
       let before = state.results.count
       pass.run(state: state, context: context)
-      Logger.debug("Discovery pass \(pass.name): +\(state.results.count - before) elements",
-                   logger: Logger.pluginLifecycle)
+      Logger.debug(
+        "Discovery pass \(pass.name): +\(state.results.count - before) elements " +
+        "in \(Int(Date().timeIntervalSince(passStart) * 1000))ms",
+        logger: Logger.pluginLifecycle
+      )
     }
+    Logger.debug("Discovery scan took \(Int(Date().timeIntervalSince(scanStart) * 1000))ms",
+                 logger: Logger.pluginLifecycle)
 
-    let unique = Self.deduplicateAndRegroup(state.results, mode: mode, nodeParent: state.nodeParent)
+    let unique = Self.deduplicateAndRegroup(state.results, mode: mode)
 
     Logger.debug(
       "Discovery: \(unique.count) elements, \(state.visitedCount) visited, " +
@@ -83,8 +90,8 @@ final class ElementDiscovery {
   }
 
   static func deduplicateAndRegroup(
-    _ results: [DiscoveredElement], mode: ScanMode, nodeParent: [Int: Int]
-  ) -> [DiscoveredElement] {
+    _ results: [NavigationTarget], mode: ScanMode
+  ) -> [NavigationTarget] {
     var seen = Set<String>()
     var unique = results.filter { seen.insert($0.dedupKey).inserted }
 
@@ -98,6 +105,6 @@ final class ElementDiscovery {
       }
     }
 
-    return unique.regroupedForLabels(nodeParent: nodeParent)
+    return unique.regroupedForLabels()
   }
 }

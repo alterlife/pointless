@@ -44,6 +44,15 @@ private enum AXAttrName {
 
 private let axPressAction = "AXPress"
 
+struct NodeAttributes {
+  var children: [AXElement]
+  var role: String?
+  var isHidden: Bool
+  var isEnabled: Bool
+  /// NSScreen coords — nil when the app reports no usable frame.
+  var frame: CGRect?
+}
+
 // MARK: - Coordinate conversion
 
 /// Converts AX top-left-origin coordinates to NSScreen bottom-left-origin
@@ -118,6 +127,54 @@ struct AXElement {
     AXValueGetValue(posValue, .cgPoint, &position)
     AXValueGetValue(sizeValue, .cgSize, &size)
     return axToNSScreen(axOrigin: position, axSize: size, primaryScreenHeight: primaryScreenHeight)
+  }
+
+  /// Batched per-node attributes for the tree walk, with individual-read fallback.
+  func nodeAttributes(primaryScreenHeight: CGFloat) -> NodeAttributes {
+    let names: [CFString] = [
+      AXAttrName.childAttrs[0], AXAttrName.childAttrs[1], AXAttrName.childAttrs[2], AXAttrName.childAttrs[3],
+      AXAttrName.role, AXAttrName.hidden, AXAttrName.enabled,
+      AXAttrName.position, AXAttrName.size
+    ] as [CFString]
+    var values: CFArray?
+    guard AXUIElementCopyMultipleAttributeValues(
+      raw, names as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &values
+    ) == .success, let vals = values as? [AnyObject], vals.count == names.count else {
+      return NodeAttributes(
+        children: children, role: role, isHidden: isHidden, isEnabled: isEnabled,
+        frame: frame(primaryScreenHeight: primaryScreenHeight)
+      )
+    }
+    return NodeAttributes(
+      children: (0..<AXAttrName.childAttrs.count).lazy
+        .map { Self.axElements(from: vals[$0]) }
+        .first { !$0.isEmpty } ?? [],
+      role: vals[4] as? String,
+      isHidden: (vals[5] as? NSNumber)?.boolValue ?? false,
+      isEnabled: (vals[6] as? NSNumber)?.boolValue ?? true,
+      frame: Self.nsscreenFrame(position: vals[7], size: vals[8], primaryScreenHeight: primaryScreenHeight)
+    )
+  }
+
+  private static func axElements(from value: AnyObject?) -> [AXElement] {
+    guard let arr = value as? NSArray else { return [] }
+    return arr.map { AXElement(raw: unsafeBitCast($0 as AnyObject, to: AXUIElement.self)) }
+  }
+
+  private static func nsscreenFrame(position: AnyObject?, size: AnyObject?, primaryScreenHeight: CGFloat) -> CGRect? {
+    guard let posObj = position, let sizeObj = size,
+          CFGetTypeID(posObj) == AXValueGetTypeID(), CFGetTypeID(sizeObj) == AXValueGetTypeID() else { return nil }
+    // CFGetTypeID verified — AXValue casts are safe here
+    // swiftlint:disable:next force_cast
+    let posValue = posObj as! AXValue
+    // swiftlint:disable:next force_cast
+    let sizeValue = sizeObj as! AXValue
+    guard AXValueGetType(posValue) == .cgPoint, AXValueGetType(sizeValue) == .cgSize else { return nil }
+    var point = CGPoint.zero
+    var dimensions = CGSize.zero
+    AXValueGetValue(posValue, .cgPoint, &point)
+    AXValueGetValue(sizeValue, .cgSize, &dimensions)
+    return axToNSScreen(axOrigin: point, axSize: dimensions, primaryScreenHeight: primaryScreenHeight)
   }
 
   // MARK: Actions

@@ -21,8 +21,8 @@ struct DiscoveryContext {
 }
 
 final class DiscoveryState {
-  var results: [DiscoveredElement] = []
-  var pressFallbackCandidates: [DiscoveredElement] = []
+  var results: [NavigationTarget] = []
+  var pressFallbackCandidates: [NavigationTarget] = []
   var pressableCount = 0
   var visitedCount = 0
   var roleCount: [String: Int] = [:]
@@ -35,8 +35,9 @@ final class DiscoveryState {
   /// Frames (NSScreen coords) of opaque provider groups — regions the walk can't see inside.
   var opaqueRegions: [CGRect] = []
 
+  var roots: [AXTreeNode] = []
+
   private(set) var nextNodeID = 0
-  var nodeParent: [Int: Int] = [:]
 
   func makeNodeID() -> Int {
     nextNodeID += 1
@@ -62,53 +63,71 @@ struct ElementTreeWalker {
   static let maxElements = 500
 
   func walk(from root: AXElement, state: DiscoveryState, context: DiscoveryContext) {
-    visit(root, depth: 0, parentID: 0, state: state, context: context)
+    visit(root, parent: nil, depth: 0, state: state, context: context)
   }
 
   private func visit(
-    _ element: AXElement, depth: Int, parentID: Int,
+    _ element: AXElement, parent: AXTreeNode?, depth: Int,
     state: DiscoveryState, context: DiscoveryContext
   ) {
     guard !context.isCancelled(), depth <= Self.maxDepth,
           state.discoveredCount < Self.maxElements else { return }
-    guard !element.isHidden, element.isEnabled else { return }
+
+    let attrs = element.nodeAttributes(primaryScreenHeight: context.primaryScreenHeight)
+    guard !attrs.isHidden, attrs.isEnabled else { return }
+
+    if isOffscreenSubtree(attrs, context: context) { return }
 
     state.visitedCount += 1
     let pressable = context.mode == .interactive && element.supportsPress
     if pressable { state.pressableCount += 1 }
 
-    let nodeID = state.makeNodeID()
-    state.nodeParent[nodeID] = parentID
-
-    let role = element.role
-    if let role {
-      state.roleCount[role, default: 0] += 1
-      let roleMatched = context.roles.contains(role)
-      if roleMatched || pressable,
-         let frame = element.frame(primaryScreenHeight: context.primaryScreenHeight),
-         frame.width >= 4, frame.height >= 4,
-         context.windowFrame.map({ $0.intersects(frame) }) ?? true,
-         let screen = context.screens.first(where: { $0.frame.intersects(frame) }) {
-        let discovered = DiscoveredElement(
-          element: element, screenFrame: frame, role: role, screen: screen,
-          groupingAncestor: .walkNode(parentID), walkNodeID: nodeID
-        )
-        if roleMatched {
-          state.results.append(discovered)
-        } else {
-          state.pressFallbackCandidates.append(discovered)
-        }
-      }
+    let node = AXTreeNode(id: state.makeNodeID(), element: element, parent: parent)
+    if let parent {
+      parent.add(node)
+    } else {
+      state.roots.append(node)
     }
 
-    if role == AXRoleName.opaqueProviderGroup,
-       let frame = element.frame(primaryScreenHeight: context.primaryScreenHeight) {
+    recordDiscovery(node, attrs: attrs, pressable: pressable, state: state, context: context)
+
+    if attrs.role == AXRoleName.opaqueProviderGroup, let frame = attrs.frame {
       state.opaqueRegions.append(frame)
     }
 
-    for child in element.children {
+    for child in attrs.children {
       guard state.discoveredCount < Self.maxElements else { break }
-      visit(child, depth: depth + 1, parentID: nodeID, state: state, context: context)
+      visit(child, parent: node, depth: depth + 1, state: state, context: context)
     }
+  }
+
+  private func recordDiscovery(
+    _ node: AXTreeNode, attrs: NodeAttributes, pressable: Bool,
+    state: DiscoveryState, context: DiscoveryContext
+  ) {
+    guard let role = attrs.role else { return }
+    state.roleCount[role, default: 0] += 1
+    let roleMatched = context.roles.contains(role)
+    guard roleMatched || pressable,
+          let frame = attrs.frame,
+          frame.width >= 4, frame.height >= 4,
+          context.windowFrame.map({ $0.intersects(frame) }) ?? true,
+          let screen = context.screens.first(where: { $0.frame.intersects(frame) }) else { return }
+    let discovered = NavigationTarget(
+      element: node.element, screenFrame: frame, role: role, screen: screen,
+      groupingAncestor: .walkNode(node.parent?.id ?? 0), node: node
+    )
+    if roleMatched {
+      state.results.append(discovered)
+    } else {
+      state.pressFallbackCandidates.append(discovered)
+    }
+  }
+
+  private func isOffscreenSubtree(_ attrs: NodeAttributes, context: DiscoveryContext) -> Bool {
+    guard let frame = attrs.frame, !attrs.children.isEmpty,
+          frame.width > 0, frame.height > 0,
+          let windowFrame = context.windowFrame else { return false }
+    return !frame.intersects(windowFrame)
   }
 }
