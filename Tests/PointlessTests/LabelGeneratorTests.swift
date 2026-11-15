@@ -38,6 +38,18 @@ final class LabelGeneratorTests: XCTestCase {
     XCTAssertEqual(labeled[0].label, "aa")
   }
 
+  func testAdjacentLabelsDifferInFirstChar() {
+    // 28 elements in one group → flat 2-char labels. Spatial neighbors
+    // should get labels one keystroke apart (Vimium-style ordering).
+    let labeled = LabelGenerator.label(makeElements(count: 28, groups: 1))
+    for pair in zip(labeled, labeled.dropFirst()) {
+      XCTAssertNotEqual(
+        pair.0.label.first, pair.1.label.first,
+        "\(pair.0.label) and \(pair.1.label) share a first char"
+      )
+    }
+  }
+
   // MARK: Hierarchical labeling
 
   func testDenseMultiGroupLabelsShareGroupPrefix() {

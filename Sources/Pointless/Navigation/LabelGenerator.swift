@@ -160,20 +160,30 @@ enum LabelGenerator {
     let homeRowCount = 9
     let indexOf = Dictionary(uniqueKeysWithValues: priorityKeys.enumerated().map { ($0.element, $0.offset) })
     // Score packs (non-home-row count, priority-index sum) into one Int —
-    // index sums stay under 10_000 for lengths ≤ 3.
-    let scored = allowed.enumerated().map { offset, combo -> (Int, Int) in
+    // index sums stay under 10_000 for lengths ≤ 3. Ties sort by char index
+    // last-to-first so consecutive combos differ in the first char — spatial
+    // neighbors get labels one keystroke apart (Vimium-style).
+    struct Candidate {
+      let score: Int
+      let combo: String
+      let indices: [Int]
+    }
+    let scored = allowed.map { combo -> Candidate in
       var nonHome = 0
       var indexSum = 0
+      var indices: [Int] = []
       for char in combo {
         let index = indexOf[char] ?? 0
+        indices.append(index)
         indexSum += index
         if index >= homeRowCount { nonHome += 1 }
       }
-      return (nonHome * 10_000 + indexSum, offset)
+      return Candidate(score: nonHome * 10_000 + indexSum, combo: combo, indices: indices)
     }.sorted { lhs, rhs in
-      lhs.0 != rhs.0 ? lhs.0 < rhs.0 : lhs.1 < rhs.1
+      if lhs.score != rhs.score { return lhs.score < rhs.score }
+      return lhs.indices.reversed().lexicographicallyPrecedes(rhs.indices.reversed())
     }
-    return scored.map { allowed[$0.1] }
+    return scored.map(\.combo)
   }
 
   private static func isBanned(_ label: String) -> Bool {
