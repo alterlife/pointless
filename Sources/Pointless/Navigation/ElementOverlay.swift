@@ -317,7 +317,9 @@ struct OverlayContentView: View {
     )
     let path = Path(roundedRect: canvasRect.insetBy(dx: 2, dy: 2), cornerRadius: 6)
     // Dual-tone stroke stays visible on light and dark content alike.
-    context.stroke(path, with: .color(.black.opacity(0.7)), lineWidth: 3)
-    context.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1)
+    context.stroke(path, with: .color(.black.opacity(0.85)), lineWidth: 5)
+    context.stroke(path, with: .color(.white.opacity(0.95)), lineWidth: 2)
+    let inner = Path(roundedRect: canvasRect.insetBy(dx: 5, dy: 5), cornerRadius: 4)
+    context.stroke(inner, with: .color(.white.opacity(0.8)), lineWidth: 1.5)
   }
 }
