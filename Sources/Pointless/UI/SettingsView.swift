@@ -16,20 +16,20 @@ public struct SettingsView: View {
   public var body: some View {
     TabView(selection: $selectedTab) {
       // Pointless tab — the core navigation settings, always first
-      settingsTab(for: navigation)
-        .tabItem { Label("Pointless", systemImage: "keyboard") }
-        .tag(navigation.id)
+      Tab("Pointless", systemImage: "keyboard", value: navigation.id) {
+        settingsTab(for: navigation)
+      }
 
       // Plugins tab — card layout with per-widget toggles
-      pluginsTab()
-        .tabItem { Label("Plugins", systemImage: "puzzlepiece.extension") }
-        .tag("plugins")
+      Tab("Plugins", systemImage: "puzzlepiece.extension", value: "plugins") {
+        pluginsTab()
+      }
 
       // Conditional per-plugin settings tabs (only when enabled)
       ForEach(enabledPlugins, id: \.id) { plugin in
-        settingsTab(for: plugin)
-          .tabItem { Label(plugin.name, systemImage: plugin.icon) }
-          .tag(plugin.id)
+        Tab(plugin.name, systemImage: plugin.icon, value: plugin.id) {
+          settingsTab(for: plugin)
+        }
       }
     }
     .frame(minWidth: 800, minHeight: 600)
