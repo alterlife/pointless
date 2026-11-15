@@ -81,14 +81,15 @@ struct ElementTreeWalker {
 
     state.visitedCount += 1
 
-    let node = AXTreeNode(id: state.makeNodeID(), element: element, parent: parent)
+    let node = AXTreeNode(id: state.makeNodeID(), element: element, parent: parent, role: attrs.role)
     if let parent {
       parent.add(node)
     } else {
       state.roots.append(node)
     }
 
-    let fallbackEligible = isFallbackEligible(attrs, context: context)
+    let roleMatched = isDiscoverableRole(attrs.role, node: node, context: context)
+    let fallbackEligible = !roleMatched && isFallbackEligible(attrs, context: context)
     if fallbackEligible { state.fallbackEligibleCount += 1 }
     let pressable = fallbackEligible && element.supportsPress
     if pressable { state.pressableCount += 1 }
@@ -105,6 +106,15 @@ struct ElementTreeWalker {
     }
   }
 
+  /// Outline rows are click targets with no AXPress; scrollbar contents never are.
+  private func isDiscoverableRole(_ role: String?, node: AXTreeNode, context: DiscoveryContext) -> Bool {
+    guard let role, !node.hasAncestor(role: AXRoleName.scrollBar) else { return false }
+    if context.roles.contains(role) { return true }
+    return context.mode == .interactive
+      && role == AXRoleName.row
+      && node.hasAncestor(role: AXRoleName.outline)
+  }
+
   private func isFallbackEligible(_ attrs: NodeAttributes, context: DiscoveryContext) -> Bool {
     guard context.mode == .interactive,
           let role = attrs.role, !context.roles.contains(role) else { return false }
@@ -117,7 +127,7 @@ struct ElementTreeWalker {
   ) {
     guard let role = attrs.role else { return }
     state.roleCount[role, default: 0] += 1
-    let roleMatched = context.roles.contains(role)
+    let roleMatched = isDiscoverableRole(role, node: node, context: context)
     guard roleMatched || pressable,
           let (frame, screen) = targetFrame(attrs, context: context) else { return }
     let discovered = NavigationTarget(

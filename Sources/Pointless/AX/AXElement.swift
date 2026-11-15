@@ -19,6 +19,8 @@ enum AXRoleName {
   static let incrementor = "AXIncrementor"
   static let slider = "AXSlider"
   static let scrollArea = "AXScrollArea"
+  static let row = "AXRow"
+  static let outline = "AXOutline"
   static let scrollBar = "AXScrollBar"
   static let webArea = "AXWebArea"
   static let browser = "AXBrowser"
