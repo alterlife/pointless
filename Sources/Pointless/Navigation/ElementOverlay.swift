@@ -65,7 +65,6 @@ final class OverlayState: ObservableObject {
   @Published var scrollOutlineHidden = false
   @Published var showScrollHint = false
   @Published var clickHintDismissed = false
-  @Published var revealElementText = false
 
   var collapsedPrefixes: Set<String> { Set(collapsedGroups.map(\.prefix)) }
 
@@ -153,6 +152,9 @@ struct OverlayContentView: View {
           topInset: screen.safeAreaInsets.top,
           reservedRects: hint.map { [$0.insetBy(dx: -4, dy: -4)] } ?? []
         )
+        for labeled in onScreen where shouldHighlight(labeled) {
+          drawHighlight(frame: labeled.element.screenFrame, in: &ctx)
+        }
         for group in groupsOnScreen {
           drawGroupFrame(group, in: &ctx)
         }
@@ -164,9 +166,6 @@ struct OverlayContentView: View {
           drawGroupBadge(
             group, badgeRect: badgeRects[badgeIndex], anchor: anchors[badgeIndex], in: &ctx
           )
-        }
-        for labeled in onScreen where shouldHighlight(labeled) {
-          drawHighlight(frame: labeled.element.screenFrame, in: &ctx)
         }
         if let target = state.scrollTargetFrame, !state.scrollOutlineHidden {
           drawScrollTarget(target, in: &ctx)
@@ -183,7 +182,7 @@ struct OverlayContentView: View {
   private var hintText: String {
     state.scrollTargetFrame != nil
       ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
-      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ to highlight  ·  ESC cancel"
+      : "type a letter to jump  ·  ⌫ back  ·  ESC cancel"
   }
 
   private var hintSize: CGSize {
@@ -228,10 +227,9 @@ struct OverlayContentView: View {
     drawBadge(rect: badgeRect, color: fillColor, label: labeled.label, alpha: alpha, context: &context)
   }
 
-  /// Prefix matches highlight while narrowing; ⌘ held highlights everything.
+  /// Only elements still in the running after the typed prefix.
   private func shouldHighlight(_ labeled: LabeledElement) -> Bool {
-    if state.revealElementText { return true }
-    return !state.typedPrefix.isEmpty && labeled.label.hasPrefix(state.typedPrefix)
+    !state.typedPrefix.isEmpty && labeled.label.hasPrefix(state.typedPrefix)
   }
 
   private func drawHighlight(frame: CGRect, in context: inout GraphicsContext) {
@@ -243,7 +241,7 @@ struct OverlayContentView: View {
     )
     context.stroke(
       Path(roundedRect: rect.insetBy(dx: -2, dy: -2), cornerRadius: 6),
-      with: .color(state.badgeColor.opacity(0.9)), lineWidth: 2
+      with: .color(Color(nsColor: .controlAccentColor).opacity(0.9)), lineWidth: 2.5
     )
   }
 

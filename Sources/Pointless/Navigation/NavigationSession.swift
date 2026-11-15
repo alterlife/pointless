@@ -24,11 +24,6 @@ private func navigationSessionEventCallback(
     return nil
   }
 
-  if type == .flagsChanged, let nsEvent = NSEvent(cgEvent: event) {
-    Task { @MainActor in session.handleFlagsChanged(nsEvent) }
-    return Unmanaged.passUnretained(event)
-  }
-
   return Unmanaged.passUnretained(event)
 }
 
@@ -202,10 +197,6 @@ final class NavigationSession {
     }
   }
 
-  func handleFlagsChanged(_ event: NSEvent) {
-    overlayState.revealElementText = event.modifierFlags.contains(.command)
-  }
-
   private func handleClickKey(_ event: NSEvent, prefix: String) {
     switch event.keyCode {
     case 53:  // ESC
@@ -322,7 +313,6 @@ final class NavigationSession {
 
   private func installEventTap() {
     let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
-                          | (1 << CGEventType.flagsChanged.rawValue)
                           | (1 << CGEventType.leftMouseDown.rawValue)
                           | (1 << CGEventType.rightMouseDown.rawValue)
     let selfPtr = Unmanaged.passUnretained(self).toOpaque()
@@ -364,7 +354,6 @@ final class NavigationSession {
     overlayState.labeledElements = []
     overlayState.collapsedGroups = []
     overlayState.typedPrefix = ""
-    overlayState.revealElementText = false
     overlayState.scrollTargetFrame = nil
     overlayState.showScrollHint = false
     overlayState.scrollOutlineHidden = false
