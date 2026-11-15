@@ -7,16 +7,7 @@ Ordered by priority within each section.
 
 ## UX effectiveness
 
-### U1. Cursor warp on activation
-
-A successful `AXPress` leaves the pointer where it was — the user loses the
-spatial "I am now here" confirmation, and hover-dependent UI misbehaves.
-`warpCursor(to:)` already exists for scroll-target cycling; `activate(_:)`
-doesn't use it. Warp the cursor to the element on press, or expose a setting.
-
-**Files:** `Navigation/NavigationSession.swift` (`activate`, `warpCursor`)
-
-### U2. Label stability across activations
+### U1. Label stability across activations
 
 Sort/assign labels so the same element tends to get the same letter on repeated
 activations of the same screen. Muscle memory is the core value proposition of
@@ -24,7 +15,7 @@ this tool category.
 
 **Files:** `Navigation/LabelGenerator.swift`
 
-### U3. Scroll mode leftovers
+### U2. Scroll mode leftovers
 
 - The `d`/`u` half-page keys are undiscoverable — add them to the hint capsule.
 - A persistent "scroll mode" indicator beyond the target outline may still help
@@ -59,6 +50,5 @@ walked `AXTreeNode` tree to JSON for `DiscoveryFixtureTests`.
 
 ## Suggested sequencing
 
-1. **U1** cursor warp (small, self-contained)
-2. **U2** label stability (bigger, core to the product)
-3. **U3, M1** as independent follow-ups
+1. **U1** label stability (bigger, core to the product)
+2. **U2, M1** as independent follow-ups
