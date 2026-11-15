@@ -117,7 +117,7 @@ enum LabelGenerator {
       }
     }
     var pool = sortedCombos(length: comboLength(for: elements.count))
-      .filter { !used.contains($0) }
+      .filter { !labelConflicts($0, with: used) }
       .makeIterator()
     for index in elements.indices where labels[index] == nil {
       labels[index] = pool.next()
@@ -146,7 +146,13 @@ enum LabelGenerator {
     for length in [3, 4] where length <= stream.count {
       candidates.append(String(stream.prefix(length)))
     }
-    return candidates.first { !used.contains($0) && !isBanned($0) }
+    return candidates.first { !labelConflicts($0, with: used) && !isBanned($0) }
+  }
+
+  /// Two labels where one prefixes the other are ambiguous under prefix
+  /// filtering — "ne" can't coexist with "neu".
+  private static func labelConflicts(_ candidate: String, with used: Set<String>) -> Bool {
+    used.contains { $0.hasPrefix(candidate) || candidate.hasPrefix($0) }
   }
 
   private static func hierarchicalLabel(

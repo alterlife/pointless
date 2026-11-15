@@ -77,16 +77,25 @@ final class LabelGeneratorTests: XCTestCase {
     XCTAssertEqual(labeled[1].label, "no")
   }
 
-  func testTextLabelSingleWordCollisionExtends() {
-    // Two "Save" elements: first gets "sa", second extends to "sav".
+  func testTextLabelPrefixConflictsFallBack() {
+    // "sav" prefixes "sa" — the second Save can't extend into a conflict.
     let labeled = LabelGenerator.label(
-      [textElement("Save", x: 0), textElement("Save", x: 20), element(groupingAncestor: .walkNode(0), x: 40)],
+      [textElement("Save", x: 0), textElement("Save", x: 20)],
       strategy: .clickableElementText
     )
     XCTAssertEqual(labeled[0].label, "sa")
-    XCTAssertEqual(labeled[1].label, "sav")
-    // No text → homerow combo, and it can't collide with a text hint.
-    XCTAssertFalse(["sav", "save"].contains(labeled[2].label))
+    XCTAssertFalse(labeled[1].label.hasPrefix("sa"))
+    XCTAssertEqual(Set(labeled.map(\.label)).count, 2)
+  }
+
+  func testShorterLabelBlocksLongerPrefix() {
+    // "Ne" claims "ne"; "Neuroport" can't take "neu" — prefix ambiguity.
+    let labeled = LabelGenerator.label(
+      [textElement("Ne", x: 0), textElement("Neuroport", x: 20)],
+      strategy: .clickableElementText
+    )
+    XCTAssertEqual(labeled[0].label, "ne")
+    XCTAssertFalse(labeled[1].label.hasPrefix("ne"))
   }
 
   func testTextStrategyStaysFlatAboveGroupThreshold() {
