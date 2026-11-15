@@ -134,6 +134,23 @@ final class NavigationTargetTests: XCTestCase {
     XCTAssertEqual([field, button].dropContainedPassiveElements().count, 2)
   }
 
+  func testGroupWrappingLinkIsDropped() {
+    let group = element(CGRect(x: 99, y: 960, width: 200, height: 40), role: "AXGroup")
+    let link = element(CGRect(x: 107, y: 970, width: 180, height: 20), role: "AXLink")
+
+    let result = [group, link].dropRedundantContainers()
+
+    XCTAssertEqual(result.count, 1)
+    XCTAssertEqual(result[0].role, "AXLink")
+  }
+
+  func testStandaloneGroupIsKept() {
+    let group = element(CGRect(x: 99, y: 960, width: 200, height: 40), role: "AXGroup")
+    let button = element(CGRect(x: 400, y: 400, width: 40, height: 24))
+
+    XCTAssertEqual([group, button].dropRedundantContainers().count, 2)
+  }
+
   func testTextFieldInsideContainerIsKept() {
     // A pane/group isn't an action — the field inside stays editable.
     let pane = element(CGRect(x: 0, y: 0, width: 600, height: 400), role: "AXGroup")

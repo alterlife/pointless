@@ -114,6 +114,7 @@ final class ElementDiscovery {
       let beforeCollapse = unique.count
       unique = unique.mergeSharedAnchors()
       unique = unique.dropContainedPassiveElements()
+      unique = unique.dropRedundantContainers()
       if unique.count < beforeCollapse {
         Logger.debug("Discovery: dropped \(beforeCollapse - unique.count) redundant elements",
                      logger: Logger.pluginLifecycle)

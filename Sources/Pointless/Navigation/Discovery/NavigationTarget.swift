@@ -72,6 +72,23 @@ extension Array where Element == NavigationTarget {
     }
   }
 
+  /// Press-fallback AXGroups that wrap a real control duplicate it —
+  /// AXGroup is never an interactive role, so containment means wrapper.
+  func dropRedundantContainers() -> [NavigationTarget] {
+    let all = self
+    return filter { outer in
+      guard outer.role == AXRoleName.group else { return true }
+      return !all.contains { inner in
+        inner.dedupKey != outer.dedupKey
+          && outer.screenFrame.contains(
+            CGPoint(x: inner.screenFrame.midX, y: inner.screenFrame.midY)
+          )
+          && outer.screenFrame.width * outer.screenFrame.height
+            > inner.screenFrame.width * inner.screenFrame.height
+      }
+    }
+  }
+
   // Chromium wraps controls in single-child AXGroups — climb past ancestors
   // holding only one surviving discovery.
   func regroupedForLabels() -> [NavigationTarget] {

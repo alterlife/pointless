@@ -27,6 +27,7 @@ enum AXRoleName {
   static let browser = "AXBrowser"
   static let application = "AXApplication"
   static let opaqueProviderGroup = "AXOpaqueProviderGroup"
+  static let group = "AXGroup"
 }
 
 private enum AXAttrName {
