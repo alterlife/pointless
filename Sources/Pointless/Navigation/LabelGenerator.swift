@@ -109,6 +109,7 @@ enum LabelGenerator {
     var labels = [String?](repeating: nil, count: elements.count)
     var used = Set<String>()
     if strategy == .useClickableElementText {
+      assignClusterLabels(to: &labels, used: &used, elements: elements)
       assignTextHints(to: &labels, used: &used, elements: elements)
     }
     var pool = sortedCombos(length: comboLength(for: elements.count))
@@ -122,6 +123,57 @@ enum LabelGenerator {
     }
   }
 
+  /// Dense same-ancestor clusters keep hierarchical prefix+suffix labels —
+  /// that's what collapsedGroups groups by, and text hints can't provide it.
+  private static func assignClusterLabels(
+    to labels: inout [String?], used: inout Set<String>, elements: [NavigationTarget]
+  ) {
+    guard elements.count > flatLabelLimit else { return }
+    let clusters = collapsibleClusters(in: elements)
+    guard clusters.memberIndices.count > 1 else { return }
+
+    let prefixLength = comboLength(for: clusters.ancestors.count)
+    var prefixIterator = sortedCombos(length: prefixLength).makeIterator()
+    for memberIndices in clusters.memberIndices {
+      guard let prefix = prefixIterator.next() else { break }
+      let suffixLength = comboLength(for: memberIndices.count)
+      var suffixIterator = sortedCombos(length: suffixLength).makeIterator()
+      for index in memberIndices {
+        guard let suffix = suffixIterator.next() else { break }
+        let label = prefix + suffix
+        guard !isBanned(label), !labelConflicts(label, with: used) else { continue }
+        labels[index] = label
+        used.insert(label)
+      }
+    }
+  }
+
+  /// Same criteria collapsedGroups uses: dense same-ancestor clusters of
+  /// small frames. Returns member indices per cluster plus ancestor count.
+  private static func collapsibleClusters(
+    in elements: [NavigationTarget]
+  ) -> (memberIndices: [[Int]], ancestors: [GroupingAncestor]) {
+    var order: [GroupingAncestor] = []
+    var indexByGroup: [GroupingAncestor: [Int]] = [:]
+    for (index, element) in elements.enumerated() {
+      if indexByGroup[element.groupingAncestor] == nil {
+        order.append(element.groupingAncestor)
+      }
+      indexByGroup[element.groupingAncestor, default: []].append(index)
+    }
+    let dense = order.compactMap { ancestor -> [Int]? in
+      let indices = indexByGroup[ancestor] ?? []
+      guard indices.count >= collapsedClusterMinCount,
+            indices.allSatisfy({
+              elements[$0].screenFrame.width <= collapsedClusterMaxExtent
+                && elements[$0].screenFrame.height <= collapsedClusterMaxExtent
+            })
+      else { return nil }
+      return indices
+    }
+    return (dense, order)
+  }
+
   private static func assignTextHints(
     to labels: inout [String?], used: inout Set<String>, elements: [NavigationTarget]
   ) {
@@ -131,7 +183,7 @@ enum LabelGenerator {
         initialCounts[initial, default: 0] += 1
       }
     }
-    for (index, element) in elements.enumerated() {
+    for (index, element) in elements.enumerated() where labels[index] == nil {
       let initial = firstLetter(in: element.text)
       let singleAllowed = initial.flatMap { initialCounts[$0] == 1 } ?? false
       if let hint = textHint(for: element.text, singleAllowed: singleAllowed, avoiding: used) {
