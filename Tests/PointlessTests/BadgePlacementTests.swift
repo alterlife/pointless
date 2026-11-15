@@ -126,9 +126,9 @@ final class BadgePlacementTests: XCTestCase {
   }
 
   func testSpanningElementUsesScreenHoldingAnchor() {
-    // Visual top-left (maxY 950) sits on the upper screen; body extends down onto
-    // the lower one, which is listed first so a plain overlap check would pick it.
-    let element = CGRect(x: 100, y: 850, width: 50, height: 100)
+    // Anchor (midY 910) sits on the upper screen; body extends down onto the
+    // lower one, which is listed first so a plain overlap check would pick it.
+    let element = CGRect(x: 100, y: 860, width: 50, height: 100)
 
     XCTAssertEqual(badgeScreen(for: element, among: [lowerScreen, upperScreen]), upperScreen)
   }
@@ -137,5 +137,27 @@ final class BadgePlacementTests: XCTestCase {
     let element = CGRect(x: -100, y: 200, width: 300, height: 40)
 
     XCTAssertEqual(badgeScreen(for: element, among: [upperScreen, lowerScreen]), lowerScreen)
+  }
+
+  // MARK: Badge alpha
+
+  func testCollapsedMemberStaysFaintUntilPrefixTyped() {
+    XCTAssertEqual(badgeAlpha(label: "ffa", isCollapsedMember: true, typedPrefix: ""), 0.15)
+    XCTAssertEqual(badgeAlpha(label: "ffa", isCollapsedMember: true, typedPrefix: "f"), 1.0)
+    XCTAssertEqual(badgeAlpha(label: "ffa", isCollapsedMember: true, typedPrefix: "ff"), 1.0)
+    XCTAssertEqual(badgeAlpha(label: "ffa", isCollapsedMember: true, typedPrefix: "s"), 0.2)
+  }
+
+  func testNormalMemberUnaffectedByCollapse() {
+    XCTAssertEqual(badgeAlpha(label: "sa", isCollapsedMember: false, typedPrefix: ""), 1.0)
+    XCTAssertEqual(badgeAlpha(label: "sa", isCollapsedMember: false, typedPrefix: "s"), 1.0)
+    XCTAssertEqual(badgeAlpha(label: "sa", isCollapsedMember: false, typedPrefix: "a"), 0.2)
+  }
+
+  func testGroupBadgeHidesOncePrefixFullyTyped() {
+    XCTAssertEqual(groupBadgeAlpha(prefix: "ff", typedPrefix: ""), 1.0)
+    XCTAssertEqual(groupBadgeAlpha(prefix: "ff", typedPrefix: "f"), 1.0)
+    XCTAssertNil(groupBadgeAlpha(prefix: "ff", typedPrefix: "ff"))
+    XCTAssertEqual(groupBadgeAlpha(prefix: "ff", typedPrefix: "s"), 0.2)
   }
 }

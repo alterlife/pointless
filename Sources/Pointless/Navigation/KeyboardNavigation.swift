@@ -26,6 +26,8 @@ final class KeyboardNavigation: NSObject, ObservableObject {
   @Published var scrollPrevShortcutDisplay = "⌘⇧K"
   @Published var sessionJumpCount = 0
   @Published var lastScanCount = 0
+  private var captureShortcuts = true
+  var isCapturingShortcut = false
 
   // Appearance settings
   @Published var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
@@ -43,6 +45,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
 
   private var activationMonitor: Any?
   private var scrollMonitor: Any?
+  private var hotkeyTap: HotkeyTap?
   private var appSwitchObserver: NSObjectProtocol?
   private var activationObserver: NSObjectProtocol?
 
@@ -52,6 +55,13 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     .section(label: "Activation", description: "Keyboard shortcut and enable/disable"),
     .toggle(key: "enabled", label: "Enabled", defaultValue: true),
     .hotkey(key: "activationHotkey", label: "Activation Shortcut", defaultValue: "⌘⇧Space"),
+    .toggle(
+      key: "captureShortcuts",
+      label: "Capture Shortcuts",
+      defaultValue: true,
+      description: "Pointless consumes its shortcuts so apps never see them — e.g. ⌘⇧J won't also " +
+        "trigger an app's own shortcut. Turn off to let shortcuts pass through to apps."
+    ),
     .section(label: "Scroll Mode", description: "Cycle and scroll scrollable areas by keyboard"),
     .hotkey(key: "scrollNextHotkey", label: "Scroll / Next Area", defaultValue: "⌘⇧J"),
     .hotkey(key: "scrollPrevHotkey", label: "Previous Scroll Area", defaultValue: "⌘⇧K"),
@@ -69,6 +79,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
 
   func configure(with values: [String: Any]) {
     if let enabled = values["enabled"] as? Bool { isEnabled = enabled }
+    if let capture = values["captureShortcuts"] as? Bool { captureShortcuts = capture }
     if let hex = values["badgeColor"] as? String {
       badgeColor = Color(hex: hex) ?? Color(red: 0.95, green: 0.75, blue: 0.1)
     }
@@ -126,8 +137,9 @@ final class KeyboardNavigation: NSObject, ObservableObject {
       guard let self else { return }
       Task { @MainActor in self.handleActivation() }
     }
-    KeyboardOnboardingController.shared.showIfNeeded {
+    KeyboardOnboardingController.shared.showIfNeeded { [weak self] in
       Logger.info("KeyboardNavigation permissions granted", logger: Logger.pluginLifecycle)
+      self?.reinstallMonitors()
     }
   }
 
@@ -202,6 +214,46 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     removeMonitors()
     guard isEnabled else { return }
 
+    if captureShortcuts {
+      installHotkeyTap()
+    } else {
+      installGlobalMonitors()
+    }
+
+    appSwitchObserver = NSWorkspace.shared.notificationCenter.addObserver(
+      forName: NSWorkspace.didActivateApplicationNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      guard let self else { return }
+      Task { @MainActor in self.session?.end() }
+    }
+  }
+
+  private func installHotkeyTap() {
+    let tap = HotkeyTap(
+      activation: activationHotkey,
+      scrollNext: scrollNextHotkey,
+      scrollPrev: scrollPrevHotkey,
+      shouldCapture: { [weak self] in
+        guard let self else { return false }
+        return self.session == nil && !self.isCapturingShortcut
+      },
+      onHotkey: { [weak self] hotkey in
+        switch hotkey {
+        case .activate: self?.handleActivation()
+        case .scroll: self?.handleScrollActivation()
+        }
+      }
+    )
+    guard tap.start() else {
+      installGlobalMonitors()
+      return
+    }
+    hotkeyTap = tap
+  }
+
+  private func installGlobalMonitors() {
     let activation = activationHotkey
     activationMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
       guard let self, eventMatchesHotkey(event, keyCode: activation.keyCode, modifiers: activation.modifiers)
@@ -219,18 +271,11 @@ final class KeyboardNavigation: NSObject, ObservableObject {
         Task { @MainActor in self.handleScrollActivation() }
       }
     }
-
-    appSwitchObserver = NSWorkspace.shared.notificationCenter.addObserver(
-      forName: NSWorkspace.didActivateApplicationNotification,
-      object: nil,
-      queue: .main
-    ) { [weak self] _ in
-      guard let self else { return }
-      Task { @MainActor in self.session?.end() }
-    }
   }
 
   private func removeMonitors() {
+    hotkeyTap?.stop()
+    hotkeyTap = nil
     if let monitor = activationMonitor {
       NSEvent.removeMonitor(monitor)
       activationMonitor = nil

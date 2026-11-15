@@ -22,10 +22,17 @@ struct DiscoveryContext {
 
 final class DiscoveryState {
   var results: [DiscoveredElement] = []
+  var pressFallbackCandidates: [DiscoveredElement] = []
+  var pressableCount = 0
+  var visitedCount = 0
   var roleCount: [String: Int] = [:]
 
-  /// Frames (NSScreen coords) of opaque provider groups seen during tree walks —
-  /// regions whose content is hidden from traversal (e.g. Safari's Start Page).
+  var discoveredCount: Int { results.count + pressFallbackCandidates.count }
+  var pressableRatio: Double {
+    visitedCount > 0 ? Double(pressableCount) / Double(visitedCount) : 0
+  }
+
+  /// Frames (NSScreen coords) of opaque provider groups — regions the walk can't see inside.
   var opaqueRegions: [CGRect] = []
 
   private(set) var nextNodeID = 0
@@ -50,8 +57,7 @@ protocol DiscoveryPass {
 // MARK: - Shared tree walker
 
 struct ElementTreeWalker {
-  // Chromium/Electron DOMs nest AXGroup chains 30+ levels deep — native apps
-  // rarely exceed ~15.
+  // Chromium DOMs nest AXGroup chains 30+ deep — the cap must clear that.
   static let maxDepth = 100
   static let maxElements = 500
 
@@ -64,8 +70,12 @@ struct ElementTreeWalker {
     state: DiscoveryState, context: DiscoveryContext
   ) {
     guard !context.isCancelled(), depth <= Self.maxDepth,
-          state.results.count < Self.maxElements else { return }
+          state.discoveredCount < Self.maxElements else { return }
     guard !element.isHidden, element.isEnabled else { return }
+
+    state.visitedCount += 1
+    let pressable = context.mode == .interactive && element.supportsPress
+    if pressable { state.pressableCount += 1 }
 
     let nodeID = state.makeNodeID()
     state.nodeParent[nodeID] = parentID
@@ -73,17 +83,21 @@ struct ElementTreeWalker {
     let role = element.role
     if let role {
       state.roleCount[role, default: 0] += 1
-      let matched = context.roles.contains(role)
-        || (context.mode == .interactive && element.supportsPress)
-      if matched,
+      let roleMatched = context.roles.contains(role)
+      if roleMatched || pressable,
          let frame = element.frame(primaryScreenHeight: context.primaryScreenHeight),
          frame.width >= 4, frame.height >= 4,
          context.windowFrame.map({ $0.intersects(frame) }) ?? true,
          let screen = context.screens.first(where: { $0.frame.intersects(frame) }) {
-        state.results.append(DiscoveredElement(
+        let discovered = DiscoveredElement(
           element: element, screenFrame: frame, role: role, screen: screen,
           groupingAncestor: .walkNode(parentID), walkNodeID: nodeID
-        ))
+        )
+        if roleMatched {
+          state.results.append(discovered)
+        } else {
+          state.pressFallbackCandidates.append(discovered)
+        }
       }
     }
 
@@ -93,7 +107,7 @@ struct ElementTreeWalker {
     }
 
     for child in element.children {
-      guard state.results.count < Self.maxElements else { break }
+      guard state.discoveredCount < Self.maxElements else { break }
       visit(child, depth: depth + 1, parentID: nodeID, state: state, context: context)
     }
   }

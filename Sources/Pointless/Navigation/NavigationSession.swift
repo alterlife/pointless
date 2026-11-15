@@ -86,6 +86,7 @@ final class NavigationSession {
       let labeled = LabelGenerator.label(elements.sortedByPosition())
       self.labeledElements = labeled
       self.overlayState.labeledElements = labeled
+      self.overlayState.collapsedGroups = LabelGenerator.collapsedGroups(in: labeled)
       self.overlayState.typedPrefix = ""
       self.mode = .click(typedSoFar: "")
       self.overlayWindows.forEach { $0.show(fadeDuration: self.config.fadeInDuration) }
@@ -107,9 +108,13 @@ final class NavigationSession {
       guard !viable.isEmpty else {
         Logger.warning("No scrollable elements found in focused window", logger: Logger.pluginLifecycle)
         self.end()
+        showEmptyHint("No scrollable areas found")
         return
       }
-      let sorted = viable.sortedByPosition()
+      let byPosition = viable.sortedByPosition()
+      let withScrollEvidence = byPosition.filter { $0.element.hasScrollIndicators }
+      let withoutScrollEvidence = byPosition.filter { !$0.element.hasScrollIndicators }
+      let sorted = withScrollEvidence + withoutScrollEvidence
       let mousePos = NSEvent.mouseLocation
       let startIndex = sorted.firstIndex { $0.screenFrame.contains(mousePos) } ?? 0
       self.rebuildOverlayWindows()
@@ -120,6 +125,7 @@ final class NavigationSession {
       self.mode = .scrolling(targets: sorted, currentIndex: startIndex)
       self.overlayWindows.forEach { $0.show(fadeDuration: self.config.fadeInDuration) }
       self.installEventTap()
+      self.scheduleScrollHint()
     }
   }
 
@@ -157,6 +163,7 @@ final class NavigationSession {
   }
 
   private func handleScrollKey(_ event: NSEvent, targets: [DiscoveredElement], currentIndex: Int) {
+    scheduleScrollHint()
     if eventMatchesHotkey(event, keyCode: config.scrollNext.keyCode, modifiers: config.scrollNext.modifiers) {
       cycleScrollTarget(targets: targets, from: currentIndex, offset: 1)
       return
@@ -196,8 +203,7 @@ final class NavigationSession {
     onJump()
     end()
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-      // AXPress is more reliable than a synthetic click (e.g. Terminal tabs ignore
-      // clicks at their frame center). Fall back to a click for elements without it.
+      // AXPress beats a synthetic click — some apps ignore clicks at frame centers.
       if element.performPress() { return }
       Self.postClick(at: Self.unobscuredClickPoint(for: labeled.element) ?? clickPoint)
     }
@@ -239,17 +245,32 @@ final class NavigationSession {
   private static let scrollStep: Int32 = 60
   private static let scrollPage: Int32 = 400
 
+  private var scrollHintWorkItem: DispatchWorkItem?
+
+  private static let scrollHintDelay: Double = 3
+
+  private func scheduleScrollHint() {
+    scrollHintWorkItem?.cancel()
+    overlayState.showScrollHint = false
+    let work = DispatchWorkItem { [weak self] in
+      guard let self, case .scrolling = self.mode else { return }
+      self.overlayState.showScrollHint = true
+    }
+    scrollHintWorkItem = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.scrollHintDelay, execute: work)
+  }
+
   private func cycleScrollTarget(targets: [DiscoveredElement], from index: Int, offset: Int) {
     guard !targets.isEmpty else { return }
     let newIndex = (index + offset + targets.count) % targets.count
     warpCursor(to: targets[newIndex])
     overlayState.scrollTargetFrame = targets[newIndex].screenFrame
     mode = .scrolling(targets: targets, currentIndex: newIndex)
+    scheduleScrollHint()
   }
 
   private func synthesizeScroll(deltaY: Int32) {
-    // Pixel-unit events scroll smoothly (line units jump in coarse steps).
-    // Scroll events go to the current cursor position.
+    // Pixel units scroll smoothly; line units jump in coarse steps.
     CGEvent(
       scrollWheelEvent2Source: nil, units: .pixel,
       wheelCount: 1, wheel1: deltaY, wheel2: 0, wheel3: 0
@@ -317,8 +338,11 @@ final class NavigationSession {
     overlayWindows.forEach { $0.hide() }
     overlayWindows = []
     overlayState.labeledElements = []
+    overlayState.collapsedGroups = []
     overlayState.typedPrefix = ""
     overlayState.scrollTargetFrame = nil
+    overlayState.showScrollHint = false
+    scrollHintWorkItem?.cancel()
     onEnded()
   }
 }

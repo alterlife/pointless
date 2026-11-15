@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 // NOTE: DiscoveredElement is defined in Discovery/DiscoveredElement.swift (same module)
@@ -5,6 +6,14 @@ import Foundation
 struct LabeledElement {
   let label: String
   let element: DiscoveredElement
+}
+
+/// A dense cluster of small siblings collapsed into one signpost badge.
+/// Members keep their labels but render faint until the shared prefix is typed.
+struct CollapsedGroup {
+  let prefix: String
+  let label: String
+  let frame: CGRect
 }
 
 enum LabelGenerator {
@@ -23,12 +32,49 @@ enum LabelGenerator {
   /// keystrokes and narrows faster.
   private static let flatLabelLimit = 27
 
+  private static let collapsedClusterMinCount = 6
+  private static let collapsedClusterMaxExtent: CGFloat = 56
+
   /// Assign labels to pre-sorted elements
   static func label(_ elements: [DiscoveredElement]) -> [LabeledElement] {
     guard elements.count > flatLabelLimit, let groups = labelGroups(for: elements) else {
       return flatLabel(elements)
     }
     return hierarchicalLabel(elements, groups: groups)
+  }
+
+  /// Dense clusters of small siblings get a signpost badge; members stay
+  /// labeled but render faint until their shared prefix is typed.
+  static func collapsedGroups(in labeled: [LabeledElement]) -> [CollapsedGroup] {
+    guard labeled.count > flatLabelLimit else { return [] }
+    let ancestorCount = Set(labeled.map { $0.element.groupingAncestor }).count
+    guard ancestorCount > 1 else { return [] }
+    let prefixLength = comboLength(for: ancestorCount)
+
+    var membersByPrefix: [String: [LabeledElement]] = [:]
+    var prefixOrder: [String] = []
+    for item in labeled {
+      let prefix = String(item.label.prefix(prefixLength))
+      if membersByPrefix[prefix] == nil { prefixOrder.append(prefix) }
+      membersByPrefix[prefix, default: []].append(item)
+    }
+
+    return prefixOrder.compactMap { prefix in
+      let members = membersByPrefix[prefix] ?? []
+      guard members.count >= collapsedClusterMinCount,
+            members.allSatisfy({
+              $0.element.groupingAncestor == members[0].element.groupingAncestor
+                && $0.element.screenFrame.width <= collapsedClusterMaxExtent
+                && $0.element.screenFrame.height <= collapsedClusterMaxExtent
+            })
+      else { return nil }
+      let frame = members.dropFirst().reduce(members[0].element.screenFrame) {
+        $0.union($1.element.screenFrame)
+      }
+      return CollapsedGroup(
+        prefix: prefix, label: "\(prefix)_ (\(members.count) items)", frame: frame
+      )
+    }
   }
 
   /// First-appearance order — earlier groups get the home-row prefixes.

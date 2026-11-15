@@ -441,9 +441,13 @@ func axToNSScreenTest(axX: Double, axY: Double, w: Double, h: Double, screenH: D
     TRect(x: axX, y: screenH - axY - h, width: w, height: h)
 }
 
-func anchorPointTest(frameX: Double, frameY: Double, frameMaxY: Double,
-                     screenMinX: Double, screenMaxY: Double) -> TPoint {
-    TPoint(x: frameX - screenMinX + 4, y: screenMaxY - frameMaxY + 4)
+func anchorPointTest(frameX: Double, frameY: Double, frameMaxY: Double, frameWidth: Double,
+                     frameHeight: Double, screenMinX: Double, screenMaxY: Double) -> TPoint {
+    let midY = (frameY + frameMaxY) / 2
+    let x = frameWidth > frameHeight
+      ? frameX + frameWidth / 2
+      : frameX + min(10.0, frameWidth / 4)
+    return TPoint(x: x - screenMinX, y: screenMaxY - midY)
 }
 
 testSuite("Coordinate Tests") {
@@ -457,12 +461,16 @@ testSuite("Coordinate Tests") {
         assertEqual(rect.y, 0.0, "Element at AX bottom (y=1170, h=30) -> NSScreen y=0")
     }
 
-    runTest("testAnchorInsideElement — inset 4pt from element top-left in canvas coords") {
-        // screenFrame: x=100, y=200, w=80, h=30 → maxY=230; screenRect: y=0, maxY=900
-        let anchor = anchorPointTest(frameX: 100, frameY: 200, frameMaxY: 230,
-                                     screenMinX: 0, screenMaxY: 900)
-        assertEqual(anchor.x, 104.0, "anchorX = frame.minX - screen.minX + 4 = 104")
-        assertEqual(anchor.y, 674.0, "anchorY = screen.maxY - frame.maxY + 4 = 674")
+    runTest("testAnchorInsideElement — landscape centers, portrait left-insets") {
+        // screenFrame: x=100, y=200, w=80, h=30 → landscape → midX=140, midY=215
+        let wide = anchorPointTest(frameX: 100, frameY: 200, frameMaxY: 230, frameWidth: 80, frameHeight: 30,
+                                   screenMinX: 0, screenMaxY: 900)
+        assertEqual(wide.x, 140.0, "wide anchorX = frame.midX = 140")
+        assertEqual(wide.y, 685.0, "anchorY = screen.maxY - frame.midY = 685")
+        // w=20, h=40 → portrait → inset min(10, 5) = 5 → x=105
+        let tall = anchorPointTest(frameX: 100, frameY: 200, frameMaxY: 240, frameWidth: 20, frameHeight: 40,
+                                   screenMinX: 0, screenMaxY: 900)
+        assertEqual(tall.x, 105.0, "tall anchorX = minX + inset(5) = 105")
     }
 
 }

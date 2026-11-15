@@ -9,16 +9,18 @@ final class ElementDiscovery {
     AXRoleName.incrementor, AXRoleName.slider
   ]
 
-  private static let scrollableRoles: Set<String> = [AXRoleName.scrollArea]
+  // Browsers expose no AXScrollArea — AXWebArea is the scroll container.
+  private static let scrollableRoles: Set<String> = [AXRoleName.scrollArea, AXRoleName.webArea]
 
-  /// How long to wait for WebKit/Chromium to build their AX tree after assistive
-  /// access is first enabled (the tree is populated lazily).
+  // WebKit/Chromium build the AX tree lazily once assistive access is enabled.
   private static let assistiveAccessSettleMicroseconds: UInt32 = 300_000
 
   private let passes: [DiscoveryPass] = [
     TreeWalkPass(),
+    PressFallbackPass(),
     FocusedElementFallbackPass(),
-    HitTestPass()
+    HitTestPass(),
+    OcclusionPass()
   ]
 
   private var cancelled = false
@@ -29,7 +31,7 @@ final class ElementDiscovery {
 
   func scan(mode: ScanMode = .interactive, completion: @escaping @MainActor ([DiscoveredElement]) -> Void) {
     cancelled = false
-    // Capture screen info before leaving the main thread — NSScreen is AppKit API
+    // NSScreen is main-thread-only — capture screens before hopping to the scan queue.
     let screens = NSScreen.screens
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       guard let self else {
@@ -70,20 +72,17 @@ final class ElementDiscovery {
                    logger: Logger.pluginLifecycle)
     }
 
-    let unique = Self.consolidate(state.results, mode: mode, nodeParent: state.nodeParent)
+    let unique = Self.deduplicateAndRegroup(state.results, mode: mode, nodeParent: state.nodeParent)
 
-    let visited = state.roleCount.values.reduce(0, +)
     Logger.debug(
-      "Discovery: \(unique.count) elements, \(visited) visited, " +
+      "Discovery: \(unique.count) elements, \(state.visitedCount) visited, " +
       "roles=\(state.roleCount.sorted { $0.value > $1.value }.prefix(15))",
       logger: Logger.pluginLifecycle
     )
     return unique
   }
 
-  /// Dedup across passes, collapse same-anchor elements to one label, and
-  /// regroup for label prefixes.
-  static func consolidate(
+  static func deduplicateAndRegroup(
     _ results: [DiscoveredElement], mode: ScanMode, nodeParent: [Int: Int]
   ) -> [DiscoveredElement] {
     var seen = Set<String>()

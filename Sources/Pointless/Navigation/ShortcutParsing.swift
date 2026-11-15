@@ -44,7 +44,11 @@ private let relevantModifiers: NSEvent.ModifierFlags = [.command, .shift, .optio
 
 /// Check whether an NSEvent matches a specific hotkey (key code + modifier mask).
 func eventMatchesHotkey(_ event: NSEvent, keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
-  event.keyCode == keyCode && event.modifierFlags.intersection(relevantModifiers) == modifiers
+  eventMatchesHotkey(event, shortcut: ParsedShortcut(modifiers: modifiers, keyCode: keyCode))
+}
+
+func eventMatchesHotkey(_ event: NSEvent, shortcut: ParsedShortcut) -> Bool {
+  event.keyCode == shortcut.keyCode && event.modifierFlags.intersection(relevantModifiers) == shortcut.modifiers
 }
 
 private func carbonKeyCode(for char: String) -> UInt16? {
