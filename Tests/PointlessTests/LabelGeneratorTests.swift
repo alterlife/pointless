@@ -79,6 +79,14 @@ final class LabelGeneratorTests: XCTestCase {
     XCTAssertFalse(["sav", "save"].contains(labeled[2].label))
   }
 
+  func testTextStrategyStaysFlatAboveGroupThreshold() {
+    // 30 elements would normally go hierarchical — text strategy stays flat.
+    let elements = (0..<30).map { textElement("Item \($0)", x: CGFloat($0) * 20) }
+    let labeled = LabelGenerator.label(elements, strategy: .clickableElementText)
+    XCTAssertTrue(labeled.allSatisfy { !$0.label.contains("_") })
+    XCTAssertEqual(labeled[0].label, "ite")
+  }
+
   func testEmptyTextFallsBackToKeys() {
     let labeled = LabelGenerator.label(
       [element(groupingAncestor: .walkNode(0), x: 0)],

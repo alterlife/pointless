@@ -44,7 +44,12 @@ enum LabelGenerator {
   static func label(
     _ elements: [NavigationTarget], strategy: LabelStrategy = .homerowKeys
   ) -> [LabeledElement] {
-    guard elements.count > flatLabelLimit, let groups = labelGroups(for: elements) else {
+    // Text hints are self-describing — group prefixes add nothing, so the
+    // text strategy stays flat at any count.
+    guard strategy == .homerowKeys,
+          elements.count > flatLabelLimit,
+          let groups = labelGroups(for: elements)
+    else {
       return flatLabel(elements, strategy: strategy)
     }
     return hierarchicalLabel(elements, groups: groups, strategy: strategy)
