@@ -109,8 +109,16 @@ enum LabelGenerator {
     var labels = [String?](repeating: nil, count: elements.count)
     var used = Set<String>()
     if strategy == .clickableElementText {
+      var initialCounts: [Character: Int] = [:]
+      for element in elements {
+        if let initial = firstLetter(in: element.text) {
+          initialCounts[initial, default: 0] += 1
+        }
+      }
       for (index, element) in elements.enumerated() {
-        if let hint = textHint(for: element.text, avoiding: used) {
+        let initial = firstLetter(in: element.text)
+        let singleAllowed = initial.flatMap { initialCounts[$0] == 1 } ?? false
+        if let hint = textHint(for: element.text, singleAllowed: singleAllowed, avoiding: used) {
           labels[index] = hint
           used.insert(hint)
         }
@@ -130,13 +138,19 @@ enum LabelGenerator {
   /// Windows-style access keys: first letters of words, then scan the next
   /// word's letters for a free second char — "New Song" colliding on "ns"
   /// becomes "no". 3-4 char prefixes of the full text are the last resort.
-  private static func textHint(for text: String, avoiding used: Set<String>) -> String? {
+  private static func firstLetter(in text: String) -> Character? {
+    text.first { $0.isLetter }
+  }
+
+  private static func textHint(
+    for text: String, singleAllowed: Bool, avoiding used: Set<String>
+  ) -> String? {
     let words = text.lowercased()
       .components(separatedBy: CharacterSet.letters.inverted)
       .filter { !$0.isEmpty }
     guard let head = words.first, let headChar = head.first else { return nil }
 
-    var candidates: [String] = []
+    var candidates = singleAllowed ? [String(headChar)] : []
     if words.count > 1 {
       for char in words[1] { candidates.append("\(headChar)\(char)") }
     } else if head.count > 1 {

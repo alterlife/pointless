@@ -63,18 +63,22 @@ final class LabelGeneratorTests: XCTestCase {
       [textElement("Save", x: 0), textElement("Cancel", x: 20)],
       strategy: .clickableElementText
     )
-    XCTAssertEqual(labeled[0].label, "sa")
-    XCTAssertEqual(labeled[1].label, "ca")
+    XCTAssertEqual(labeled[0].label, "s")
+    XCTAssertEqual(labeled[1].label, "c")
   }
 
   func testTextLabelCollisionsScanSecondWord() {
-    // "New Session" and "New Song" both start "ns" — second gets "no".
+    // First letters collide on "n" — later elements scan word-two letters.
     let labeled = LabelGenerator.label(
-      [textElement("New Session", x: 0), textElement("New Song", x: 20)],
+      [
+        textElement("New Session", x: 0), textElement("New Settings", x: 20),
+        textElement("New Song", x: 40)
+      ],
       strategy: .clickableElementText
     )
     XCTAssertEqual(labeled[0].label, "ns")
-    XCTAssertEqual(labeled[1].label, "no")
+    XCTAssertEqual(labeled[1].label, "ne")
+    XCTAssertEqual(labeled[2].label, "no")
   }
 
   func testTextLabelPrefixConflictsFallBack() {
@@ -89,7 +93,7 @@ final class LabelGeneratorTests: XCTestCase {
   }
 
   func testShorterLabelBlocksLongerPrefix() {
-    // "Ne" claims "ne"; "Neuroport" can't take "neu" — prefix ambiguity.
+    // "Ne" claims "n"; "Neuroport" can't take "ne"/"neu" — prefix ambiguity.
     let labeled = LabelGenerator.label(
       [textElement("Ne", x: 0), textElement("Neuroport", x: 20)],
       strategy: .clickableElementText
@@ -110,7 +114,7 @@ final class LabelGeneratorTests: XCTestCase {
     let labeled = LabelGenerator.label(
       [textElement("OK", x: 0)], strategy: .clickableElementText
     )
-    XCTAssertEqual(labeled[0].label, "ok")
+    XCTAssertEqual(labeled[0].label, "o")
   }
 
   func testEmptyTextFallsBackToKeys() {
