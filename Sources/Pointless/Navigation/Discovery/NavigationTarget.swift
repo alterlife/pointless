@@ -47,6 +47,23 @@ extension Array where Element == NavigationTarget {
     }
   }
 
+  func dropContainedPassiveElements() -> [NavigationTarget] {
+    let passiveRoles: Set<String> = [
+      AXRoleName.staticText, AXRoleName.textField, AXRoleName.textArea
+    ]
+    let all = self
+    return filter { inner in
+      guard passiveRoles.contains(inner.role) else { return true }
+      let center = CGPoint(x: inner.screenFrame.midX, y: inner.screenFrame.midY)
+      return !all.contains { outer in
+        outer.dedupKey != inner.dedupKey
+          && outer.screenFrame.contains(center)
+          && outer.screenFrame.width * outer.screenFrame.height
+            > inner.screenFrame.width * inner.screenFrame.height
+      }
+    }
+  }
+
   // Chromium wraps controls in single-child AXGroups — climb past ancestors
   // holding only one surviving discovery.
   func regroupedForLabels() -> [NavigationTarget] {

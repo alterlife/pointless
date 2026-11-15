@@ -9,6 +9,7 @@ enum AXRoleName {
   static let link = "AXLink"
   static let textField = "AXTextField"
   static let textArea = "AXTextArea"
+  static let staticText = "AXStaticText"
   static let checkBox = "AXCheckBox"
   static let radioButton = "AXRadioButton"
   static let popUpButton = "AXPopUpButton"
