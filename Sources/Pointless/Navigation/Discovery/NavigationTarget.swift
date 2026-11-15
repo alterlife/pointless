@@ -78,13 +78,15 @@ extension Array where Element == NavigationTarget {
     let all = self
     return filter { outer in
       guard outer.role == AXRoleName.group else { return true }
+      let outerArea = outer.screenFrame.width * outer.screenFrame.height
       return !all.contains { inner in
-        inner.dedupKey != outer.dedupKey
-          && outer.screenFrame.contains(
-            CGPoint(x: inner.screenFrame.midX, y: inner.screenFrame.midY)
-          )
-          && outer.screenFrame.width * outer.screenFrame.height
-            > inner.screenFrame.width * inner.screenFrame.height
+        guard inner.dedupKey != outer.dedupKey else { return false }
+        let overlap = outer.screenFrame.intersection(inner.screenFrame)
+        guard !overlap.isNull else { return false }
+        let overlapArea = overlap.width * overlap.height
+        let innerArea = inner.screenFrame.width * inner.screenFrame.height
+        let smaller = outerArea < innerArea ? outerArea : innerArea
+        return overlapArea * 2 > smaller
       }
     }
   }
