@@ -43,7 +43,7 @@ struct HitTestPass: DiscoveryPass {
         let parent = target.parent
         let element = NavigationTarget(
           element: target, screenFrame: frame, role: role, screen: screen,
-          groupingAncestor: .hitTestParent(CFHash(parent?.raw ?? target.raw)),
+          groupingAncestor: .hitTestParent(parent?.axIdentity ?? target.axIdentity),
           node: nil
         )
         guard seen.insert(element.dedupKey).inserted else { continue }
@@ -55,8 +55,8 @@ struct HitTestPass: DiscoveryPass {
 
   /// Climb from a hit-test result (often a deep AXImage/AXStaticText) to the nearest
   /// ancestor that is actually clickable.
-  private func clickableAncestor(of element: AXElement, roles: Set<String>) -> AXElement? {
-    var current = element
+  private func clickableAncestor(of element: any AXNode, roles: Set<String>) -> (any AXNode)? {
+    var current: any AXNode = element
     for _ in 0..<Self.maxAncestorClimb {
       if let role = current.role, roles.contains(role) || current.supportsPress {
         return current

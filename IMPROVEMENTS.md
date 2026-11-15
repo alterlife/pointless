@@ -11,15 +11,10 @@ makes both the progressive merge and the fixtures clean to build.
 
 ### U1. Progressive overlay (biggest single win)
 
-Latency is the entire experience for jump-to-click. The current fallback stack
-trades latency for coverage — the Safari Start Page worst case (300 ms
-enhanced-UI settle + ~900 hit-test probes) approaches "did it hear me?"
-territory.
-
-- Show badges for tree-walk results immediately (~50 ms).
-- Stream in fallback/hit-test results as they arrive, merging labels without
-  re-lettering already-visible badges.
-- Converts the ~1 s worst case into perceived-instant.
+Badges still wait for the full scan (~200–370 ms typical after the batch-fetch
+and pruning work). Showing tree-walk results as soon as that pass finishes and
+merging fallback/occlusion results as they land would make activation feel
+instant.
 
 **Files:** `Navigation/Discovery/ElementDiscovery.swift` (per-pass incremental
 callbacks — `scan` already delivers results via completion),
@@ -71,21 +66,14 @@ regression test.
 - Replay fixtures through the `DiscoveryPass` pipeline in XCTest
   (`Tests/PointlessTests/`) — XCTest works with the installed Xcode toolchain.
 
-### M2. Per-app quirk table
+### M2. Built-in diagnostics command
 
-Replace scattered conditionals with a bundle-ID-keyed table declaring:
-"needs enhanced UI," "needs hit-test," "needs focused-element fallback,"
-"settle delay." Quirks become data (per the project's declarative-over-
-imperative rule); adding Chrome/Electron support becomes a table row.
-
-**Files:** `Navigation/Discovery/` (pass `shouldRun` conditions)
-
-### M3. Built-in diagnostics command
-
-Promote the debug instrumentation (role counts, probe stats) into a hidden
-"diagnostics" action that runs one scan and dumps a report (frontmost app,
-pass-by-pass results, roles, timings). Future bug reports arrive with the data
-instead of requiring a debug-logging session over buffered stdout.
+Promote the debug instrumentation (per-pass element counts and timings,
+role counts) into a hidden "diagnostics" action that runs one scan and dumps
+a report (frontmost app, pass-by-pass results, roles, timings). Future bug
+reports arrive with the data instead of requiring a debug-logging session
+over buffered stdout. Could double as the fixture recorder for M1 — serialize
+the walked `AXTreeNode` tree to JSON.
 
 **Files:** `Navigation/Discovery/ElementDiscovery.swift`, `App/Logger.swift`
 
@@ -96,4 +84,4 @@ instead of requiring a debug-logging session over buffered stdout.
 1. **M1** fixture tests on top of the pass pipeline (locks in current behavior
    before changing it)
 2. **U1** progressive overlay (incremental pass results → incremental badges)
-3. **U2–U4, M2, M3** as independent follow-ups
+3. **U2–U4, M2** as independent follow-ups

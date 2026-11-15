@@ -11,7 +11,7 @@ enum GroupingAncestor: Hashable {
 
 /// An interactive (or scrollable) on-screen element found by a discovery pass.
 struct NavigationTarget {
-  let element: AXElement
+  let element: any AXNode
   let screenFrame: CGRect   // NSScreen coords (bottom-left origin)
   let role: String
   let screen: NSScreen

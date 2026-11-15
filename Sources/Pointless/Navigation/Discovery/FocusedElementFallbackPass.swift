@@ -27,7 +27,7 @@ struct FocusedElementFallbackPass: DiscoveryPass {
   /// Walk from the focused element up to a content root (AXWebArea, AXScrollArea) that
   /// can serve as a traversal starting point. Stops before AXApplication to avoid
   /// scanning the entire app (menu bars, other windows, etc.).
-  private func contentRoot(from app: AXElement) -> AXElement? {
+  private func contentRoot(from app: any AXNode) -> (any AXNode)? {
     guard var current = app.focusedUIElement else { return nil }
 
     let contentRoles: Set<String> = [AXRoleName.webArea, AXRoleName.scrollArea, AXRoleName.browser]

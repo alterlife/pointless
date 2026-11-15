@@ -2,7 +2,7 @@ import AppKit
 import OSLog
 
 final class ElementDiscovery {
-  private static let interactiveRoles: Set<String> = [
+  static let interactiveRoles: Set<String> = [
     AXRoleName.button, AXRoleName.link, AXRoleName.textField, AXRoleName.textArea,
     AXRoleName.checkBox, AXRoleName.radioButton, AXRoleName.popUpButton, AXRoleName.menuItem,
     AXRoleName.comboBox, AXRoleName.tabGroup, AXRoleName.disclosureTriangle,
@@ -10,7 +10,7 @@ final class ElementDiscovery {
   ]
 
   // Browsers expose no AXScrollArea — AXWebArea is the scroll container.
-  private static let scrollableRoles: Set<String> = [AXRoleName.scrollArea, AXRoleName.webArea]
+  static let scrollableRoles: Set<String> = [AXRoleName.scrollArea, AXRoleName.webArea]
 
   // WebKit/Chromium build the AX tree lazily once assistive access is enabled.
   private static let assistiveAccessSettleMicroseconds: UInt32 = 300_000

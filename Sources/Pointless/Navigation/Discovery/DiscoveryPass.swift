@@ -10,8 +10,8 @@ enum ScanMode {
 // MARK: - Pipeline context & state
 
 struct DiscoveryContext {
-  let app: AXElement
-  let window: AXElement
+  let app: any AXNode
+  let window: any AXNode
   let windowFrame: CGRect?
   let primaryScreenHeight: CGFloat
   let screens: [NSScreen]
@@ -63,12 +63,12 @@ struct ElementTreeWalker {
   static let maxDepth = 100
   static let maxElements = 500
 
-  func walk(from root: AXElement, state: DiscoveryState, context: DiscoveryContext) {
+  func walk(from root: any AXNode, state: DiscoveryState, context: DiscoveryContext) {
     visit(root, parent: nil, depth: 0, state: state, context: context)
   }
 
   private func visit(
-    _ element: AXElement, parent: AXTreeNode?, depth: Int,
+    _ element: any AXNode, parent: AXTreeNode?, depth: Int,
     state: DiscoveryState, context: DiscoveryContext
   ) {
     guard !context.isCancelled(), depth <= Self.maxDepth,

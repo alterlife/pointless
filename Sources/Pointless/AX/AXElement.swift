@@ -45,7 +45,7 @@ private enum AXAttrName {
 private let axPressAction = "AXPress"
 
 struct NodeAttributes {
-  var children: [AXElement]
+  var children: [any AXNode]
   var role: String?
   var isHidden: Bool
   var isEnabled: Bool
@@ -65,7 +65,7 @@ internal func axToNSScreen(axOrigin: CGPoint, axSize: CGSize, primaryScreenHeigh
 
 /// Typed facade over `AXUIElement`. All raw accessibility calls, CF cast workarounds,
 /// and per-framework quirks live here so the rest of the codebase never touches them.
-struct AXElement {
+struct AXElement: AXNode {
   let raw: AXUIElement
 
   // MARK: Construction
@@ -94,21 +94,21 @@ struct AXElement {
     (attributeValue(AXAttrName.hidden) as? NSNumber)?.boolValue ?? false
   }
 
-  var parent: AXElement? {
+  var parent: (any AXNode)? {
     elementAttribute(AXAttrName.parent)
   }
 
-  var focusedWindow: AXElement? {
+  var focusedWindow: (any AXNode)? {
     elementAttribute(AXAttrName.focusedWindow) ?? elementAttribute(AXAttrName.mainWindow)
   }
 
-  var focusedUIElement: AXElement? {
+  var focusedUIElement: (any AXNode)? {
     elementAttribute(AXAttrName.focusedUIElement)
   }
 
   /// Children via AXChildren, falling back to the alternative attributes some
   /// frameworks (Firefox, Mullvad) populate instead.
-  var children: [AXElement] {
+  var children: [any AXNode] {
     for attr in AXAttrName.childAttrs {
       // swiftlint:disable:next empty_count
       guard let arr = attributeValue(attr) as? NSArray, arr.count > 0 else { continue }
@@ -156,9 +156,9 @@ struct AXElement {
     )
   }
 
-  private static func axElements(from value: AnyObject?) -> [AXElement] {
+  private static func axElements(from value: AnyObject?) -> [any AXNode] {
     guard let arr = value as? NSArray else { return [] }
-    return arr.map { AXElement(raw: unsafeBitCast($0 as AnyObject, to: AXUIElement.self)) }
+    return arr.map { AXElement(raw: unsafeBitCast($0 as AnyObject, to: AXUIElement.self)) as any AXNode }
   }
 
   private static func nsscreenFrame(position: AnyObject?, size: AnyObject?, primaryScreenHeight: CGFloat) -> CGRect? {
@@ -204,11 +204,13 @@ struct AXElement {
 
   /// CFHash is how the codebase already identifies AXUIElements
   /// (see GroupingAncestor.hitTestParent).
-  func isSameElement(as other: AXElement) -> Bool {
-    CFHash(raw) == CFHash(other.raw)
+  var axIdentity: UInt { CFHash(raw) }
+
+  func isSameElement(as other: any AXNode) -> Bool {
+    axIdentity == other.axIdentity
   }
 
-  func isDescendant(of ancestor: AXElement, maxHops: Int = 10) -> Bool {
+  func isDescendant(of ancestor: any AXNode, maxHops: Int) -> Bool {
     var current = parent
     for _ in 0..<maxHops {
       guard let node = current else { return false }
@@ -222,7 +224,7 @@ struct AXElement {
 
   /// The deepest element at a point in AX (top-left origin) coordinates.
   /// Position resolution pierces opaque provider boundaries that block tree traversal.
-  func elementAt(axX: CGFloat, axY: CGFloat) -> AXElement? {
+  func elementAt(axX: CGFloat, axY: CGFloat) -> (any AXNode)? {
     var ref: AXUIElement?
     guard AXUIElementCopyElementAtPosition(raw, Float(axX), Float(axY), &ref) == .success,
           let hit = ref else { return nil }
