@@ -16,6 +16,7 @@ final class FixtureAXNode: AXNode {
   var focusedWindow: (any AXNode)?
   var focusedUIElement: (any AXNode)?
   var hasScrollIndicators = false
+  var text: String?
   var pressResult = true
   var axIdentity: UInt { UInt(bitPattern: ObjectIdentifier(self)) }
 
@@ -42,7 +43,7 @@ final class FixtureAXNode: AXNode {
   func nodeAttributes(primaryScreenHeight: CGFloat) -> NodeAttributes {
     NodeAttributes(
       children: children, role: role, isHidden: isHidden,
-      isEnabled: isEnabled, frame: frame
+      isEnabled: isEnabled, frame: frame, text: text
     )
   }
 

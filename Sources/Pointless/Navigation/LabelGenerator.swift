@@ -32,15 +32,22 @@ enum LabelGenerator {
   /// keystrokes and narrows faster.
   private static let flatLabelLimit = 27
 
+  enum LabelStrategy {
+    case homerowKeys
+    case clickableElementText
+  }
+
   private static let collapsedClusterMinCount = 6
   private static let collapsedClusterMaxExtent: CGFloat = 56
 
   /// Assign labels to pre-sorted elements
-  static func label(_ elements: [NavigationTarget]) -> [LabeledElement] {
+  static func label(
+    _ elements: [NavigationTarget], strategy: LabelStrategy = .homerowKeys
+  ) -> [LabeledElement] {
     guard elements.count > flatLabelLimit, let groups = labelGroups(for: elements) else {
-      return flatLabel(elements)
+      return flatLabel(elements, strategy: strategy)
     }
-    return hierarchicalLabel(elements, groups: groups)
+    return hierarchicalLabel(elements, groups: groups, strategy: strategy)
   }
 
   /// Dense clusters of small siblings get a signpost badge; members stay
@@ -91,14 +98,51 @@ enum LabelGenerator {
     return order.map { (ancestor: $0, indices: indexByGroup[$0] ?? []) }
   }
 
-  private static func flatLabel(_ elements: [NavigationTarget]) -> [LabeledElement] {
-    let labels = combos(count: elements.count, length: comboLength(for: elements.count))
-    return zip(elements, labels).map { elem, lbl in LabeledElement(label: lbl, element: elem) }
+  private static func flatLabel(
+    _ elements: [NavigationTarget], strategy: LabelStrategy
+  ) -> [LabeledElement] {
+    var labels = [String?](repeating: nil, count: elements.count)
+    var used = Set<String>()
+    if strategy == .clickableElementText {
+      for (index, element) in elements.enumerated() {
+        if let hint = textHint(for: element.text, avoiding: used) {
+          labels[index] = hint
+          used.insert(hint)
+        }
+      }
+    }
+    var pool = sortedCombos(length: comboLength(for: elements.count))
+      .filter { !used.contains($0) }
+      .makeIterator()
+    for index in elements.indices where labels[index] == nil {
+      labels[index] = pool.next()
+    }
+    return zip(elements, labels.compactMap { $0 }).map { elem, lbl in
+      LabeledElement(label: lbl, element: elem)
+    }
+  }
+
+  /// Shortest unique prefix (2–4 chars) of the element's visible text.
+  /// "Save" → "sav", "Save File" colliding → "savef". Nil when unusable.
+  private static func textHint(for text: String, avoiding used: Set<String>) -> String? {
+    let stream = text.lowercased()
+      .components(separatedBy: CharacterSet.alphanumerics.inverted)
+      .filter { !$0.isEmpty }
+      .joined()
+    guard stream.count >= 2 else { return nil }
+    // Prefer 3 chars (readable), extend to 4 on collision, 2 as last resort.
+    let lengths = [3, 4, 2].filter { $0 <= stream.count }
+    for length in lengths {
+      let candidate = String(stream.prefix(length))
+      if !used.contains(candidate), !isBanned(candidate) { return candidate }
+    }
+    return nil
   }
 
   private static func hierarchicalLabel(
     _ elements: [NavigationTarget],
-    groups: [(ancestor: GroupingAncestor, indices: [Int])]
+    groups: [(ancestor: GroupingAncestor, indices: [Int])],
+    strategy: LabelStrategy
   ) -> [LabeledElement] {
     let prefixLength = comboLength(for: groups.count)
     let prefixes = combos(count: groups.count, length: prefixLength)
@@ -114,7 +158,9 @@ enum LabelGenerator {
         while candidateIndex < candidates.count, isBanned(prefix + candidates[candidateIndex]) {
           candidateIndex += 1
         }
-        guard candidateIndex < candidates.count else { return flatLabel(elements) }
+        guard candidateIndex < candidates.count else {
+          return flatLabel(elements, strategy: strategy)
+        }
         result[elementIndex] = LabeledElement(
           label: prefix + candidates[candidateIndex],
           element: elements[elementIndex]

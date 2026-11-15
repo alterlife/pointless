@@ -18,6 +18,8 @@ struct NavigationTarget {
   /// The ancestor this element groups under — not necessarily its AX parent.
   var groupingAncestor: GroupingAncestor
   let node: AXTreeNode?
+  /// Visible text (title/description/value) — feeds text-derived hints.
+  var text: String = ""
 
   var dedupKey: String { "\(role)|\(screenFrame)" }
 }

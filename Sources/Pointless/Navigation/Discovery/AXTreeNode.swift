@@ -4,13 +4,15 @@ final class AXTreeNode {
   let id: Int
   let element: any AXNode
   let role: String?
+  let text: String?
   private(set) weak var parent: AXTreeNode?
   private(set) var children: [AXTreeNode] = []
 
-  init(id: Int, element: any AXNode, parent: AXTreeNode?, role: String? = nil) {
+  init(id: Int, element: any AXNode, parent: AXTreeNode?, role: String? = nil, text: String? = nil) {
     self.id = id
     self.element = element
     self.role = role
+    self.text = text
     self.parent = parent
   }
 

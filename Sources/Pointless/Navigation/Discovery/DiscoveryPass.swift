@@ -81,7 +81,9 @@ struct ElementTreeWalker {
 
     state.visitedCount += 1
 
-    let node = AXTreeNode(id: state.makeNodeID(), element: element, parent: parent, role: attrs.role)
+    let node = AXTreeNode(
+      id: state.makeNodeID(), element: element, parent: parent, role: attrs.role, text: attrs.text
+    )
     if let parent {
       parent.add(node)
     } else {
@@ -130,10 +132,11 @@ struct ElementTreeWalker {
     let roleMatched = isDiscoverableRole(role, node: node, context: context)
     guard roleMatched || pressable,
           let (frame, screen) = targetFrame(attrs, context: context) else { return }
-    let discovered = NavigationTarget(
+    var discovered = NavigationTarget(
       element: node.element, screenFrame: frame, role: role, screen: screen,
       groupingAncestor: .walkNode(node.parent?.id ?? 0), node: node
     )
+    discovered.text = node.text ?? ""
     if roleMatched {
       state.results.append(discovered)
     } else {

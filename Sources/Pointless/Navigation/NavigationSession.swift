@@ -40,6 +40,7 @@ final class NavigationSession {
   struct Config {
     let fadeInDuration: Double
     let scrollSpeed: Double
+    let labelStrategy: LabelGenerator.LabelStrategy
     let scrollNext: ParsedShortcut
     let scrollPrev: ParsedShortcut
   }
@@ -134,7 +135,9 @@ final class NavigationSession {
   }
 
   private func applySnapshot(_ elements: [NavigationTarget]) {
-    let labeled = LabelGenerator.label(elements.sortedByPosition())
+    let labeled = LabelGenerator.label(
+      elements.sortedByPosition(), strategy: config.labelStrategy
+    )
     labeledElements = labeled
     overlayState.labeledElements = labeled
     overlayState.collapsedGroups = LabelGenerator.collapsedGroups(in: labeled)

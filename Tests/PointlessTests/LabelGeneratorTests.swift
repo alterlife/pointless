@@ -50,6 +50,43 @@ final class LabelGeneratorTests: XCTestCase {
     }
   }
 
+  // MARK: Element-text labels
+
+  private func textElement(_ text: String, x: CGFloat) -> NavigationTarget {
+    var target = element(groupingAncestor: .walkNode(0), x: x)
+    target.text = text
+    return target
+  }
+
+  func testTextLabelsComeFromElementText() {
+    let labeled = LabelGenerator.label(
+      [textElement("Save", x: 0), textElement("Cancel", x: 20)],
+      strategy: .clickableElementText
+    )
+    XCTAssertEqual(labeled[0].label, "sav")
+    XCTAssertEqual(labeled[1].label, "can")
+  }
+
+  func testTextLabelCollisionsExtendThenFallback() {
+    // Two "Save" elements: first gets "sav", second extends to "save".
+    let labeled = LabelGenerator.label(
+      [textElement("Save", x: 0), textElement("Save", x: 20), element(groupingAncestor: .walkNode(0), x: 40)],
+      strategy: .clickableElementText
+    )
+    XCTAssertEqual(labeled[0].label, "sav")
+    XCTAssertEqual(labeled[1].label, "save")
+    // No text → homerow combo, and it can't collide with a text hint.
+    XCTAssertFalse(["sav", "save"].contains(labeled[2].label))
+  }
+
+  func testEmptyTextFallsBackToKeys() {
+    let labeled = LabelGenerator.label(
+      [element(groupingAncestor: .walkNode(0), x: 0)],
+      strategy: .clickableElementText
+    )
+    XCTAssertEqual(labeled[0].label, "a")
+  }
+
   // MARK: Hierarchical labeling
 
   func testDenseMultiGroupLabelsShareGroupPrefix() {

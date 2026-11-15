@@ -36,6 +36,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
   @Published var showConnectorLines = true
   @Published var fadeInDuration = 0.08
   @Published var scrollSpeed = 1.0
+  @Published var labelStrategy = "Homerow Keys"
 
   private var activationHotkey = ParsedShortcut(modifiers: [.command, .shift], keyCode: 49)  // Space
   private var scrollNextHotkey = ParsedShortcut(modifiers: [.command, .shift], keyCode: 38)  // J
@@ -68,6 +69,10 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     .hotkey(key: "scrollPrevHotkey", label: "Previous Scroll Area", defaultValue: "⌘⇧K"),
     .slider(key: "scrollSpeed", label: "Scroll Speed", range: 0.25...4, defaultValue: 1, step: 0.25),
     .section(label: "Overlay Style", description: "Customize the letter hints on screen elements"),
+    .dropdown(
+      key: "labelStrategy", label: "Label Style",
+      options: ["Homerow Keys", "Element Text"], defaultValue: "Homerow Keys"
+    ),
     .color(key: "badgeColor", label: "Hint Color", defaultValue: "#F2BF1A"),
     .color(key: "textColor", label: "Hint Text Color", defaultValue: "#000000"),
     .slider(key: "fontSize", label: "Hint Size", range: 9...16, defaultValue: 11, step: 1),
@@ -91,6 +96,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     if let size = values["fontSize"] as? Double { badgeFontSize = CGFloat(size) }
     if let lines = values["showLines"] as? Bool { showConnectorLines = lines }
     if let fade = values["fadeIn"] as? Double { fadeInDuration = fade }
+    if let strategy = values["labelStrategy"] as? String { labelStrategy = strategy }
     applyScrollSettings(values)
     if let shortcut = values["activationHotkey"] as? String {
       shortcutDisplay = shortcut
@@ -205,6 +211,8 @@ final class KeyboardNavigation: NSObject, ObservableObject {
       config: NavigationSession.Config(
         fadeInDuration: fadeInDuration,
         scrollSpeed: scrollSpeed,
+        labelStrategy: labelStrategy == "Element Text"
+          ? .clickableElementText : .homerowKeys,
         scrollNext: scrollNextHotkey,
         scrollPrev: scrollPrevHotkey
       ),

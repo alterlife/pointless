@@ -41,6 +41,9 @@ private enum AXAttrName {
   static let focusedUIElement = "AXFocusedUIElement"
   static let enhancedUserInterface = "AXEnhancedUserInterface"
   static let manualAccessibility = "AXManualAccessibility"
+  static let title = "AXTitle"
+  static let description = "AXDescription"
+  static let value = "AXValue"
   /// AXChildren first, then Firefox/Mullvad alternatives as fallbacks
   static let childAttrs = ["AXChildren", "AXChildrenInNavigationOrder", "AXVisibleChildren", "AXContents"]
 }
@@ -54,6 +57,8 @@ struct NodeAttributes {
   var isEnabled: Bool
   /// NSScreen coords — nil when the app reports no usable frame.
   var frame: CGRect?
+  /// First non-empty of title, description, value — the element's visible text.
+  var text: String?
 }
 
 // MARK: - Coordinate conversion
@@ -137,7 +142,8 @@ struct AXElement: AXNode {
     let names: [CFString] = [
       AXAttrName.childAttrs[0], AXAttrName.childAttrs[1], AXAttrName.childAttrs[2], AXAttrName.childAttrs[3],
       AXAttrName.role, AXAttrName.hidden, AXAttrName.enabled,
-      AXAttrName.position, AXAttrName.size
+      AXAttrName.position, AXAttrName.size,
+      AXAttrName.title, AXAttrName.description, AXAttrName.value
     ] as [CFString]
     var values: CFArray?
     guard AXUIElementCopyMultipleAttributeValues(
@@ -145,7 +151,10 @@ struct AXElement: AXNode {
     ) == .success, let vals = values as? [AnyObject], vals.count == names.count else {
       return NodeAttributes(
         children: children, role: role, isHidden: isHidden, isEnabled: isEnabled,
-        frame: frame(primaryScreenHeight: primaryScreenHeight)
+        frame: frame(primaryScreenHeight: primaryScreenHeight),
+        text: Self.nodeText(title: attributeValue(AXAttrName.title) as? String,
+                            description: attributeValue(AXAttrName.description) as? String,
+                            value: attributeValue(AXAttrName.value) as? String)
       )
     }
     return NodeAttributes(
@@ -155,8 +164,20 @@ struct AXElement: AXNode {
       role: vals[4] as? String,
       isHidden: (vals[5] as? NSNumber)?.boolValue ?? false,
       isEnabled: (vals[6] as? NSNumber)?.boolValue ?? true,
-      frame: Self.nsscreenFrame(position: vals[7], size: vals[8], primaryScreenHeight: primaryScreenHeight)
+      frame: Self.nsscreenFrame(position: vals[7], size: vals[8], primaryScreenHeight: primaryScreenHeight),
+      text: Self.nodeText(title: vals[9] as? String,
+                          description: vals[10] as? String,
+                          value: vals[11] as? String)
     )
+  }
+
+  private static func nodeText(title: String?, description: String?, value: String?) -> String? {
+    for candidate in [title, description, value] {
+      if let text = candidate?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+        return text
+      }
+    }
+    return nil
   }
 
   private static func axElements(from value: AnyObject?) -> [any AXNode] {
