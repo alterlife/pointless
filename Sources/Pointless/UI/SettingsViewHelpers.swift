@@ -67,6 +67,9 @@ extension SettingsView {
     case .dropdown:
       dropdownSettingView(definition: definition, host: host)
 
+    case .choice:
+      choiceSettingView(definition: definition, host: host)
+
     case .hotkey(let key, let label, let defaultValue):
       ShortcutRecorderView(
         label: label,
@@ -91,6 +94,37 @@ extension SettingsView {
 
     case .section(let label, let description):
       sectionHeaderView(label: label, description: description)
+    }
+  }
+
+  @ViewBuilder
+  private func choiceSettingView(
+    definition: SettingDefinition, host: any SettingsHost
+  ) -> some View {
+    if case .choice(let key, let label, let options, let defaultValue) = definition {
+      VStack(alignment: .leading, spacing: 6) {
+        Text(label).font(.subheadline)
+        ForEach(options, id: \.title) { option in
+          let isSelected = getValue(for: host.id, key: key, default: defaultValue) as? String == option.title
+          Button {
+            setValue(option.title, for: host.id, key: key)
+          } label: {
+            HStack(alignment: .top, spacing: 8) {
+              Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(isSelected ? .accentColor : .secondary)
+              VStack(alignment: .leading, spacing: 2) {
+                Text(option.title).font(.body)
+                Text(option.detail)
+                  .font(.caption)
+                  .foregroundColor(Color(NSColor.tertiaryLabelColor))
+              }
+            }
+          }
+          .buttonStyle(.plain)
+        }
+      }
+    } else {
+      EmptyView()
     }
   }
 

@@ -69,12 +69,17 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     .hotkey(key: "scrollPrevHotkey", label: "Previous Scroll Area", defaultValue: "⌘⇧K"),
     .slider(key: "scrollSpeed", label: "Scroll Speed", range: 0.25...4, defaultValue: 1, step: 0.25),
     .section(label: "Overlay Style", description: "Customize the letter hints on screen elements"),
-    .dropdown(
+    .choice(
       key: "labelStrategy", label: "Shortcut Hints",
-      options: ["Homerow Keys", "Element Text"], defaultValue: "Homerow Keys",
-      description: "Homerow Keys assigns short keyboard combos by position — fast to type, " +
-        "meaningless until memorized. Element Text derives hints from each control's own " +
-        "label (Save → s), easier to learn, occasionally longer."
+      options: [
+        (title: "Homerow Keys",
+         detail: "Short keyboard combos assigned by position — fast to type, " +
+           "meaningless until memorized."),
+        (title: "Element Text",
+         detail: "Hints derived from each control's own label (Save → s) — " +
+           "self-documenting and stable, occasionally longer.")
+      ],
+      defaultValue: "Homerow Keys"
     ),
     .color(key: "badgeColor", label: "Hint Color", defaultValue: "#F2BF1A"),
     .color(key: "textColor", label: "Hint Text Color", defaultValue: "#000000"),
