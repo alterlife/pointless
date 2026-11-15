@@ -105,6 +105,9 @@ final class ElementDiscovery {
   ) -> [NavigationTarget] {
     var seen = Set<String>()
     var unique = results.filter { seen.insert($0.dedupKey).inserted }
+    for index in unique.indices where unique[index].text.isEmpty {
+      unique[index].text = unique[index].node?.firstTextDescendant ?? ""
+    }
 
     // Scroll areas sharing a corner still scroll different content — keep them all.
     if mode == .interactive {

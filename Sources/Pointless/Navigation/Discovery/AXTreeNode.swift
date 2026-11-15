@@ -25,6 +25,16 @@ final class AXTreeNode {
     return false
   }
 
+  /// First non-empty text in the subtree — containers often carry their
+  /// label in a child static text rather than on themselves.
+  var firstTextDescendant: String? {
+    for child in children {
+      if let text = child.text, !text.isEmpty { return text }
+      if let text = child.firstTextDescendant { return text }
+    }
+    return nil
+  }
+
   func add(_ child: AXTreeNode) {
     children.append(child)
   }
