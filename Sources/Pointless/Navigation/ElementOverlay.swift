@@ -228,8 +228,6 @@ struct OverlayContentView: View {
     drawBadge(rect: badgeRect, color: fillColor, label: labeled.label, alpha: alpha, context: &context)
   }
 
-  /// ⌘ held outlines the filtered set — everything before typing,
-  /// only prefix survivors after.
   private func shouldHighlight(_ labeled: LabeledElement) -> Bool {
     guard state.revealElementText else { return false }
     return state.typedPrefix.isEmpty || labeled.label.hasPrefix(state.typedPrefix)

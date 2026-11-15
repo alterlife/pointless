@@ -123,8 +123,8 @@ enum LabelGenerator {
     }
   }
 
-  /// Dense same-ancestor clusters keep hierarchical prefix+suffix labels —
-  /// that's what collapsedGroups groups by, and text hints can't provide it.
+  /// collapsedGroups needs shared label prefixes, which text hints lack —
+  /// dense clusters keep hierarchical labels so the signpost badge survives.
   private static func assignClusterLabels(
     to labels: inout [String?], used: inout Set<String>, elements: [NavigationTarget]
   ) {
@@ -148,8 +148,6 @@ enum LabelGenerator {
     }
   }
 
-  /// Same criteria collapsedGroups uses: dense same-ancestor clusters of
-  /// small frames. Returns member indices per cluster plus ancestor count.
   private static func collapsibleClusters(
     in elements: [NavigationTarget]
   ) -> (memberIndices: [[Int]], ancestors: [GroupingAncestor]) {
