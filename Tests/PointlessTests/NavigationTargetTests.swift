@@ -101,6 +101,54 @@ final class NavigationTargetTests: XCTestCase {
     XCTAssertTrue(result.allSatisfy { $0.groupingAncestor == .walkNode(1) })
   }
 
+  // MARK: dropContainedPassiveElements
+
+  func testPassiveElementInsideTabIsDropped() {
+    // Firefox tab: radio button contains its title text field.
+    let tab = element(CGRect(x: 200, y: 1030, width: 220, height: 30), role: "AXRadioButton")
+    let title = element(CGRect(x: 210, y: 1035, width: 180, height: 20), role: "AXTextField")
+    let close = element(CGRect(x: 400, y: 1035, width: 16, height: 20))
+
+    let result = [tab, title, close].dropContainedPassiveElements()
+
+    XCTAssertEqual(result.count, 2)
+    XCTAssertTrue(result.contains { $0.role == "AXRadioButton" })
+    XCTAssertTrue(result.contains { $0.role == "AXButton" })
+  }
+
+  func testPressableStaticTextInsideTabIsDropped() {
+    // Gecko fallback promotes tab-title static text to a target.
+    let tab = element(CGRect(x: 200, y: 1030, width: 220, height: 30), role: "AXRadioButton")
+    let title = element(CGRect(x: 210, y: 1040, width: 180, height: 15), role: "AXStaticText")
+
+    let result = [tab, title].dropContainedPassiveElements()
+
+    XCTAssertEqual(result.count, 1)
+    XCTAssertEqual(result[0].role, "AXRadioButton")
+  }
+
+  func testStandaloneTextFieldIsKept() {
+    let field = element(CGRect(x: 297, y: 1050, width: 300, height: 24), role: "AXTextField")
+    let button = element(CGRect(x: 900, y: 1050, width: 40, height: 24))
+
+    XCTAssertEqual([field, button].dropContainedPassiveElements().count, 2)
+  }
+
+  func testTextFieldInsideContainerIsKept() {
+    // A pane/group isn't an action — the field inside stays editable.
+    let pane = element(CGRect(x: 0, y: 0, width: 600, height: 400), role: "AXGroup")
+    let field = element(CGRect(x: 100, y: 100, width: 200, height: 24), role: "AXTextField")
+
+    XCTAssertEqual([pane, field].dropContainedPassiveElements().count, 2)
+  }
+
+  func testTextFieldPartiallyOverlappingIsKept() {
+    let field = element(CGRect(x: 100, y: 100, width: 200, height: 30), role: "AXTextField")
+    let button = element(CGRect(x: 250, y: 100, width: 200, height: 30))
+
+    XCTAssertEqual([field, button].dropContainedPassiveElements().count, 2)
+  }
+
   func testRegroupKeepsAncestorWithMultipleDiscoveries() {
     // Node 2 (under root 1) holds two buttons; node 3 (under root 1) wraps a single button.
     let root = node(1)

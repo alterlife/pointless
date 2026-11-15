@@ -62,6 +62,7 @@ final class OverlayState: ObservableObject {
   @Published var collapsedGroups: [CollapsedGroup] = []
   @Published var typedPrefix: String = ""
   @Published var scrollTargetFrame: CGRect?
+  @Published var scrollOutlineHidden = false
   @Published var showScrollHint = false
   @Published var clickHintDismissed = false
 
@@ -163,7 +164,7 @@ struct OverlayContentView: View {
             group, badgeRect: badgeRects[badgeIndex], anchor: anchors[badgeIndex], in: &ctx
           )
         }
-        if let target = state.scrollTargetFrame {
+        if let target = state.scrollTargetFrame, !state.scrollOutlineHidden {
           drawScrollTarget(target, in: &ctx)
         }
       }
@@ -256,7 +257,9 @@ struct OverlayContentView: View {
     alpha: Double,
     context: inout GraphicsContext
   ) {
-    context.fill(Path(roundedRect: rect, cornerRadius: 5), with: .color(color))
+    let badgePath = Path(roundedRect: rect, cornerRadius: 5)
+    context.fill(badgePath, with: .color(color))
+    context.stroke(badgePath, with: .color(state.textColor.opacity(0.4)), lineWidth: 1)
     context.draw(badgeText(label: label, alpha: alpha), at: rect.center)
   }
 
@@ -313,7 +316,10 @@ struct OverlayContentView: View {
       height: frame.height
     )
     let path = Path(roundedRect: canvasRect.insetBy(dx: 2, dy: 2), cornerRadius: 6)
-    context.fill(path, with: .color(state.badgeColor.opacity(0.08)))
-    context.stroke(path, with: .color(state.badgeColor), lineWidth: 2.5)
+    // Dual-tone stroke stays visible on light and dark content alike.
+    context.stroke(path, with: .color(.black.opacity(0.85)), lineWidth: 5)
+    context.stroke(path, with: .color(.white.opacity(0.95)), lineWidth: 2)
+    let inner = Path(roundedRect: canvasRect.insetBy(dx: 5, dy: 5), cornerRadius: 4)
+    context.stroke(inner, with: .color(.white.opacity(0.8)), lineWidth: 1.5)
   }
 }

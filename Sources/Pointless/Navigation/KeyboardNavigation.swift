@@ -35,6 +35,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
   @Published var badgeFontSize: CGFloat = 11
   @Published var showConnectorLines = true
   @Published var fadeInDuration = 0.08
+  @Published var scrollSpeed = 1.0
 
   private var activationHotkey = ParsedShortcut(modifiers: [.command, .shift], keyCode: 49)  // Space
   private var scrollNextHotkey = ParsedShortcut(modifiers: [.command, .shift], keyCode: 38)  // J
@@ -65,6 +66,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     .section(label: "Scroll Mode", description: "Cycle and scroll scrollable areas by keyboard"),
     .hotkey(key: "scrollNextHotkey", label: "Scroll / Next Area", defaultValue: "⌘⇧J"),
     .hotkey(key: "scrollPrevHotkey", label: "Previous Scroll Area", defaultValue: "⌘⇧K"),
+    .slider(key: "scrollSpeed", label: "Scroll Speed", range: 0.25...4, defaultValue: 1, step: 0.25),
     .section(label: "Overlay Style", description: "Customize the letter hints on screen elements"),
     .color(key: "badgeColor", label: "Hint Color", defaultValue: "#F2BF1A"),
     .color(key: "textColor", label: "Hint Text Color", defaultValue: "#000000"),
@@ -89,10 +91,17 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     if let size = values["fontSize"] as? Double { badgeFontSize = CGFloat(size) }
     if let lines = values["showLines"] as? Bool { showConnectorLines = lines }
     if let fade = values["fadeIn"] as? Double { fadeInDuration = fade }
+    applyScrollSettings(values)
     if let shortcut = values["activationHotkey"] as? String {
       shortcutDisplay = shortcut
       activationHotkey = parseShortcutString(shortcut)
     }
+    applyAppearanceToOverlay()
+    reinstallMonitors()
+    saveSettings(values)
+  }
+
+  private func applyScrollSettings(_ values: [String: Any]) {
     if let shortcut = values["scrollNextHotkey"] as? String {
       scrollNextShortcutDisplay = shortcut
       scrollNextHotkey = parseShortcutString(shortcut)
@@ -101,9 +110,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
       scrollPrevShortcutDisplay = shortcut
       scrollPrevHotkey = parseShortcutString(shortcut)
     }
-    applyAppearanceToOverlay()
-    reinstallMonitors()
-    saveSettings(values)
+    if let speed = values["scrollSpeed"] as? Double { scrollSpeed = speed }
   }
 
   private func saveSettings(_ values: [String: Any]) {
@@ -197,6 +204,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
       overlayState: overlayState,
       config: NavigationSession.Config(
         fadeInDuration: fadeInDuration,
+        scrollSpeed: scrollSpeed,
         scrollNext: scrollNextHotkey,
         scrollPrev: scrollPrevHotkey
       ),

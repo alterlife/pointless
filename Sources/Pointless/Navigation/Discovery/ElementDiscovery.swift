@@ -110,8 +110,9 @@ final class ElementDiscovery {
     if mode == .interactive {
       let beforeCollapse = unique.count
       unique = unique.mergeSharedAnchors()
+      unique = unique.dropContainedPassiveElements()
       if unique.count < beforeCollapse {
-        Logger.debug("Discovery: dropped \(beforeCollapse - unique.count) same-anchor elements",
+        Logger.debug("Discovery: dropped \(beforeCollapse - unique.count) redundant elements",
                      logger: Logger.pluginLifecycle)
       }
     }
