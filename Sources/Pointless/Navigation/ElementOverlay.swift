@@ -65,6 +65,7 @@ final class OverlayState: ObservableObject {
   @Published var scrollOutlineHidden = false
   @Published var showScrollHint = false
   @Published var clickHintDismissed = false
+  @Published var revealElementText = false
 
   var collapsedPrefixes: Set<String> { Set(collapsedGroups.map(\.prefix)) }
 
@@ -182,7 +183,7 @@ struct OverlayContentView: View {
   private var hintText: String {
     state.scrollTargetFrame != nil
       ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
-      : "type a letter to jump  ·  ⌫ back  ·  ESC cancel"
+      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ to highlight all  ·  ESC cancel"
   }
 
   private var hintSize: CGSize {
@@ -227,9 +228,11 @@ struct OverlayContentView: View {
     drawBadge(rect: badgeRect, color: fillColor, label: labeled.label, alpha: alpha, context: &context)
   }
 
-  /// Only elements still in the running after the typed prefix.
+  /// ⌘ held outlines the filtered set — everything before typing,
+  /// only prefix survivors after.
   private func shouldHighlight(_ labeled: LabeledElement) -> Bool {
-    !state.typedPrefix.isEmpty && labeled.label.hasPrefix(state.typedPrefix)
+    guard state.revealElementText else { return false }
+    return state.typedPrefix.isEmpty || labeled.label.hasPrefix(state.typedPrefix)
   }
 
   private func drawHighlight(frame: CGRect, in context: inout GraphicsContext) {
