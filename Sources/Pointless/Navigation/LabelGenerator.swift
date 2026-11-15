@@ -143,7 +143,7 @@ enum LabelGenerator {
       candidates.append(String(head.prefix(2)))
     }
     let stream = head + (words.count > 1 ? words.dropFirst().joined() : "")
-    for length in 3...min(4, stream.count) {
+    for length in [3, 4] where length <= stream.count {
       candidates.append(String(stream.prefix(length)))
     }
     return candidates.first { !used.contains($0) && !isBanned($0) }

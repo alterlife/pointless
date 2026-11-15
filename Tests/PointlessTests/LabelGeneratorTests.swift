@@ -97,6 +97,13 @@ final class LabelGeneratorTests: XCTestCase {
     XCTAssertEqual(labeled[0].label, "it")
   }
 
+  func testShortTextGetsShortHint() {
+    let labeled = LabelGenerator.label(
+      [textElement("OK", x: 0)], strategy: .clickableElementText
+    )
+    XCTAssertEqual(labeled[0].label, "ok")
+  }
+
   func testEmptyTextFallsBackToKeys() {
     let labeled = LabelGenerator.label(
       [element(groupingAncestor: .walkNode(0), x: 0)],
