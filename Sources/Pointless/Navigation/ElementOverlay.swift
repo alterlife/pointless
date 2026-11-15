@@ -65,6 +65,7 @@ final class OverlayState: ObservableObject {
   @Published var scrollOutlineHidden = false
   @Published var showScrollHint = false
   @Published var clickHintDismissed = false
+  @Published var revealElementText = false
 
   var collapsedPrefixes: Set<String> { Set(collapsedGroups.map(\.prefix)) }
 
@@ -143,7 +144,7 @@ struct OverlayContentView: View {
           anchorPoint(screenFrame: $0.frame, screenRect: screen.frame)
         }
         let badgeSizes = onScreen.map {
-          measureBadge(label: $0.label, context: ctx)
+          measureBadge(label: displayText(for: $0), context: ctx)
         } + groupsOnScreen.map {
           measureBadge(label: $0.label, context: ctx)
         }
@@ -179,7 +180,7 @@ struct OverlayContentView: View {
   private var hintText: String {
     state.scrollTargetFrame != nil
       ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
-      : "type a letter to jump  ·  ⌫ back  ·  ESC cancel"
+      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ for text  ·  ESC cancel"
   }
 
   private var hintSize: CGSize {
@@ -221,7 +222,18 @@ struct OverlayContentView: View {
 
     drawConnector(anchor: anchor, center: badgeRect.center, alpha: alpha, context: &context)
     drawDot(at: anchor, color: fillColor, context: &context)
-    drawBadge(rect: badgeRect, color: fillColor, label: labeled.label, alpha: alpha, context: &context)
+    drawBadge(
+      rect: badgeRect, color: fillColor, label: displayText(for: labeled),
+      alpha: alpha, context: &context
+    )
+  }
+
+  private func displayText(for labeled: LabeledElement) -> String {
+    guard state.revealElementText else { return labeled.label }
+    let text = labeled.element.text
+    guard !text.isEmpty else { return labeled.label }
+    let preview = text.count > 48 ? String(text.prefix(48)) + "…" : text
+    return "\(labeled.label) (\(preview))"
   }
 
   private func measureBadge(label: String, context: GraphicsContext) -> CGSize {
@@ -264,6 +276,11 @@ struct OverlayContentView: View {
   }
 
   private func badgeText(label: String, alpha: Double) -> Text {
+    if state.revealElementText {
+      return Text(label)
+        .font(.system(size: state.badgeFontSize, weight: .bold, design: .monospaced))
+        .foregroundColor(state.textColor.opacity(alpha))
+    }
     let font = Font.system(size: state.badgeFontSize, weight: .bold, design: .monospaced)
     let typed = state.typedPrefix
     guard !typed.isEmpty, label.hasPrefix(typed), typed.count < label.count else {
