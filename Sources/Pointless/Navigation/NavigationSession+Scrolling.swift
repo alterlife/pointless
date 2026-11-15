@@ -22,6 +22,7 @@ extension NavigationSession {
 
   func cycleScrollTarget(targets: [NavigationTarget], from index: Int, offset: Int) {
     guard !targets.isEmpty else { return }
+    finishScrollGesture()
     let newIndex = (index + offset + targets.count) % targets.count
     warpCursor(to: targets[newIndex])
     overlayState.scrollTargetFrame = targets[newIndex].screenFrame
@@ -74,6 +75,17 @@ extension NavigationSession {
     }
     pendingScroll = remaining
     postScrollEvent(deltaY: applied, phase: phase)
+  }
+
+  /// Drops queued distance and closes an open gesture — the app needs the
+  /// Ended phase or it waits on a scroll that will never finish.
+  func finishScrollGesture() {
+    scrollDrainTimer?.invalidate()
+    scrollDrainTimer = nil
+    pendingScroll = 0
+    guard scrollGestureActive else { return }
+    scrollGestureActive = false
+    postScrollEvent(deltaY: 0, phase: 4)  // kCGScrollPhaseEnded
   }
 
   private func postScrollEvent(deltaY: Int32, phase: Int32) {

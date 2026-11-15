@@ -356,9 +356,7 @@ final class NavigationSession {
     scrollHintWorkItem?.cancel()
     clickHintWorkItem?.cancel()
     scrollOutlineWorkItem?.cancel()
-    scrollDrainTimer?.invalidate()
-    scrollDrainTimer = nil
-    pendingScroll = 0
+    finishScrollGesture()
     onEnded()
   }
 }

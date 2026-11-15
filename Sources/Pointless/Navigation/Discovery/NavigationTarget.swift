@@ -48,18 +48,24 @@ extension Array where Element == NavigationTarget {
   }
 
   func dropContainedPassiveElements() -> [NavigationTarget] {
-    let passiveRoles: Set<String> = [
-      AXRoleName.staticText, AXRoleName.textField, AXRoleName.textArea
+    let editableRoles: Set<String> = [AXRoleName.textField, AXRoleName.textArea]
+    // Clicking these performs an action, so a contained field is redundant.
+    // Plain containers (groups, tab panes) don't — the field stays editable.
+    let activatingRoles: Set<String> = [
+      AXRoleName.button, AXRoleName.link, AXRoleName.checkBox, AXRoleName.radioButton,
+      AXRoleName.menuItem, AXRoleName.popUpButton, AXRoleName.comboBox
     ]
     let all = self
     return filter { inner in
-      guard passiveRoles.contains(inner.role) else { return true }
+      guard inner.role == AXRoleName.staticText || editableRoles.contains(inner.role)
+      else { return true }
       let center = CGPoint(x: inner.screenFrame.midX, y: inner.screenFrame.midY)
       return !all.contains { outer in
         outer.dedupKey != inner.dedupKey
           && outer.screenFrame.contains(center)
           && outer.screenFrame.width * outer.screenFrame.height
             > inner.screenFrame.width * inner.screenFrame.height
+          && (!editableRoles.contains(inner.role) || activatingRoles.contains(outer.role))
       }
     }
   }

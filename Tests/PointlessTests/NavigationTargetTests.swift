@@ -134,6 +134,14 @@ final class NavigationTargetTests: XCTestCase {
     XCTAssertEqual([field, button].dropContainedPassiveElements().count, 2)
   }
 
+  func testTextFieldInsideContainerIsKept() {
+    // A pane/group isn't an action — the field inside stays editable.
+    let pane = element(CGRect(x: 0, y: 0, width: 600, height: 400), role: "AXGroup")
+    let field = element(CGRect(x: 100, y: 100, width: 200, height: 24), role: "AXTextField")
+
+    XCTAssertEqual([pane, field].dropContainedPassiveElements().count, 2)
+  }
+
   func testTextFieldPartiallyOverlappingIsKept() {
     let field = element(CGRect(x: 100, y: 100, width: 200, height: 30), role: "AXTextField")
     let button = element(CGRect(x: 250, y: 100, width: 200, height: 30))
