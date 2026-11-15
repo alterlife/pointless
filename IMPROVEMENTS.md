@@ -1,27 +1,13 @@
 # Pointless — Improvement Plan
 
 Proposals for cleaner code, more effective UX, and easier maintenance.
-Ordered by priority within each section. Top pick overall: **U1 (progressive
-overlay)** — the pass pipeline delivers per-pass results, so badges can appear
-as each pass lands instead of waiting for the full scan.
+Ordered by priority within each section.
 
 ---
 
 ## UX effectiveness
 
-### U1. Progressive overlay (biggest single win)
-
-Badges still wait for the full scan (~200–370 ms typical after the batch-fetch
-and pruning work). Showing tree-walk results as soon as that pass finishes and
-merging fallback/occlusion results as they land would make activation feel
-instant.
-
-**Files:** `Navigation/Discovery/ElementDiscovery.swift` (per-pass incremental
-callbacks — `scan` already delivers results via completion),
-`Navigation/NavigationSession.swift` (merge instead of replace),
-`Navigation/ElementOverlay.swift`
-
-### U2. Cursor warp on activation
+### U1. Cursor warp on activation
 
 A successful `AXPress` leaves the pointer where it was — the user loses the
 spatial "I am now here" confirmation, and hover-dependent UI misbehaves.
@@ -30,7 +16,7 @@ doesn't use it. Warp the cursor to the element on press, or expose a setting.
 
 **Files:** `Navigation/NavigationSession.swift` (`activate`, `warpCursor`)
 
-### U3. Label stability across activations
+### U2. Label stability across activations
 
 Sort/assign labels so the same element tends to get the same letter on repeated
 activations of the same screen. Muscle memory is the core value proposition of
@@ -38,42 +24,41 @@ this tool category.
 
 **Files:** `Navigation/LabelGenerator.swift`
 
-### U4. Scroll mode polish
+### U3. Scroll mode leftovers
 
-- Momentum: accelerate deltas on key repeat.
-- A visible "scroll mode" indicator beyond the target outline.
-- The `d`/`u` half-page keys are undiscoverable — add them to the esc-hint
-  capsule.
+- The `d`/`u` half-page keys are undiscoverable — add them to the hint capsule.
+- A persistent "scroll mode" indicator beyond the target outline may still help
+  in windows where the outline is suppressed or ambiguous.
 
-**Files:** `Navigation/NavigationSession.swift` (`synthesizeScroll`,
-`scrollStep`/`scrollPage`, `handleScrollKey`),
+**Files:** `Navigation/NavigationSession+Scrolling.swift`,
 `Navigation/ElementOverlay.swift` (`escHint`)
 
 ---
 
 ## Maintenance
 
-### M1. AX fixture tests — done
-
-`AXNode` protocol abstracts AX reads; `FixtureAXNode` replays synthetic trees
-through the real `DiscoveryPass` pipeline in XCTest (`DiscoveryFixtureTests`).
-JSON fixtures for real captured trees remain possible if needed.
-
-### M2. Built-in diagnostics command
+### M1. Built-in diagnostics command
 
 Promote the debug instrumentation (per-pass element counts and timings,
 role counts) into a hidden "diagnostics" action that runs one scan and dumps
 a report (frontmost app, pass-by-pass results, roles, timings). Future bug
 reports arrive with the data instead of requiring a debug-logging session
-over buffered stdout. Could double as the fixture recorder for M1 — serialize
-the walked `AXTreeNode` tree to JSON.
+over buffered stdout. Could double as a fixture recorder — serialize the
+walked `AXTreeNode` tree to JSON for `DiscoveryFixtureTests`.
 
 **Files:** `Navigation/Discovery/ElementDiscovery.swift`, `App/Logger.swift`
 
 ---
 
+## Known limitations
+
+- **Electron/Chromium inner scrollers**: apps like Devin expose only a
+  whole-window `AXWebArea` — inner panes have no AX scroll representation, so
+  scroll mode can't outline them. Scroll events still land on whatever is
+  under the cursor.
+
 ## Suggested sequencing
 
-1. ~~**M1** fixture tests~~ — done
-2. **U1** progressive overlay (incremental pass results → incremental badges)
-3. **U2–U4, M2** as independent follow-ups
+1. **U1** cursor warp (small, self-contained)
+2. **U2** label stability (bigger, core to the product)
+3. **U3, M1** as independent follow-ups
