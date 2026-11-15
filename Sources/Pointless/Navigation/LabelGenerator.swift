@@ -127,21 +127,26 @@ enum LabelGenerator {
     }
   }
 
-  /// Shortest unique prefix (2–4 chars) of the element's visible text.
-  /// "Save" → "sav", "Save File" colliding → "savef". Nil when unusable.
+  /// Windows-style access keys: first letters of words, then scan the next
+  /// word's letters for a free second char — "New Song" colliding on "ns"
+  /// becomes "no". 3-4 char prefixes of the full text are the last resort.
   private static func textHint(for text: String, avoiding used: Set<String>) -> String? {
-    let stream = text.lowercased()
-      .components(separatedBy: CharacterSet.alphanumerics.inverted)
+    let words = text.lowercased()
+      .components(separatedBy: CharacterSet.letters.inverted)
       .filter { !$0.isEmpty }
-      .joined()
-    guard stream.count >= 2 else { return nil }
-    // Prefer 3 chars (readable), extend to 4 on collision, 2 as last resort.
-    let lengths = [3, 4, 2].filter { $0 <= stream.count }
-    for length in lengths {
-      let candidate = String(stream.prefix(length))
-      if !used.contains(candidate), !isBanned(candidate) { return candidate }
+    guard let head = words.first, let headChar = head.first else { return nil }
+
+    var candidates: [String] = []
+    if words.count > 1 {
+      for char in words[1] { candidates.append("\(headChar)\(char)") }
+    } else if head.count > 1 {
+      candidates.append(String(head.prefix(2)))
     }
-    return nil
+    let stream = head + (words.count > 1 ? words.dropFirst().joined() : "")
+    for length in 3...min(4, stream.count) {
+      candidates.append(String(stream.prefix(length)))
+    }
+    return candidates.first { !used.contains($0) && !isBanned($0) }
   }
 
   private static func hierarchicalLabel(

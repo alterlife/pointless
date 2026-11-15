@@ -63,18 +63,28 @@ final class LabelGeneratorTests: XCTestCase {
       [textElement("Save", x: 0), textElement("Cancel", x: 20)],
       strategy: .clickableElementText
     )
-    XCTAssertEqual(labeled[0].label, "sav")
-    XCTAssertEqual(labeled[1].label, "can")
+    XCTAssertEqual(labeled[0].label, "sa")
+    XCTAssertEqual(labeled[1].label, "ca")
   }
 
-  func testTextLabelCollisionsExtendThenFallback() {
-    // Two "Save" elements: first gets "sav", second extends to "save".
+  func testTextLabelCollisionsScanSecondWord() {
+    // "New Session" and "New Song" both start "ns" — second gets "no".
+    let labeled = LabelGenerator.label(
+      [textElement("New Session", x: 0), textElement("New Song", x: 20)],
+      strategy: .clickableElementText
+    )
+    XCTAssertEqual(labeled[0].label, "ns")
+    XCTAssertEqual(labeled[1].label, "no")
+  }
+
+  func testTextLabelSingleWordCollisionExtends() {
+    // Two "Save" elements: first gets "sa", second extends to "sav".
     let labeled = LabelGenerator.label(
       [textElement("Save", x: 0), textElement("Save", x: 20), element(groupingAncestor: .walkNode(0), x: 40)],
       strategy: .clickableElementText
     )
-    XCTAssertEqual(labeled[0].label, "sav")
-    XCTAssertEqual(labeled[1].label, "save")
+    XCTAssertEqual(labeled[0].label, "sa")
+    XCTAssertEqual(labeled[1].label, "sav")
     // No text → homerow combo, and it can't collide with a text hint.
     XCTAssertFalse(["sav", "save"].contains(labeled[2].label))
   }
@@ -84,7 +94,7 @@ final class LabelGeneratorTests: XCTestCase {
     let elements = (0..<30).map { textElement("Item \($0)", x: CGFloat($0) * 20) }
     let labeled = LabelGenerator.label(elements, strategy: .clickableElementText)
     XCTAssertTrue(labeled.allSatisfy { !$0.label.contains("_") })
-    XCTAssertEqual(labeled[0].label, "ite")
+    XCTAssertEqual(labeled[0].label, "it")
   }
 
   func testEmptyTextFallsBackToKeys() {
