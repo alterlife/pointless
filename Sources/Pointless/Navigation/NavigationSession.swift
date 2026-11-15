@@ -257,6 +257,7 @@ final class NavigationSession {
     onJump()
     end()
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+      self.warpCursor(to: labeled.element)
       // AXPress beats a synthetic click — some apps ignore clicks at frame centers.
       if element.performPress() { return }
       Self.postClick(at: Self.unobscuredClickPoint(for: labeled.element) ?? clickPoint)
