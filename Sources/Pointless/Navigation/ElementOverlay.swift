@@ -144,7 +144,7 @@ struct OverlayContentView: View {
           anchorPoint(screenFrame: $0.frame, screenRect: screen.frame)
         }
         let badgeSizes = onScreen.map {
-          measureBadge(label: displayText(for: $0), context: ctx)
+          measureBadge(label: $0.label, context: ctx)
         } + groupsOnScreen.map {
           measureBadge(label: $0.label, context: ctx)
         }
@@ -165,6 +165,9 @@ struct OverlayContentView: View {
             group, badgeRect: badgeRects[badgeIndex], anchor: anchors[badgeIndex], in: &ctx
           )
         }
+        for labeled in onScreen where shouldHighlight(labeled) {
+          drawHighlight(frame: labeled.element.screenFrame, in: &ctx)
+        }
         if let target = state.scrollTargetFrame, !state.scrollOutlineHidden {
           drawScrollTarget(target, in: &ctx)
         }
@@ -180,7 +183,7 @@ struct OverlayContentView: View {
   private var hintText: String {
     state.scrollTargetFrame != nil
       ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
-      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ for text  ·  ESC cancel"
+      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ to highlight  ·  ESC cancel"
   }
 
   private var hintSize: CGSize {
@@ -222,18 +225,26 @@ struct OverlayContentView: View {
 
     drawConnector(anchor: anchor, center: badgeRect.center, alpha: alpha, context: &context)
     drawDot(at: anchor, color: fillColor, context: &context)
-    drawBadge(
-      rect: badgeRect, color: fillColor, label: displayText(for: labeled),
-      alpha: alpha, context: &context
-    )
+    drawBadge(rect: badgeRect, color: fillColor, label: labeled.label, alpha: alpha, context: &context)
   }
 
-  private func displayText(for labeled: LabeledElement) -> String {
-    guard state.revealElementText else { return labeled.label }
-    let text = labeled.element.text
-    guard !text.isEmpty else { return labeled.label }
-    let preview = text.count > 48 ? String(text.prefix(48)) + "…" : text
-    return "\(labeled.label) (\(preview))"
+  /// Prefix matches highlight while narrowing; ⌘ held highlights everything.
+  private func shouldHighlight(_ labeled: LabeledElement) -> Bool {
+    if state.revealElementText { return true }
+    return !state.typedPrefix.isEmpty && labeled.label.hasPrefix(state.typedPrefix)
+  }
+
+  private func drawHighlight(frame: CGRect, in context: inout GraphicsContext) {
+    let rect = CGRect(
+      x: frame.minX - screen.frame.minX,
+      y: screen.frame.maxY - frame.maxY,
+      width: frame.width,
+      height: frame.height
+    )
+    context.stroke(
+      Path(roundedRect: rect.insetBy(dx: -2, dy: -2), cornerRadius: 6),
+      with: .color(state.badgeColor.opacity(0.9)), lineWidth: 2
+    )
   }
 
   private func measureBadge(label: String, context: GraphicsContext) -> CGSize {
@@ -276,11 +287,6 @@ struct OverlayContentView: View {
   }
 
   private func badgeText(label: String, alpha: Double) -> Text {
-    if state.revealElementText {
-      return Text(label)
-        .font(.system(size: state.badgeFontSize, weight: .bold, design: .monospaced))
-        .foregroundColor(state.textColor.opacity(alpha))
-    }
     let font = Font.system(size: state.badgeFontSize, weight: .bold, design: .monospaced)
     let typed = state.typedPrefix
     guard !typed.isEmpty, label.hasPrefix(typed), typed.count < label.count else {
