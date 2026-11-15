@@ -29,7 +29,11 @@ final class ElementDiscovery {
     cancelled = true
   }
 
-  func scan(mode: ScanMode = .interactive, completion: @escaping @MainActor ([NavigationTarget]) -> Void) {
+  func scan(
+    mode: ScanMode = .interactive,
+    onProgress: (@MainActor ([NavigationTarget]) -> Void)? = nil,
+    completion: @escaping @MainActor ([NavigationTarget]) -> Void
+  ) {
     cancelled = false
     // NSScreen is main-thread-only — capture screens before hopping to the scan queue.
     let screens = NSScreen.screens
@@ -38,12 +42,15 @@ final class ElementDiscovery {
         Task { @MainActor in completion([]) }
         return
       }
-      let elements = self.performScan(mode: mode, screens: screens)
+      let elements = self.performScan(mode: mode, screens: screens, onProgress: onProgress)
       Task { @MainActor in completion(elements) }
     }
   }
 
-  private func performScan(mode: ScanMode, screens: [NSScreen]) -> [NavigationTarget] {
+  private func performScan(
+    mode: ScanMode, screens: [NSScreen],
+    onProgress: (@MainActor ([NavigationTarget]) -> Void)?
+  ) -> [NavigationTarget] {
     guard let app = AXElement.frontmostApplication() else { return [] }
     if app.enableAssistiveAccess() {
       Logger.debug("Discovery: enabled assistive access, waiting for AX tree",
@@ -75,6 +82,10 @@ final class ElementDiscovery {
         "in \(Int(Date().timeIntervalSince(passStart) * 1000))ms",
         logger: Logger.pluginLifecycle
       )
+      if let onProgress {
+        let snapshot = Self.deduplicateAndRegroup(state.results, mode: mode)
+        Task { @MainActor in onProgress(snapshot) }
+      }
     }
     Logger.debug("Discovery scan took \(Int(Date().timeIntervalSince(scanStart) * 1000))ms",
                  logger: Logger.pluginLifecycle)

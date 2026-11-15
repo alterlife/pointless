@@ -1,9 +1,9 @@
 # Pointless — Improvement Plan
 
 Proposals for cleaner code, more effective UX, and easier maintenance.
-Ordered by priority within each section. Top picks overall: **U1 (progressive
-overlay), M1 (AX fixture tests)** — they compound: the pass pipeline is what
-makes both the progressive merge and the fixtures clean to build.
+Ordered by priority within each section. Top pick overall: **U1 (progressive
+overlay)** — the pass pipeline delivers per-pass results, so badges can appear
+as each pass lands instead of waiting for the full scan.
 
 ---
 
@@ -53,18 +53,11 @@ this tool category.
 
 ## Maintenance
 
-### M1. AX fixture tests (highest-leverage change)
+### M1. AX fixture tests — done
 
-The highest-risk code — element discovery — is untestable because it is welded
-to live AX calls. Every bug fixed recently (opaque providers, lazy WebKit
-trees, Terminal tab radio buttons) is currently folklore instead of a
-regression test.
-
-- Define an `ElementProvider` protocol abstracting AX reads (role, frame,
-  children, actions, hit-test).
-- Record real AX trees (Safari Start Page, Firefox, Terminal) as JSON fixtures.
-- Replay fixtures through the `DiscoveryPass` pipeline in XCTest
-  (`Tests/PointlessTests/`) — XCTest works with the installed Xcode toolchain.
+`AXNode` protocol abstracts AX reads; `FixtureAXNode` replays synthetic trees
+through the real `DiscoveryPass` pipeline in XCTest (`DiscoveryFixtureTests`).
+JSON fixtures for real captured trees remain possible if needed.
 
 ### M2. Built-in diagnostics command
 
@@ -81,7 +74,6 @@ the walked `AXTreeNode` tree to JSON.
 
 ## Suggested sequencing
 
-1. **M1** fixture tests on top of the pass pipeline (locks in current behavior
-   before changing it)
+1. ~~**M1** fixture tests~~ — done
 2. **U1** progressive overlay (incremental pass results → incremental badges)
 3. **U2–U4, M2** as independent follow-ups

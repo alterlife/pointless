@@ -54,6 +54,12 @@ final class NavigationSession {
   private let discovery = ElementDiscovery()
   private var overlayWindows: [ElementOverlayWindow] = []
   private var labeledElements: [LabeledElement] = []
+  private var badgesShown = false
+  private var scrollHintWorkItem: DispatchWorkItem?
+  private var clickHintWorkItem: DispatchWorkItem?
+
+  private static let clickHintKey = "navigation.clickHintDismissed"
+  private static let clickHintDuration: Double = 5
   private var eventTap: CFMachPort?
   private var ended = false
 
@@ -75,7 +81,19 @@ final class NavigationSession {
 
   func beginClick() {
     rebuildOverlayWindows()
-    discovery.scan { [weak self] elements in
+    badgesShown = false
+    overlayState.clickHintDismissed = UserDefaults.standard.bool(forKey: Self.clickHintKey)
+    clickHintWorkItem?.cancel()
+    if !overlayState.clickHintDismissed {
+      let work = DispatchWorkItem { [weak self] in
+        self?.overlayState.clickHintDismissed = true
+      }
+      clickHintWorkItem = work
+      DispatchQueue.main.asyncAfter(deadline: .now() + Self.clickHintDuration, execute: work)
+    }
+    discovery.scan(onProgress: { [weak self] elements in
+      self?.showProgress(elements)
+    }, completion: { [weak self] elements in
       guard let self, !self.ended else { return }
       guard !elements.isEmpty else {
         Logger.warning("No interactive elements found in focused window", logger: Logger.pluginLifecycle)
@@ -83,16 +101,34 @@ final class NavigationSession {
         showEmptyHint()
         return
       }
-      let labeled = LabelGenerator.label(elements.sortedByPosition())
-      self.labeledElements = labeled
-      self.overlayState.labeledElements = labeled
-      self.overlayState.collapsedGroups = LabelGenerator.collapsedGroups(in: labeled)
-      self.overlayState.typedPrefix = ""
+      self.applySnapshot(elements)
+      self.showBadges()
       self.mode = .click(typedSoFar: "")
-      self.overlayWindows.forEach { $0.show(fadeDuration: self.config.fadeInDuration) }
       self.installEventTap()
       self.onScanCompleted(elements.count)
-    }
+    })
+  }
+
+  /// Early pass results render immediately, but keys stay locked until the
+  /// final snapshot — labels can still shift as later passes add elements.
+  private func showProgress(_ elements: [NavigationTarget]) {
+    guard !ended, !elements.isEmpty else { return }
+    applySnapshot(elements)
+    showBadges()
+  }
+
+  private func applySnapshot(_ elements: [NavigationTarget]) {
+    let labeled = LabelGenerator.label(elements.sortedByPosition())
+    labeledElements = labeled
+    overlayState.labeledElements = labeled
+    overlayState.collapsedGroups = LabelGenerator.collapsedGroups(in: labeled)
+    overlayState.typedPrefix = ""
+  }
+
+  private func showBadges() {
+    guard !badgesShown else { return }
+    badgesShown = true
+    overlayWindows.forEach { $0.show(fadeDuration: config.fadeInDuration) }
   }
 
   // MARK: - Scroll mode
@@ -191,11 +227,13 @@ final class NavigationSession {
   private func updatePrefix(_ prefix: String) {
     mode = .click(typedSoFar: prefix)
     overlayState.typedPrefix = prefix
+    overlayState.clickHintDismissed = true
   }
 
   // MARK: - Element activation
 
   private func activate(_ labeled: LabeledElement) {
+    UserDefaults.standard.set(true, forKey: Self.clickHintKey)
     let element = labeled.element.element
     let center = labeled.element.screenFrame.center
     let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
@@ -238,50 +276,6 @@ final class NavigationSession {
             mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
     CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
             mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
-  }
-
-  // MARK: - Scrolling
-
-  private static let scrollStep: Int32 = 60
-  private static let scrollPage: Int32 = 400
-
-  private var scrollHintWorkItem: DispatchWorkItem?
-
-  private static let scrollHintDelay: Double = 3
-
-  private func scheduleScrollHint() {
-    scrollHintWorkItem?.cancel()
-    overlayState.showScrollHint = false
-    let work = DispatchWorkItem { [weak self] in
-      guard let self, case .scrolling = self.mode else { return }
-      self.overlayState.showScrollHint = true
-    }
-    scrollHintWorkItem = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + Self.scrollHintDelay, execute: work)
-  }
-
-  private func cycleScrollTarget(targets: [NavigationTarget], from index: Int, offset: Int) {
-    guard !targets.isEmpty else { return }
-    let newIndex = (index + offset + targets.count) % targets.count
-    warpCursor(to: targets[newIndex])
-    overlayState.scrollTargetFrame = targets[newIndex].screenFrame
-    mode = .scrolling(targets: targets, currentIndex: newIndex)
-    scheduleScrollHint()
-  }
-
-  private func synthesizeScroll(deltaY: Int32) {
-    // Pixel units scroll smoothly; line units jump in coarse steps.
-    CGEvent(
-      scrollWheelEvent2Source: nil, units: .pixel,
-      wheelCount: 1, wheel1: deltaY, wheel2: 0, wheel3: 0
-    )?.post(tap: .cghidEventTap)
-  }
-
-  private func warpCursor(to element: NavigationTarget) {
-    let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-    let cgPoint = CGPoint(x: element.screenFrame.midX, y: primaryHeight - element.screenFrame.midY)
-    CGWarpMouseCursorPosition(cgPoint)
-    CGAssociateMouseAndMouseCursorPosition(1)
   }
 
   // MARK: - Overlay windows
@@ -343,6 +337,50 @@ final class NavigationSession {
     overlayState.scrollTargetFrame = nil
     overlayState.showScrollHint = false
     scrollHintWorkItem?.cancel()
+    clickHintWorkItem?.cancel()
     onEnded()
+  }
+}
+
+// MARK: - Scrolling
+
+extension NavigationSession {
+  private static let scrollStep: Int32 = 60
+  private static let scrollPage: Int32 = 400
+  private static let scrollHintDelay: Double = 3
+
+  private func scheduleScrollHint() {
+    scrollHintWorkItem?.cancel()
+    overlayState.showScrollHint = false
+    let work = DispatchWorkItem { [weak self] in
+      guard let self, case .scrolling = self.mode else { return }
+      self.overlayState.showScrollHint = true
+    }
+    scrollHintWorkItem = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.scrollHintDelay, execute: work)
+  }
+
+  private func cycleScrollTarget(targets: [NavigationTarget], from index: Int, offset: Int) {
+    guard !targets.isEmpty else { return }
+    let newIndex = (index + offset + targets.count) % targets.count
+    warpCursor(to: targets[newIndex])
+    overlayState.scrollTargetFrame = targets[newIndex].screenFrame
+    mode = .scrolling(targets: targets, currentIndex: newIndex)
+    scheduleScrollHint()
+  }
+
+  private func synthesizeScroll(deltaY: Int32) {
+    // Pixel units scroll smoothly; line units jump in coarse steps.
+    CGEvent(
+      scrollWheelEvent2Source: nil, units: .pixel,
+      wheelCount: 1, wheel1: deltaY, wheel2: 0, wheel3: 0
+    )?.post(tap: .cghidEventTap)
+  }
+
+  private func warpCursor(to element: NavigationTarget) {
+    let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+    let cgPoint = CGPoint(x: element.screenFrame.midX, y: primaryHeight - element.screenFrame.midY)
+    CGWarpMouseCursorPosition(cgPoint)
+    CGAssociateMouseAndMouseCursorPosition(1)
   }
 }

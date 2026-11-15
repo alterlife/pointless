@@ -63,6 +63,7 @@ final class OverlayState: ObservableObject {
   @Published var typedPrefix: String = ""
   @Published var scrollTargetFrame: CGRect?
   @Published var showScrollHint = false
+  @Published var clickHintDismissed = false
 
   var collapsedPrefixes: Set<String> { Set(collapsedGroups.map(\.prefix)) }
 
@@ -121,12 +122,13 @@ struct OverlayContentView: View {
   let allScreenFrames: [CGRect]
 
   private var hintVisible: Bool {
-    state.scrollTargetFrame == nil || state.showScrollHint
+    if state.scrollTargetFrame != nil { return state.showScrollHint }
+    return !state.clickHintDismissed
   }
 
   var body: some View {
-    let hint = hintVisible ? hintFrame() : nil
-    return ZStack(alignment: .bottomTrailing) {
+    let hint = hintVisible && NSScreen.main === screen ? hintFrame() : nil
+    return ZStack {
       Canvas { ctx, size in
         let onScreen = state.labeledElements.filter {
           badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame
@@ -147,7 +149,7 @@ struct OverlayContentView: View {
         let badgeRects = placeBadges(
           anchors: anchors, badgeSizes: badgeSizes, viewSize: size,
           topInset: screen.safeAreaInsets.top,
-          reservedRects: hint.map { [$0.frame.insetBy(dx: -4, dy: -4)] } ?? []
+          reservedRects: hint.map { [$0.insetBy(dx: -4, dy: -4)] } ?? []
         )
         for group in groupsOnScreen {
           drawGroupFrame(group, in: &ctx)
@@ -169,9 +171,6 @@ struct OverlayContentView: View {
 
       if let hint {
         escHint
-          .padding(.trailing, 12)
-          .padding(.bottom, 12 + screen.safeAreaInsets.bottom)
-          .offset(y: -hint.nudge)
       }
     }
   }
@@ -184,48 +183,27 @@ struct OverlayContentView: View {
 
   private var hintSize: CGSize {
     let textSize = (hintText as NSString).size(
-      withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium)]
+      withAttributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold)]
     )
-    return CGSize(width: textSize.width + 20, height: textSize.height + 8)
+    return CGSize(width: textSize.width + 32, height: textSize.height + 16)
   }
 
-  private func viewRect(for screenFrame: CGRect) -> CGRect {
+  private func hintFrame() -> CGRect {
     CGRect(
-      x: screenFrame.minX - screen.frame.minX,
-      y: screen.frame.maxY - screenFrame.maxY,
-      width: screenFrame.width,
-      height: screenFrame.height
-    )
-  }
-
-  private func hintFrame() -> (frame: CGRect, nudge: CGFloat) {
-    let margin: CGFloat = 12
-    var rect = CGRect(
-      x: screen.frame.width - hintSize.width - margin,
-      y: screen.frame.height - hintSize.height - margin - screen.safeAreaInsets.bottom,
+      x: (screen.frame.width - hintSize.width) / 2,
+      y: (screen.frame.height - hintSize.height) / 2,
       width: hintSize.width,
       height: hintSize.height
     )
-    let topLimit = screen.safeAreaInsets.top + 8
-    let elementRects = state.labeledElements
-      .filter { badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame }
-      .map { viewRect(for: $0.element.screenFrame) }
-    var nudge: CGFloat = 0
-    while rect.minY - nudge > topLimit,
-          elementRects.contains(where: { rect.offsetBy(dx: 0, dy: -nudge).intersects($0) }) {
-      nudge += 8
-    }
-    rect.origin.y -= nudge
-    return (rect, nudge)
   }
 
   private var escHint: some View {
     Text(hintText)
-      .font(.system(size: 11, weight: .medium, design: .rounded))
+      .font(.system(size: 13, weight: .semibold, design: .rounded))
       .foregroundColor(.white)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 4)
-      .background(Capsule().fill(Color.black.opacity(0.55)))
+      .padding(.horizontal, 16)
+      .padding(.vertical, 8)
+      .background(Capsule().fill(Color.black.opacity(0.8)))
   }
 
   private func drawElement(
@@ -279,10 +257,23 @@ struct OverlayContentView: View {
     context: inout GraphicsContext
   ) {
     context.fill(Path(roundedRect: rect, cornerRadius: 5), with: .color(color))
-    let textView = Text(label)
-      .font(.system(size: state.badgeFontSize, weight: .bold, design: .monospaced))
+    context.draw(badgeText(label: label, alpha: alpha), at: rect.center)
+  }
+
+  private func badgeText(label: String, alpha: Double) -> Text {
+    let font = Font.system(size: state.badgeFontSize, weight: .bold, design: .monospaced)
+    let typed = state.typedPrefix
+    guard !typed.isEmpty, label.hasPrefix(typed), typed.count < label.count else {
+      return Text(label)
+        .font(font)
+        .foregroundColor(state.textColor.opacity(alpha))
+    }
+    return Text(String(label.prefix(typed.count)))
+      .font(font)
       .foregroundColor(state.textColor.opacity(alpha))
-    context.draw(textView, at: rect.center)
+      + Text(String(label.dropFirst(typed.count)))
+      .font(font)
+      .foregroundColor(state.textColor.opacity(alpha * 0.45))
   }
 
   private func drawGroupFrame(_ group: CollapsedGroup, in context: inout GraphicsContext) {
