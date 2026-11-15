@@ -66,7 +66,7 @@ final class PluginSettingsTests: XCTestCase {
     ])
 
     guard let first = settings.definitions.first,
-          case .dropdown(let key, let label, let options, let defaultValue) = first else {
+          case .dropdown(let key, let label, let options, let defaultValue, _) = first else {
       XCTFail("Expected dropdown definition")
       return
     }

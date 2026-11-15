@@ -67,7 +67,7 @@ enum SimpleSetting {
              .toggle(let key, _, _),
              .text(let key, _, _),
              .color(let key, _, _),
-             .dropdown(let key, _, _, _):
+             .dropdown(let key, _, _, _, _):
             return key
         }
     }
@@ -78,7 +78,7 @@ enum SimpleSetting {
              .toggle(_, let label, _),
              .text(_, let label, _),
              .color(_, let label, _),
-             .dropdown(_, let label, _, _):
+             .dropdown(_, let label, _, _, _):
             return label
         }
     }
@@ -501,7 +501,7 @@ enum TestSettingDefinition {
              .toggle(let key, _, _),
              .hotkey(let key, _, _),
              .text(let key, _, _),
-             .dropdown(let key, _, _, _),
+             .dropdown(let key, _, _, _, _),
              .color(let key, _, _):
             return key
         case .section:
@@ -515,7 +515,7 @@ enum TestSettingDefinition {
              .toggle(_, let label, _),
              .hotkey(_, let label, _),
              .text(_, let label, _),
-             .dropdown(_, let label, _, _),
+             .dropdown(_, let label, _, _, _),
              .color(_, let label, _):
             return label
         case .section(let label, _):

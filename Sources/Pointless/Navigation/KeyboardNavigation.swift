@@ -70,8 +70,11 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     .slider(key: "scrollSpeed", label: "Scroll Speed", range: 0.25...4, defaultValue: 1, step: 0.25),
     .section(label: "Overlay Style", description: "Customize the letter hints on screen elements"),
     .dropdown(
-      key: "labelStrategy", label: "Label Style",
-      options: ["Homerow Keys", "Element Text"], defaultValue: "Homerow Keys"
+      key: "labelStrategy", label: "Shortcut Hints",
+      options: ["Homerow Keys", "Element Text"], defaultValue: "Homerow Keys",
+      description: "Homerow Keys assigns short keyboard combos by position — fast to type, " +
+        "meaningless until memorized. Element Text derives hints from each control's own " +
+        "label (Save → s), easier to learn, occasionally longer."
     ),
     .color(key: "badgeColor", label: "Hint Color", defaultValue: "#F2BF1A"),
     .color(key: "textColor", label: "Hint Text Color", defaultValue: "#000000"),

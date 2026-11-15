@@ -64,21 +64,8 @@ extension SettingsView {
           .textFieldStyle(.roundedBorder)
       }
 
-    case .dropdown(let key, let label, let options, let defaultValue):
-      let showCores = getValue(for: host.id, key: "showCores", default: false) as? Bool ?? false
-      if key == "coreLayout" && !showCores {
-        EmptyView()
-      } else {
-        VStack(alignment: .leading) {
-          Text(label).font(.subheadline)
-          Picker("", selection: binding(for: host.id, key: key, default: defaultValue)) {
-            ForEach(options, id: \.self) { option in
-              Text(option.capitalized).tag(option)
-            }
-          }
-          .pickerStyle(.menu)
-        }
-      }
+    case .dropdown:
+      dropdownSettingView(definition: definition, host: host)
 
     case .hotkey(let key, let label, let defaultValue):
       ShortcutRecorderView(
@@ -104,6 +91,35 @@ extension SettingsView {
 
     case .section(let label, let description):
       sectionHeaderView(label: label, description: description)
+    }
+  }
+
+  @ViewBuilder
+  private func dropdownSettingView(
+    definition: SettingDefinition, host: any SettingsHost
+  ) -> some View {
+    if case .dropdown(let key, let label, let options, let defaultValue, let description) = definition {
+      let showCores = getValue(for: host.id, key: "showCores", default: false) as? Bool ?? false
+      if key == "coreLayout" && !showCores {
+        EmptyView()
+      } else {
+        VStack(alignment: .leading, spacing: 2) {
+          Text(label).font(.subheadline)
+          Picker("", selection: binding(for: host.id, key: key, default: defaultValue)) {
+            ForEach(options, id: \.self) { option in
+              Text(option.capitalized).tag(option)
+            }
+          }
+          .pickerStyle(.menu)
+          if let description {
+            Text(description)
+              .font(.caption)
+              .foregroundColor(Color(NSColor.tertiaryLabelColor))
+          }
+        }
+      }
+    } else {
+      EmptyView()
     }
   }
 
