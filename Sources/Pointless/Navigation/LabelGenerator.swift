@@ -81,7 +81,8 @@ enum LabelGenerator {
                 && $0.element.screenFrame.height <= collapsedClusterMaxExtent
             })
       else { return nil }
-      guard proximityChained(members.map(\.element.screenFrame)) else { return nil }
+      guard proximityComponents(members, frame: { $0.element.screenFrame }).count == 1
+      else { return nil }
       let frame = members.dropFirst().reduce(members[0].element.screenFrame) {
         $0.union($1.element.screenFrame)
       }
@@ -91,18 +92,29 @@ enum LabelGenerator {
     }
   }
 
-  /// Consecutive members in reading order must be near each other —
-  /// clusters grow by adjacency, not by shared ancestor alone.
-  private static func proximityChained(_ frames: [CGRect]) -> Bool {
-    let sorted = frames.sorted(by: beforeInReadingOrder)
-    return zip(sorted, sorted.dropFirst()).allSatisfy {
-      frameGap($0, $1) <= collapsedClusterMaxGap
+  /// Single-linkage components: an item joins a cluster when it's within
+  /// collapsedClusterMaxGap of any member — clusters grow by adjacency.
+  private static func proximityComponents<T>(
+    _ items: [T], frame: (T) -> CGRect
+  ) -> [[T]] {
+    var remaining = items
+    var components: [[T]] = []
+    while let seed = remaining.first {
+      var component = [seed]
+      remaining.removeFirst()
+      var grew = true
+      while grew {
+        grew = false
+        if let position = remaining.firstIndex(where: { item in
+          component.contains { frameGap(frame($0), frame(item)) <= collapsedClusterMaxGap }
+        }) {
+          component.append(remaining.remove(at: position))
+          grew = true
+        }
+      }
+      components.append(component)
     }
-  }
-
-  private static func beforeInReadingOrder(_ first: CGRect, _ second: CGRect) -> Bool {
-    if first.minY != second.minY { return first.minY > second.minY }
-    return first.minX < second.minX
+    return components
   }
 
   private static func frameGap(_ first: CGRect, _ second: CGRect) -> CGFloat {
@@ -192,28 +204,13 @@ enum LabelGenerator {
     return (dense, order)
   }
 
-  /// Splits same-ancestor members into runs where consecutive frames
-  /// stay within collapsedClusterMaxGap, keeping runs of minCount+.
+  /// Splits same-ancestor members into proximity components, keeping
+  /// runs of minCount+.
   private static func proximityRuns(
     _ indices: [Int], in elements: [NavigationTarget]
   ) -> [[Int]] {
-    let sorted = indices.sorted {
-      beforeInReadingOrder(elements[$0].screenFrame, elements[$1].screenFrame)
-    }
-    var runs: [[Int]] = []
-    var run: [Int] = []
-    var previousFrame: CGRect?
-    for index in sorted {
-      let frame = elements[index].screenFrame
-      if let previous = previousFrame, frameGap(previous, frame) > collapsedClusterMaxGap {
-        if run.count >= collapsedClusterMinCount { runs.append(run) }
-        run = []
-      }
-      run.append(index)
-      previousFrame = frame
-    }
-    if run.count >= collapsedClusterMinCount { runs.append(run) }
-    return runs
+    proximityComponents(indices) { elements[$0].screenFrame }
+      .filter { $0.count >= collapsedClusterMinCount }
   }
 
   private static func assignTextHints(
