@@ -27,3 +27,6 @@ test-runner
 *.test
 
 # Documentation
+
+# Packaged app
+build/
