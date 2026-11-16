@@ -79,7 +79,8 @@ enum LabelGenerator {
               $0.element.screenFrame.width <= collapsedClusterMaxExtent
                 && $0.element.screenFrame.height <= collapsedClusterMaxExtent
             }),
-            proximityComponents(members, frame: { $0.element.screenFrame }).count == 1
+            (proximityComponents(members, frame: { $0.element.screenFrame })
+              .map(\.count).max() ?? 0) >= collapsedClusterMinCount
       else { return nil }
       let frame = members.dropFirst().reduce(members[0].element.screenFrame) {
         $0.union($1.element.screenFrame)
@@ -100,15 +101,10 @@ enum LabelGenerator {
     while let seed = remaining.first {
       var component = [seed]
       remaining.removeFirst()
-      var grew = true
-      while grew {
-        grew = false
-        if let position = remaining.firstIndex(where: { item in
-          component.contains { frameGap(frame($0), frame(item)) <= collapsedClusterMaxGap }
-        }) {
-          component.append(remaining.remove(at: position))
-          grew = true
-        }
+      while let position = remaining.firstIndex(where: { item in
+        component.contains { frameGap(frame($0), frame(item)) <= collapsedClusterMaxGap }
+      }) {
+        component.append(remaining.remove(at: position))
       }
       components.append(component)
     }
@@ -201,8 +197,24 @@ enum LabelGenerator {
   private static func proximityRuns(
     _ indices: [Int], in elements: [NavigationTarget]
   ) -> [[Int]] {
-    proximityComponents(indices) { elements[$0].screenFrame }
+    var runs = proximityComponents(indices) { elements[$0].screenFrame }
       .filter { $0.count >= collapsedClusterMinCount }
+    var memberSet = Set(runs.flatMap { $0 })
+    var unions = runs.map { members in
+      members.dropFirst().reduce(elements[members[0]].screenFrame) {
+        $0.union(elements[$1].screenFrame)
+      }
+    }
+    for index in indices where !memberSet.contains(index) {
+      let frame = elements[index].screenFrame
+      let center = CGPoint(x: frame.midX, y: frame.midY)
+      guard let runIndex = unions.firstIndex(where: { $0.contains(center) })
+      else { continue }
+      runs[runIndex].append(index)
+      unions[runIndex] = unions[runIndex].union(frame)
+      memberSet.insert(index)
+    }
+    return runs
   }
 
   private static func assignTextHints(
