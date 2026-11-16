@@ -6,6 +6,8 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>Pointless</string>
+	<key>CFBundleIconFile</key>
+	<string>Pointless</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.alterlife.pointless</string>
 	<key>CFBundleInfoDictionaryVersion</key>
