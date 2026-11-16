@@ -40,7 +40,7 @@ enum LabelGenerator {
 
   static let collapsedClusterMinCount = 6
   static let collapsedClusterMaxExtent: CGFloat = 56
-  static let collapsedClusterMaxGap: CGFloat = 40
+  static let collapsedClusterMaxGap: CGFloat = 25
 
   /// Assign labels to pre-sorted elements
   static func label(
