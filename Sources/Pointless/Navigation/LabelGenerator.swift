@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import OSLog
 
 // NOTE: NavigationTarget is defined in Discovery/NavigationTarget.swift (same module)
 
@@ -57,49 +56,39 @@ enum LabelGenerator {
     return hierarchicalLabel(elements, groups: groups, strategy: strategy)
   }
 
-  /// Dense clusters of small siblings get a signpost badge; members stay
+  /// Dense clusters of small elements get a signpost badge; members stay
   /// labeled but render faint until their shared prefix is typed.
   static func collapsedGroups(in labeled: [LabeledElement]) -> [CollapsedGroup] {
-    Logger.debug(
-      "Collapse check: \(labeled.count) elements, " +
-        "\(Set(labeled.map { $0.element.groupingAncestor }).count) ancestors",
-      logger: Logger.pluginLifecycle
-    )
     guard labeled.count > flatLabelLimit else { return [] }
-    let ancestorCount = Set(labeled.map { $0.element.groupingAncestor }).count
-    guard ancestorCount > 1 else { return [] }
-    let prefixLength = comboLength(for: ancestorCount)
-
-    var membersByPrefix: [String: [LabeledElement]] = [:]
-    var prefixOrder: [String] = []
-    for item in labeled {
-      let prefix = String(item.label.prefix(prefixLength))
-      if membersByPrefix[prefix] == nil { prefixOrder.append(prefix) }
-      membersByPrefix[prefix, default: []].append(item)
+    let small = labeled.filter {
+      $0.element.screenFrame.width <= collapsedClusterMaxExtent
+        && $0.element.screenFrame.height <= collapsedClusterMaxExtent
     }
-
-    return prefixOrder.compactMap { prefix in
-      let members = membersByPrefix[prefix] ?? []
-      let largestRun = proximityComponents(members, frame: { $0.element.screenFrame })
-        .map(\.count).max() ?? 0
-      Logger.debug(
-        "Cluster candidate \(prefix): \(members.count) members, largest run \(largestRun)",
-        logger: Logger.pluginLifecycle
-      )
-      guard members.count >= collapsedClusterMinCount,
-            members.allSatisfy({
-              $0.element.screenFrame.width <= collapsedClusterMaxExtent
-                && $0.element.screenFrame.height <= collapsedClusterMaxExtent
-            }),
-            largestRun >= collapsedClusterMinCount
-      else { return nil }
-      let frame = members.dropFirst().reduce(members[0].element.screenFrame) {
-        $0.union($1.element.screenFrame)
+    return proximityComponents(small, frame: { $0.element.screenFrame })
+      .filter { $0.count >= collapsedClusterMinCount }
+      .compactMap { members in
+        guard let prefix = longestCommonPrefix(members.map(\.label)), !prefix.isEmpty
+        else { return nil }
+        let all = labeled.filter { $0.label.hasPrefix(prefix) }
+        guard all.count >= collapsedClusterMinCount else { return nil }
+        let frame = all.dropFirst().reduce(all[0].element.screenFrame) {
+          $0.union($1.element.screenFrame)
+        }
+        return CollapsedGroup(
+          prefix: prefix, label: "\(prefix)_ (\(all.count) items)", frame: frame
+        )
       }
-      return CollapsedGroup(
-        prefix: prefix, label: "\(prefix)_ (\(members.count) items)", frame: frame
-      )
+  }
+
+  private static func longestCommonPrefix(_ labels: [String]) -> String? {
+    guard var prefix = labels.first else { return nil }
+    for label in labels.dropFirst() {
+      while !label.hasPrefix(prefix) {
+        prefix.removeLast()
+        if prefix.isEmpty { return prefix }
+      }
     }
+    return prefix
   }
 
   /// First-appearance order — earlier groups get the home-row prefixes.
