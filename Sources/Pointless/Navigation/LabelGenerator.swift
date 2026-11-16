@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import OSLog
 
 // NOTE: NavigationTarget is defined in Discovery/NavigationTarget.swift (same module)
 
@@ -30,16 +31,16 @@ enum LabelGenerator {
 
   /// Past this, flat labels need 2 chars anyway — hierarchical costs the same
   /// keystrokes and narrows faster.
-  private static let flatLabelLimit = 27
+  static let flatLabelLimit = 27
 
   enum LabelStrategy {
     case useHomeRowKeys
     case useClickableElementText
   }
 
-  private static let collapsedClusterMinCount = 6
-  private static let collapsedClusterMaxExtent: CGFloat = 56
-  private static let collapsedClusterMaxGap: CGFloat = 40
+  static let collapsedClusterMinCount = 6
+  static let collapsedClusterMaxExtent: CGFloat = 56
+  static let collapsedClusterMaxGap: CGFloat = 40
 
   /// Assign labels to pre-sorted elements
   static func label(
@@ -59,6 +60,11 @@ enum LabelGenerator {
   /// Dense clusters of small siblings get a signpost badge; members stay
   /// labeled but render faint until their shared prefix is typed.
   static func collapsedGroups(in labeled: [LabeledElement]) -> [CollapsedGroup] {
+    Logger.debug(
+      "Collapse check: \(labeled.count) elements, " +
+        "\(Set(labeled.map { $0.element.groupingAncestor }).count) ancestors",
+      logger: Logger.pluginLifecycle
+    )
     guard labeled.count > flatLabelLimit else { return [] }
     let ancestorCount = Set(labeled.map { $0.element.groupingAncestor }).count
     guard ancestorCount > 1 else { return [] }
@@ -74,13 +80,18 @@ enum LabelGenerator {
 
     return prefixOrder.compactMap { prefix in
       let members = membersByPrefix[prefix] ?? []
+      let largestRun = proximityComponents(members, frame: { $0.element.screenFrame })
+        .map(\.count).max() ?? 0
+      Logger.debug(
+        "Cluster candidate \(prefix): \(members.count) members, largest run \(largestRun)",
+        logger: Logger.pluginLifecycle
+      )
       guard members.count >= collapsedClusterMinCount,
             members.allSatisfy({
               $0.element.screenFrame.width <= collapsedClusterMaxExtent
                 && $0.element.screenFrame.height <= collapsedClusterMaxExtent
             }),
-            (proximityComponents(members, frame: { $0.element.screenFrame })
-              .map(\.count).max() ?? 0) >= collapsedClusterMinCount
+            largestRun >= collapsedClusterMinCount
       else { return nil }
       let frame = members.dropFirst().reduce(members[0].element.screenFrame) {
         $0.union($1.element.screenFrame)
@@ -89,32 +100,6 @@ enum LabelGenerator {
         prefix: prefix, label: "\(prefix)_ (\(members.count) items)", frame: frame
       )
     }
-  }
-
-  /// Single-linkage components: an item joins a cluster when it's within
-  /// collapsedClusterMaxGap of any member — clusters grow by adjacency.
-  private static func proximityComponents<T>(
-    _ items: [T], frame: (T) -> CGRect
-  ) -> [[T]] {
-    var remaining = items
-    var components: [[T]] = []
-    while let seed = remaining.first {
-      var component = [seed]
-      remaining.removeFirst()
-      while let position = remaining.firstIndex(where: { item in
-        component.contains { frameGap(frame($0), frame(item)) <= collapsedClusterMaxGap }
-      }) {
-        component.append(remaining.remove(at: position))
-      }
-      components.append(component)
-    }
-    return components
-  }
-
-  private static func frameGap(_ first: CGRect, _ second: CGRect) -> CGFloat {
-    let hGap = max(0, max(first.minX - second.maxX, second.minX - first.maxX))
-    let vGap = max(0, max(first.minY - second.maxY, second.minY - first.maxY))
-    return max(hGap, vGap)
   }
 
   /// First-appearance order — earlier groups get the home-row prefixes.
@@ -149,72 +134,6 @@ enum LabelGenerator {
     return zip(elements, labels.compactMap { $0 }).map { elem, lbl in
       LabeledElement(label: lbl, element: elem)
     }
-  }
-
-  /// collapsedGroups needs shared label prefixes, which text hints lack —
-  /// dense clusters keep hierarchical labels so the signpost badge survives.
-  private static func assignClusterLabels(
-    to labels: inout [String?], used: inout Set<String>, elements: [NavigationTarget]
-  ) {
-    guard elements.count > flatLabelLimit else { return }
-    let clusters = collapsibleClusters(in: elements)
-    guard clusters.memberIndices.count > 1 else { return }
-
-    let prefixLength = comboLength(for: clusters.ancestors.count)
-    var prefixIterator = sortedCombos(length: prefixLength).makeIterator()
-    for memberIndices in clusters.memberIndices {
-      guard let prefix = prefixIterator.next() else { break }
-      let suffixLength = comboLength(for: memberIndices.count)
-      var suffixIterator = sortedCombos(length: suffixLength).makeIterator()
-      for index in memberIndices {
-        guard let suffix = suffixIterator.next() else { break }
-        let label = prefix + suffix
-        guard !isBanned(label), !labelConflicts(label, with: used) else { continue }
-        labels[index] = label
-        used.insert(label)
-      }
-    }
-  }
-
-  private static func collapsibleClusters(
-    in elements: [NavigationTarget]
-  ) -> (memberIndices: [[Int]], ancestors: [GroupingAncestor]) {
-    var seen = Set<GroupingAncestor>()
-    var order: [GroupingAncestor] = []
-    for element in elements where seen.insert(element.groupingAncestor).inserted {
-      order.append(element.groupingAncestor)
-    }
-    let small = elements.indices.filter {
-      elements[$0].screenFrame.width <= collapsedClusterMaxExtent
-        && elements[$0].screenFrame.height <= collapsedClusterMaxExtent
-    }
-    let dense = proximityRuns(small, in: elements)
-    return (dense, order)
-  }
-
-  /// Splits same-ancestor members into proximity components, keeping
-  /// runs of minCount+.
-  private static func proximityRuns(
-    _ indices: [Int], in elements: [NavigationTarget]
-  ) -> [[Int]] {
-    var runs = proximityComponents(indices) { elements[$0].screenFrame }
-      .filter { $0.count >= collapsedClusterMinCount }
-    var memberSet = Set(runs.flatMap { $0 })
-    var unions = runs.map { members in
-      members.dropFirst().reduce(elements[members[0]].screenFrame) {
-        $0.union(elements[$1].screenFrame)
-      }
-    }
-    for index in elements.indices where !memberSet.contains(index) {
-      let frame = elements[index].screenFrame
-      let center = CGPoint(x: frame.midX, y: frame.midY)
-      guard let runIndex = unions.firstIndex(where: { $0.contains(center) })
-      else { continue }
-      runs[runIndex].append(index)
-      unions[runIndex] = unions[runIndex].union(frame)
-      memberSet.insert(index)
-    }
-    return runs
   }
 
   private static func assignTextHints(
@@ -266,7 +185,7 @@ enum LabelGenerator {
 
   /// Two labels where one prefixes the other are ambiguous under prefix
   /// filtering — "ne" can't coexist with "neu".
-  private static func labelConflicts(_ candidate: String, with used: Set<String>) -> Bool {
+  static func labelConflicts(_ candidate: String, with used: Set<String>) -> Bool {
     used.contains { $0.hasPrefix(candidate) || candidate.hasPrefix($0) }
   }
 
@@ -313,7 +232,7 @@ enum LabelGenerator {
     labeled.first { $0.label == input }
   }
 
-  private static func comboLength(for count: Int) -> Int {
+  static func comboLength(for count: Int) -> Int {
     let base = priorityKeys.count
     if count <= base { return 1 }
     if count <= base * base { return 2 }
@@ -326,7 +245,7 @@ enum LabelGenerator {
   }
 
   /// Every combo of `length` chars in preference order, minus banned words.
-  private static func sortedCombos(length: Int) -> [String] {
+  static func sortedCombos(length: Int) -> [String] {
     if length == 1 {
       return priorityKeys.map(String.init)
     }
@@ -363,7 +282,7 @@ enum LabelGenerator {
     return scored.map(\.combo)
   }
 
-  private static func isBanned(_ label: String) -> Bool {
+  static func isBanned(_ label: String) -> Bool {
     BannedLabelWords.all.contains { label.contains($0) }
   }
 
