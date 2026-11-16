@@ -81,15 +81,20 @@ final class KeyboardOnboardingController: ObservableObject {
     hasInputMonitoring = checkInputMonitoringAccess()
   }
 
-  /// Fires both system prompts at once — Shortcat-style single action.
-  func requestAccess() {
-    if !hasAccessibility {
+  /// Fires a system prompt for one permission.
+  func request(_ permission: Permission) {
+    switch permission {
+    case .accessibility:
       let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
       _ = AXIsProcessTrustedWithOptions(options)
-    }
-    if !hasInputMonitoring {
+    case .inputMonitoring:
       _ = cgRequestListenEventAccess()
     }
+  }
+
+  enum Permission {
+    case accessibility
+    case inputMonitoring
   }
 
   private func startPolling() {
@@ -172,16 +177,41 @@ struct OnboardingView: View {
         Label("All set!", systemImage: "checkmark.circle.fill")
           .foregroundColor(.green)
       } else {
-        Button("Request Permissions") {
-          controller.requestAccess()
+        VStack(spacing: 10) {
+          permissionButton(
+            "Accessibility", granted: controller.hasAccessibility,
+            permission: .accessibility
+          )
+          permissionButton(
+            "Input Monitoring", granted: controller.hasInputMonitoring,
+            permission: .inputMonitoring
+          )
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
         statusLine
       }
     }
     .padding(28)
     .frame(width: 400)
+  }
+
+  private func permissionButton(
+    _ title: String, granted: Bool, permission: KeyboardOnboardingController.Permission
+  ) -> some View {
+    Button {
+      controller.request(permission)
+    } label: {
+      HStack {
+        Image(systemName: granted ? "checkmark.circle.fill" : "circle")
+          .foregroundColor(granted ? .green : .secondary)
+        Text(title)
+        Spacer()
+        Text(granted ? "Granted" : "Request")
+          .foregroundColor(.secondary)
+      }
+      .frame(width: 220)
+    }
+    .buttonStyle(.bordered)
+    .disabled(granted)
   }
 
   @ViewBuilder
