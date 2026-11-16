@@ -3,23 +3,6 @@ import ApplicationServices
 import OSLog
 import SwiftUI
 
-// MARK: - Input Monitoring check
-//
-// CGPreflightListenEventAccess() (available since macOS 10.15) is the correct API
-// but is not consistently exported by the Swift module in SPM builds. We link
-// directly to the C symbol using @_silgen_name, which resolves at link time against
-// CoreGraphics.framework where the symbol always exists.
-
-@_silgen_name("CGPreflightListenEventAccess")
-private func cgPreflightListenEventAccess() -> Bool
-
-@_silgen_name("CGRequestListenEventAccess")
-private func cgRequestListenEventAccess() -> Bool
-
-private func checkInputMonitoringAccess() -> Bool {
-  cgPreflightListenEventAccess()
-}
-
 // MARK: - Controller
 
 @MainActor
@@ -27,10 +10,9 @@ final class KeyboardOnboardingController: ObservableObject {
   static let shared = KeyboardOnboardingController()
 
   @Published private(set) var hasAccessibility: Bool
-  @Published private(set) var hasInputMonitoring: Bool
   @Published private(set) var showSuccess: Bool = false
 
-  var allGranted: Bool { hasAccessibility && hasInputMonitoring }
+  var allGranted: Bool { hasAccessibility }
 
   /// Whether onComplete has been called (activation monitor installed)
   private(set) var isActivated = false
@@ -41,7 +23,6 @@ final class KeyboardOnboardingController: ObservableObject {
 
   private init() {
     hasAccessibility = AXIsProcessTrusted()
-    hasInputMonitoring = checkInputMonitoringAccess()
   }
 
   func showIfNeeded(onComplete: @escaping () -> Void) {
@@ -52,7 +33,7 @@ final class KeyboardOnboardingController: ObservableObject {
     }
     refresh()
     Logger.info(
-      "KeyboardOnboarding: AX=\(hasAccessibility), IM=\(hasInputMonitoring), allGranted=\(allGranted)",
+      "KeyboardOnboarding: AX=\(hasAccessibility), allGranted=\(allGranted)",
       logger: Logger.pluginLifecycle
     )
     if allGranted {
@@ -78,23 +59,11 @@ final class KeyboardOnboardingController: ObservableObject {
 
   func refresh() {
     hasAccessibility = AXIsProcessTrusted()
-    hasInputMonitoring = checkInputMonitoringAccess()
   }
 
-  /// Fires a system prompt for one permission.
-  func request(_ permission: Permission) {
-    switch permission {
-    case .accessibility:
-      let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
-      _ = AXIsProcessTrustedWithOptions(options)
-    case .inputMonitoring:
-      _ = cgRequestListenEventAccess()
-    }
-  }
-
-  enum Permission {
-    case accessibility
-    case inputMonitoring
+  func requestAccessibility() {
+    let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
+    _ = AXIsProcessTrustedWithOptions(options)
   }
 
   private func startPolling() {
@@ -165,10 +134,10 @@ struct OnboardingView: View {
         .font(.system(size: 40, weight: .light))
         .foregroundColor(.accentColor)
       VStack(spacing: 6) {
-        Text("Pointless needs a couple permissions")
+        Text("Pointless needs Accessibility access")
           .font(.headline)
-        Text("Accessibility finds click targets on screen. " +
-          "Input Monitoring captures the shortcut. macOS will ask you to approve each.")
+        Text("It reads the UI elements on screen to find click targets, " +
+          "and captures the navigation shortcut. macOS will ask you to approve it.")
           .font(.subheadline)
           .foregroundColor(.secondary)
           .multilineTextAlignment(.center)
@@ -177,57 +146,29 @@ struct OnboardingView: View {
         Label("All set!", systemImage: "checkmark.circle.fill")
           .foregroundColor(.green)
       } else {
-        VStack(spacing: 10) {
-          permissionButton(
-            "Accessibility", granted: controller.hasAccessibility,
-            permission: .accessibility
-          )
-          permissionButton(
-            "Input Monitoring", granted: controller.hasInputMonitoring,
-            permission: .inputMonitoring
-          )
+        Button {
+          controller.requestAccessibility()
+        } label: {
+          HStack {
+            Image(systemName: controller.hasAccessibility ? "checkmark.circle.fill" : "circle")
+              .foregroundColor(controller.hasAccessibility ? .green : .secondary)
+            Text("Accessibility")
+            Spacer()
+            Text(controller.hasAccessibility ? "Granted" : "Request")
+              .foregroundColor(.secondary)
+          }
+          .frame(width: 220)
         }
-        statusLine
+        .buttonStyle(.bordered)
+        .disabled(controller.hasAccessibility)
+        if !controller.hasAccessibility {
+          Text("Waiting for approval in System Settings")
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
       }
     }
     .padding(28)
     .frame(width: 400)
-  }
-
-  private func permissionButton(
-    _ title: String, granted: Bool, permission: KeyboardOnboardingController.Permission
-  ) -> some View {
-    Button {
-      controller.request(permission)
-    } label: {
-      HStack {
-        Image(systemName: granted ? "checkmark.circle.fill" : "circle")
-          .foregroundColor(granted ? .green : .secondary)
-        Text(title)
-        Spacer()
-        Text(granted ? "Granted" : "Request")
-          .foregroundColor(.secondary)
-      }
-      .frame(width: 220)
-    }
-    .buttonStyle(.bordered)
-    .disabled(granted)
-  }
-
-  @ViewBuilder
-  private var statusLine: some View {
-    let pending = [
-      !controller.hasAccessibility ? "Accessibility" : nil,
-      !controller.hasInputMonitoring ? "Input Monitoring" : nil
-    ].compactMap { $0 }
-    if pending.isEmpty {
-      Text("Approved — finishing up…")
-        .font(.caption)
-        .foregroundColor(.secondary)
-    } else {
-      Text("Waiting for approval: \(pending.joined(separator: " · "))")
-        .font(.caption)
-        .foregroundColor(.secondary)
-    }
   }
 }
