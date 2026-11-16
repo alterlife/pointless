@@ -13,6 +13,9 @@ import SwiftUI
 @_silgen_name("CGPreflightListenEventAccess")
 private func cgPreflightListenEventAccess() -> Bool
 
+@_silgen_name("CGRequestListenEventAccess")
+private func cgRequestListenEventAccess() -> Bool
+
 private func checkInputMonitoringAccess() -> Bool {
   cgPreflightListenEventAccess()
 }
@@ -78,6 +81,17 @@ final class KeyboardOnboardingController: ObservableObject {
     hasInputMonitoring = checkInputMonitoringAccess()
   }
 
+  /// Fires both system prompts at once — Shortcat-style single action.
+  func requestAccess() {
+    if !hasAccessibility {
+      let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
+      _ = AXIsProcessTrustedWithOptions(options)
+    }
+    if !hasInputMonitoring {
+      _ = cgRequestListenEventAccess()
+    }
+  }
+
   private func startPolling() {
     stopPolling()
     let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -135,155 +149,55 @@ final class KeyboardOnboardingController: ObservableObject {
   }
 }
 
-// MARK: - Permission row model
-
-private struct PermissionInfo {
-  let step: Int
-  let symbol: String
-  let title: String
-  let description: String
-  let settingsPath: String
-}
-
 // MARK: - View
 
 struct OnboardingView: View {
   @ObservedObject var controller: KeyboardOnboardingController
 
-  private let permissions: [PermissionInfo] = [
-    PermissionInfo(
-      step: 1, symbol: "accessibility", title: "Accessibility",
-      description: "Reads UI elements so jump targets can be found",
-      settingsPath: "Accessibility"
-    ),
-    PermissionInfo(
-      step: 2, symbol: "keyboard", title: "Input Monitoring",
-      description: "Intercepts the activation shortcut and navigation keys",
-      settingsPath: "InputMonitoring"
-    )
-  ]
-
   var body: some View {
-    VStack(spacing: 0) {
-      headerView
-      Divider()
-      VStack(spacing: 16) {
-        permissionRow(permissions[0], isGranted: controller.hasAccessibility)
-        permissionRow(permissions[1], isGranted: controller.hasInputMonitoring)
-        if controller.showSuccess {
-          successBanner
-        } else {
-          footerHint
-        }
-      }
-      .padding(24)
-    }
-  }
-
-  private var headerView: some View {
-    HStack(spacing: 12) {
+    VStack(spacing: 20) {
       Image(systemName: "keyboard")
-        .font(.system(size: 28, weight: .light))
+        .font(.system(size: 40, weight: .light))
         .foregroundColor(.accentColor)
-      VStack(alignment: .leading, spacing: 2) {
-        Text("Jump Navigation")
+      VStack(spacing: 6) {
+        Text("Pointless needs a couple permissions")
           .font(.headline)
-        Text("Grant two permissions to enable jump-to-click navigation")
+        Text("Accessibility finds click targets on screen. " +
+          "Input Monitoring captures the shortcut. macOS will ask you to approve each.")
           .font(.subheadline)
           .foregroundColor(.secondary)
+          .multilineTextAlignment(.center)
       }
-      Spacer()
+      if controller.showSuccess {
+        Label("All set!", systemImage: "checkmark.circle.fill")
+          .foregroundColor(.green)
+      } else {
+        Button("Request Permissions") {
+          controller.requestAccess()
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        statusLine
+      }
     }
-    .padding(20)
+    .padding(28)
+    .frame(width: 400)
   }
 
   @ViewBuilder
-  private func permissionRow(_ info: PermissionInfo, isGranted: Bool) -> some View {
-    HStack(alignment: .top, spacing: 12) {
-      ZStack {
-        Circle()
-          .fill(isGranted ? Color.accentColor : Color.secondary.opacity(0.15))
-          .frame(width: 32, height: 32)
-        if isGranted {
-          Image(systemName: "checkmark")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundColor(.white)
-        } else {
-          Text("\(info.step)")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(.secondary)
-        }
-      }
-      VStack(alignment: .leading, spacing: 4) {
-        HStack {
-          Image(systemName: info.symbol)
-            .font(.system(size: 13))
-            .foregroundColor(isGranted ? .accentColor : .secondary)
-          Text(info.title)
-            .font(.system(size: 13, weight: .semibold))
-          Spacer()
-          if isGranted {
-            Text("Granted")
-              .font(.caption)
-              .foregroundColor(.green)
-          }
-        }
-        Text(info.description)
-          .font(.caption)
-          .foregroundColor(.secondary)
-        if !isGranted {
-          Button("Open System Settings →") {
-            openSettings(path: info.settingsPath)
-          }
-          .buttonStyle(.link)
-          .font(.caption)
-          .padding(.top, 2)
-        }
-      }
-    }
-    .padding(14)
-    .background(
-      RoundedRectangle(cornerRadius: 10)
-        .fill(isGranted ? Color.accentColor.opacity(0.05) : Color(NSColor.controlBackgroundColor))
-    )
-    .overlay(
-      RoundedRectangle(cornerRadius: 10)
-        .strokeBorder(isGranted ? Color.accentColor.opacity(0.3) : Color.secondary.opacity(0.15))
-    )
-    .animation(.easeInOut(duration: 0.25), value: isGranted)
-  }
-
-  private var successBanner: some View {
-    HStack(spacing: 8) {
-      Image(systemName: "checkmark.circle.fill")
-        .foregroundColor(.green)
-      Text("All set! Activating Jump Navigation…")
-        .font(.system(size: 13, weight: .medium))
-    }
-    .frame(maxWidth: .infinity)
-    .padding(12)
-    .background(RoundedRectangle(cornerRadius: 8).fill(Color.green.opacity(0.1)))
-    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.green.opacity(0.3)))
-    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-  }
-
-  private var footerHint: some View {
-    Text("Status updates automatically as you grant permissions in System Settings")
-      .font(.caption)
-      .foregroundColor(.secondary)
-      .multilineTextAlignment(.center)
-      .frame(maxWidth: .infinity)
-  }
-
-  private func openSettings(path: String) {
-    // macOS 13+ uses Privacy & Security pane with direct anchor URLs
-    let url: URL?
-    if #available(macOS 13.0, *) {
-      url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_\(path)")
+  private var statusLine: some View {
+    let pending = [
+      !controller.hasAccessibility ? "Accessibility" : nil,
+      !controller.hasInputMonitoring ? "Input Monitoring" : nil
+    ].compactMap { $0 }
+    if pending.isEmpty {
+      Text("Approved — finishing up…")
+        .font(.caption)
+        .foregroundColor(.secondary)
     } else {
-      url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_\(path)")
+      Text("Waiting for approval: \(pending.joined(separator: " · "))")
+        .font(.caption)
+        .foregroundColor(.secondary)
     }
-    guard let url else { return }
-    NSWorkspace.shared.open(url)
   }
 }
