@@ -76,12 +76,10 @@ enum LabelGenerator {
       let members = membersByPrefix[prefix] ?? []
       guard members.count >= collapsedClusterMinCount,
             members.allSatisfy({
-              $0.element.groupingAncestor == members[0].element.groupingAncestor
-                && $0.element.screenFrame.width <= collapsedClusterMaxExtent
+              $0.element.screenFrame.width <= collapsedClusterMaxExtent
                 && $0.element.screenFrame.height <= collapsedClusterMaxExtent
-            })
-      else { return nil }
-      guard proximityComponents(members, frame: { $0.element.screenFrame }).count == 1
+            }),
+            proximityComponents(members, frame: { $0.element.screenFrame }).count == 1
       else { return nil }
       let frame = members.dropFirst().reduce(members[0].element.screenFrame) {
         $0.union($1.element.screenFrame)
@@ -185,22 +183,16 @@ enum LabelGenerator {
   private static func collapsibleClusters(
     in elements: [NavigationTarget]
   ) -> (memberIndices: [[Int]], ancestors: [GroupingAncestor]) {
+    var seen = Set<GroupingAncestor>()
     var order: [GroupingAncestor] = []
-    var indexByGroup: [GroupingAncestor: [Int]] = [:]
-    for (index, element) in elements.enumerated() {
-      if indexByGroup[element.groupingAncestor] == nil {
-        order.append(element.groupingAncestor)
-      }
-      indexByGroup[element.groupingAncestor, default: []].append(index)
+    for element in elements where seen.insert(element.groupingAncestor).inserted {
+      order.append(element.groupingAncestor)
     }
-    var dense: [[Int]] = []
-    for ancestor in order {
-      let small = (indexByGroup[ancestor] ?? []).filter {
-        elements[$0].screenFrame.width <= collapsedClusterMaxExtent
-          && elements[$0].screenFrame.height <= collapsedClusterMaxExtent
-      }
-      dense.append(contentsOf: proximityRuns(small, in: elements))
+    let small = elements.indices.filter {
+      elements[$0].screenFrame.width <= collapsedClusterMaxExtent
+        && elements[$0].screenFrame.height <= collapsedClusterMaxExtent
     }
+    let dense = proximityRuns(small, in: elements)
     return (dense, order)
   }
 
