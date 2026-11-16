@@ -141,23 +141,9 @@ final class BadgePlacementTests: XCTestCase {
 
   // MARK: Badge alpha
 
-  func testCollapsedMemberStaysFaintUntilPrefixTyped() {
-    XCTAssertEqual(badgeAlpha(label: "ffa", isCollapsedMember: true, typedPrefix: ""), 0.15)
-    XCTAssertEqual(badgeAlpha(label: "ffa", isCollapsedMember: true, typedPrefix: "f"), 1.0)
-    XCTAssertEqual(badgeAlpha(label: "ffa", isCollapsedMember: true, typedPrefix: "ff"), 1.0)
-    XCTAssertEqual(badgeAlpha(label: "ffa", isCollapsedMember: true, typedPrefix: "s"), 0.2)
-  }
-
-  func testNormalMemberUnaffectedByCollapse() {
-    XCTAssertEqual(badgeAlpha(label: "sa", isCollapsedMember: false, typedPrefix: ""), 1.0)
-    XCTAssertEqual(badgeAlpha(label: "sa", isCollapsedMember: false, typedPrefix: "s"), 1.0)
-    XCTAssertEqual(badgeAlpha(label: "sa", isCollapsedMember: false, typedPrefix: "a"), 0.2)
-  }
-
-  func testGroupBadgeHidesOncePrefixFullyTyped() {
-    XCTAssertEqual(groupBadgeAlpha(prefix: "ff", typedPrefix: ""), 1.0)
-    XCTAssertEqual(groupBadgeAlpha(prefix: "ff", typedPrefix: "f"), 1.0)
-    XCTAssertNil(groupBadgeAlpha(prefix: "ff", typedPrefix: "ff"))
-    XCTAssertEqual(groupBadgeAlpha(prefix: "ff", typedPrefix: "s"), 0.2)
+  func testNonMatchingBadgeDimsWhileTyping() {
+    XCTAssertEqual(badgeAlpha(label: "sa", typedPrefix: ""), 1.0)
+    XCTAssertEqual(badgeAlpha(label: "sa", typedPrefix: "s"), 1.0)
+    XCTAssertEqual(badgeAlpha(label: "sa", typedPrefix: "a"), 0.2)
   }
 }

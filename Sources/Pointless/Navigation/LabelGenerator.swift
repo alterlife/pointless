@@ -8,14 +8,6 @@ struct LabeledElement {
   let element: NavigationTarget
 }
 
-/// A dense cluster of small siblings collapsed into one signpost badge.
-/// Members keep their labels but render faint until the shared prefix is typed.
-struct CollapsedGroup {
-  let prefix: String
-  let label: String
-  let frame: CGRect
-}
-
 enum LabelGenerator {
   /// Keyboard row priority: home row → top row → bottom row.
   /// Within each row, keys are ordered by distance from centre (most reachable first).
@@ -37,10 +29,6 @@ enum LabelGenerator {
     case useClickableElementText
   }
 
-  static let collapsedClusterMinCount = 6
-  static let collapsedClusterMaxExtent: CGFloat = 56
-  static let collapsedClusterMaxGap: CGFloat = 25
-
   /// Assign labels to pre-sorted elements
   static func label(
     _ elements: [NavigationTarget], strategy: LabelStrategy = .useHomeRowKeys
@@ -54,41 +42,6 @@ enum LabelGenerator {
       return flatLabel(elements, strategy: strategy)
     }
     return hierarchicalLabel(elements, groups: groups, strategy: strategy)
-  }
-
-  /// Dense clusters of small elements get a signpost badge; members stay
-  /// labeled but render faint until their shared prefix is typed.
-  static func collapsedGroups(in labeled: [LabeledElement]) -> [CollapsedGroup] {
-    guard labeled.count > flatLabelLimit else { return [] }
-    let small = labeled.filter {
-      $0.element.screenFrame.width <= collapsedClusterMaxExtent
-        && $0.element.screenFrame.height <= collapsedClusterMaxExtent
-    }
-    return proximityComponents(small, frame: { $0.element.screenFrame })
-      .filter { $0.count >= collapsedClusterMinCount }
-      .compactMap { members in
-        guard let prefix = longestCommonPrefix(members.map(\.label)), !prefix.isEmpty
-        else { return nil }
-        let all = labeled.filter { $0.label.hasPrefix(prefix) }
-        guard all.count >= collapsedClusterMinCount else { return nil }
-        let frame = all.dropFirst().reduce(all[0].element.screenFrame) {
-          $0.union($1.element.screenFrame)
-        }
-        return CollapsedGroup(
-          prefix: prefix, label: "\(prefix)_ (\(all.count) items)", frame: frame
-        )
-      }
-  }
-
-  private static func longestCommonPrefix(_ labels: [String]) -> String? {
-    guard var prefix = labels.first else { return nil }
-    for label in labels.dropFirst() {
-      while !label.hasPrefix(prefix) {
-        prefix.removeLast()
-        if prefix.isEmpty { return prefix }
-      }
-    }
-    return prefix
   }
 
   /// First-appearance order — earlier groups get the home-row prefixes.
@@ -111,7 +64,6 @@ enum LabelGenerator {
     var labels = [String?](repeating: nil, count: elements.count)
     var used = Set<String>()
     if strategy == .useClickableElementText {
-      assignClusterLabels(to: &labels, used: &used, elements: elements)
       assignTextHints(to: &labels, used: &used, elements: elements)
     }
     var pool = sortedCombos(length: comboLength(for: elements.count))

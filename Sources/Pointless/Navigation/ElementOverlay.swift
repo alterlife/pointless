@@ -42,32 +42,19 @@ func showEmptyHint(_ text: String = "No interactive elements found") {
 
 // MARK: - Badge alpha
 
-/// Collapsed members stay faint until their group prefix is typed; once
-/// typing narrows, non-matching badges dim as usual.
-func badgeAlpha(label: String, isCollapsedMember: Bool, typedPrefix: String) -> Double {
-  if isCollapsedMember && typedPrefix.isEmpty { return 0.15 }
+func badgeAlpha(label: String, typedPrefix: String) -> Double {
   if !typedPrefix.isEmpty && !label.hasPrefix(typedPrefix) { return 0.2 }
   return 1.0
 }
 
-/// nil once the prefix is fully typed — the signpost has done its job.
-func groupBadgeAlpha(prefix: String, typedPrefix: String) -> Double? {
-  if typedPrefix.isEmpty { return 1.0 }
-  if typedPrefix.count >= prefix.count, prefix.hasPrefix(typedPrefix) { return nil }
-  return prefix.hasPrefix(typedPrefix) ? 1.0 : 0.2
-}
-
 final class OverlayState: ObservableObject {
   @Published var labeledElements: [LabeledElement] = []
-  @Published var collapsedGroups: [CollapsedGroup] = []
   @Published var typedPrefix: String = ""
   @Published var scrollTargetFrame: CGRect?
   @Published var scrollOutlineHidden = false
   @Published var showScrollHint = false
   @Published var clickHintDismissed = false
   @Published var revealElementText = false
-
-  var collapsedPrefixes: Set<String> { Set(collapsedGroups.map(\.prefix)) }
 
   var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
   var textColor = Color.black
@@ -135,17 +122,10 @@ struct OverlayContentView: View {
         let onScreen = state.labeledElements.filter {
           badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame
         }
-        let groupsOnScreen = state.collapsedGroups.filter {
-          badgeScreen(for: $0.frame, among: allScreenFrames) == screen.frame
-        }
         let anchors = onScreen.map {
           anchorPoint(screenFrame: $0.element.screenFrame, screenRect: screen.frame)
-        } + groupsOnScreen.map {
-          anchorPoint(screenFrame: $0.frame, screenRect: screen.frame)
         }
         let badgeSizes = onScreen.map {
-          measureBadge(label: $0.label, context: ctx)
-        } + groupsOnScreen.map {
           measureBadge(label: $0.label, context: ctx)
         }
         let badgeRects = placeBadges(
@@ -156,17 +136,8 @@ struct OverlayContentView: View {
         for labeled in onScreen where shouldHighlight(labeled) {
           drawHighlight(frame: labeled.element.screenFrame, in: &ctx)
         }
-        for group in groupsOnScreen {
-          drawGroupFrame(group, in: &ctx)
-        }
         for (index, labeled) in onScreen.enumerated() {
           drawElement(labeled, badgeRect: badgeRects[index], anchor: anchors[index], in: &ctx)
-        }
-        for (index, group) in groupsOnScreen.enumerated() {
-          let badgeIndex = onScreen.count + index
-          drawGroupBadge(
-            group, badgeRect: badgeRects[badgeIndex], anchor: anchors[badgeIndex], in: &ctx
-          )
         }
         if let target = state.scrollTargetFrame, !state.scrollOutlineHidden {
           drawScrollTarget(target, in: &ctx)
@@ -217,10 +188,7 @@ struct OverlayContentView: View {
     anchor: CGPoint,
     in context: inout GraphicsContext
   ) {
-    let isCollapsedMember = state.collapsedPrefixes.contains { labeled.label.hasPrefix($0) }
-    let alpha = badgeAlpha(
-      label: labeled.label, isCollapsedMember: isCollapsedMember, typedPrefix: state.typedPrefix
-    )
+    let alpha = badgeAlpha(label: labeled.label, typedPrefix: state.typedPrefix)
     let fillColor = state.badgeColor.opacity(alpha)
 
     drawConnector(anchor: anchor, center: badgeRect.center, alpha: alpha, context: &context)
@@ -299,35 +267,6 @@ struct OverlayContentView: View {
       + Text(String(label.dropFirst(typed.count)))
       .font(font)
       .foregroundColor(state.textColor.opacity(alpha * 0.45))
-  }
-
-  private func drawGroupFrame(_ group: CollapsedGroup, in context: inout GraphicsContext) {
-    guard let alpha = groupBadgeAlpha(prefix: group.prefix, typedPrefix: state.typedPrefix)
-    else { return }
-    let frame = group.frame
-    let canvasRect = CGRect(
-      x: frame.minX - screen.frame.minX,
-      y: screen.frame.maxY - frame.maxY,
-      width: frame.width,
-      height: frame.height
-    )
-    let path = Path(roundedRect: canvasRect.insetBy(dx: -3, dy: -3), cornerRadius: 8)
-    context.fill(path, with: .color(state.badgeColor.opacity(alpha * 0.06)))
-    context.stroke(path, with: .color(state.badgeColor.opacity(alpha * 0.5)), lineWidth: 1.5)
-  }
-
-  private func drawGroupBadge(
-    _ group: CollapsedGroup,
-    badgeRect: CGRect,
-    anchor: CGPoint,
-    in context: inout GraphicsContext
-  ) {
-    guard let alpha = groupBadgeAlpha(prefix: group.prefix, typedPrefix: state.typedPrefix)
-    else { return }
-    let fillColor = state.badgeColor.opacity(alpha)
-    drawConnector(anchor: anchor, center: badgeRect.center, alpha: alpha, context: &context)
-    drawDot(at: anchor, color: fillColor, context: &context)
-    drawBadge(rect: badgeRect, color: fillColor, label: group.label, alpha: alpha, context: &context)
   }
 
   private func drawScrollTarget(_ frame: CGRect, in context: inout GraphicsContext) {

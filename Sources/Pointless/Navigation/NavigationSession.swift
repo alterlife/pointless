@@ -116,11 +116,8 @@ final class NavigationSession {
       self.showBadges()
       self.mode = .click(typedSoFar: "")
       self.installEventTap()
-      let groupDesc = self.overlayState.collapsedGroups.map {
-        "\($0.label)@\(Int($0.frame.minX)),\(Int($0.frame.minY))"
-      }.joined(separator: " ")
       Logger.debug(
-        "Labels: \(self.labeledElements.count) elements, groups=\(groupDesc)",
+        "Labels: \(self.labeledElements.count) elements",
         logger: Logger.pluginLifecycle
       )
       let targetDesc = self.labeledElements.map {
@@ -145,7 +142,6 @@ final class NavigationSession {
     )
     labeledElements = labeled
     overlayState.labeledElements = labeled
-    overlayState.collapsedGroups = LabelGenerator.collapsedGroups(in: labeled)
     overlayState.typedPrefix = ""
   }
 
@@ -362,7 +358,6 @@ final class NavigationSession {
     overlayWindows.forEach { $0.hide() }
     overlayWindows = []
     overlayState.labeledElements = []
-    overlayState.collapsedGroups = []
     overlayState.typedPrefix = ""
     overlayState.revealElementText = false
     overlayState.scrollTargetFrame = nil
