@@ -205,7 +205,7 @@ enum LabelGenerator {
         $0.union(elements[$1].screenFrame)
       }
     }
-    for index in indices where !memberSet.contains(index) {
+    for index in elements.indices where !memberSet.contains(index) {
       let frame = elements[index].screenFrame
       let center = CGPoint(x: frame.midX, y: frame.midY)
       guard let runIndex = unions.firstIndex(where: { $0.contains(center) })
