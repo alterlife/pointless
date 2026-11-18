@@ -202,6 +202,8 @@ final class NavigationSession {
     overlayState.revealElementText = event.modifierFlags.contains(.command)
   }
 
+  var isDragArmed = false
+
   private func handleClickKey(_ event: NSEvent, prefix: String) {
     switch event.keyCode {
     case 53:  // ESC
@@ -209,11 +211,17 @@ final class NavigationSession {
     case 51:  // Backspace
       updatePrefix(String(prefix.dropLast()))
     default:
+      if handleCursorKey(event) { return }
+      let controlHeld = event.modifierFlags.contains(.control)
       guard let char = event.charactersIgnoringModifiers?.lowercased().first,
             LabelGenerator.priorityKeys.contains(char) else { return }
       let newPrefix = prefix + String(char)
       if let match = LabelGenerator.exactMatch(in: labeledElements, for: newPrefix) {
-        activate(match)
+        if controlHeld {
+          cursorActivate(match)
+        } else {
+          activate(match)
+        }
       } else if LabelGenerator.filter(labeledElements, prefix: newPrefix).isEmpty {
         end()
       } else {
@@ -248,7 +256,7 @@ final class NavigationSession {
     }
   }
 
-  private func updatePrefix(_ prefix: String) {
+  func updatePrefix(_ prefix: String) {
     mode = .click(typedSoFar: prefix)
     overlayState.typedPrefix = prefix
     overlayState.clickHintDismissed = true
@@ -260,8 +268,7 @@ final class NavigationSession {
     UserDefaults.standard.set(true, forKey: Self.clickHintKey)
     let element = labeled.element.element
     let center = labeled.element.screenFrame.center
-    let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-    let clickPoint = CGPoint(x: center.x, y: primaryHeight - center.y)
+    let clickPoint = cgPoint(fromAppKit: center)
     onJump()
     end()
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -275,7 +282,6 @@ final class NavigationSession {
   private static func unobscuredClickPoint(for discovered: NavigationTarget) -> CGPoint? {
     guard let app = AXElement.frontmostApplication() else { return nil }
     let frame = discovered.screenFrame
-    let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
     let candidates: [(CGFloat, CGFloat)] = [
       (0.5, 0.5), (0.5, 0.3), (0.5, 0.7), (0.3, 0.5), (0.7, 0.5),
       (0.3, 0.3), (0.7, 0.3), (0.3, 0.7), (0.7, 0.7)
@@ -283,10 +289,10 @@ final class NavigationSession {
     var centerPoint: CGPoint?
     for (xFraction, yFraction) in candidates {
       // AX hit-test and CGEvent both take top-left-origin global coords.
-      let point = CGPoint(
+      let point = cgPoint(fromAppKit: CGPoint(
         x: frame.minX + frame.width * xFraction,
-        y: primaryHeight - (frame.minY + frame.height * yFraction)
-      )
+        y: frame.minY + frame.height * yFraction
+      ))
       if centerPoint == nil { centerPoint = point }
       guard let hit = app.elementAt(axX: point.x, axY: point.y) else { continue }
       if hit.isSameElement(as: discovered.element) || hit.isDescendant(of: discovered.element) {
@@ -296,9 +302,10 @@ final class NavigationSession {
     return centerPoint
   }
 
-  private static func postClick(at point: CGPoint) {
+  static func postClick(at point: CGPoint) {
     CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
             mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+    usleep(10_000)
     CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
             mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
   }

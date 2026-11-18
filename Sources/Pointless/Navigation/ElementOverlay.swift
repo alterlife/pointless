@@ -154,7 +154,7 @@ struct OverlayContentView: View {
   private var hintText: String {
     state.scrollTargetFrame != nil
       ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
-      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ to highlight all  ·  ESC cancel"
+      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ highlight  ·  hold ⌃ cursor  ·  ESC cancel"
   }
 
   private var hintSize: CGSize {

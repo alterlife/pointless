@@ -111,9 +111,8 @@ extension NavigationSession {
   }
 
   func warpCursor(to element: NavigationTarget) {
-    let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-    let cgPoint = CGPoint(x: element.screenFrame.midX, y: primaryHeight - element.screenFrame.midY)
-    CGWarpMouseCursorPosition(cgPoint)
+    let frame = element.screenFrame
+    CGWarpMouseCursorPosition(cgPoint(fromAppKit: CGPoint(x: frame.midX, y: frame.midY)))
     CGAssociateMouseAndMouseCursorPosition(1)
   }
 }
