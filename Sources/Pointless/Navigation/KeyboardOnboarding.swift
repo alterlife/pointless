@@ -111,6 +111,8 @@ final class KeyboardOnboardingController: ObservableObject {
       defer: false
     )
     win.title = "Jump Navigation Setup"
+    win.contentMinSize = NSSize(width: 440, height: 380)
+    win.contentMaxSize = NSSize(width: 440, height: 380)
     win.contentView = NSHostingView(rootView: OnboardingView(controller: self))
     win.center()
     win.isReleasedWhenClosed = false
@@ -169,6 +171,6 @@ struct OnboardingView: View {
       }
     }
     .padding(28)
-    .frame(width: 400)
+    .frame(width: 400, height: 320)
   }
 }

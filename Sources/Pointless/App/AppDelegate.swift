@@ -4,6 +4,15 @@ import SwiftUI
 
 public class AppDelegate: NSObject, NSApplicationDelegate {
   public func applicationDidFinishLaunching(_ notification: Notification) {
+    NSSetUncaughtExceptionHandler { exception in
+      Logger.error(
+        "Uncaught exception: \(exception.name.rawValue) — \(exception.reason ?? "no reason")",
+        logger: Logger.app
+      )
+      for symbol in exception.callStackSymbols.prefix(30) {
+        Logger.error("  \(symbol)", logger: Logger.app)
+      }
+    }
     Task { @MainActor in
       Logger.info("Pointless starting up")
 
