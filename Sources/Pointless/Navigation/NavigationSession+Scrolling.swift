@@ -1,6 +1,32 @@
 import AppKit
 
 extension NavigationSession {
+  func handleScrollKey(_ event: NSEvent, targets: [NavigationTarget], currentIndex: Int) {
+    scheduleScrollHint()
+    if eventMatchesHotkey(event, keyCode: config.scrollNext.keyCode, modifiers: config.scrollNext.modifiers) {
+      cycleScrollTarget(targets: targets, from: currentIndex, offset: 1)
+      return
+    }
+    if eventMatchesHotkey(event, keyCode: config.scrollPrev.keyCode, modifiers: config.scrollPrev.modifiers) {
+      cycleScrollTarget(targets: targets, from: currentIndex, offset: -1)
+      return
+    }
+    switch event.keyCode {
+    case 53:       // ESC
+      end()
+    case 38, 125:  // j / ↓ → scroll down
+      enqueueScroll(deltaY: -Self.scrollStep)
+    case 40, 126:  // k / ↑ → scroll up
+      enqueueScroll(deltaY: Self.scrollStep)
+    case 2:        // d → half page down
+      enqueueScroll(deltaY: -Self.scrollPage)
+    case 32:       // u → half page up
+      enqueueScroll(deltaY: Self.scrollPage)
+    default:
+      end()
+    }
+  }
+
   static let scrollStep: Int32 = 60
   static let scrollPage: Int32 = 400
   private static let scrollHintDelay: Double = 3

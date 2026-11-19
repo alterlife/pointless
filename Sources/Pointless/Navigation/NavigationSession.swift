@@ -200,17 +200,26 @@ final class NavigationSession {
 
   func handleFlagsChanged(_ event: NSEvent) {
     overlayState.revealElementText = event.modifierFlags.contains(.command)
+    if !event.modifierFlags.contains(.option) {
+      clearGrid()
+    }
   }
 
   var isDragArmed = false
+  var gridRegions: [CGRect] = []
 
   private func handleClickKey(_ event: NSEvent, prefix: String) {
     switch event.keyCode {
     case 53:  // ESC
       end()
     case 51:  // Backspace
-      updatePrefix(String(prefix.dropLast()))
+      if event.modifierFlags.contains(.option), !gridRegions.isEmpty {
+        gridBackspace()
+      } else {
+        updatePrefix(String(prefix.dropLast()))
+      }
     default:
+      if handleGridKey(event) { return }
       if handleCursorKey(event) { return }
       let controlHeld = event.modifierFlags.contains(.control)
       guard let char = event.charactersIgnoringModifiers?.lowercased().first,
@@ -227,32 +236,6 @@ final class NavigationSession {
       } else {
         updatePrefix(newPrefix)
       }
-    }
-  }
-
-  private func handleScrollKey(_ event: NSEvent, targets: [NavigationTarget], currentIndex: Int) {
-    scheduleScrollHint()
-    if eventMatchesHotkey(event, keyCode: config.scrollNext.keyCode, modifiers: config.scrollNext.modifiers) {
-      cycleScrollTarget(targets: targets, from: currentIndex, offset: 1)
-      return
-    }
-    if eventMatchesHotkey(event, keyCode: config.scrollPrev.keyCode, modifiers: config.scrollPrev.modifiers) {
-      cycleScrollTarget(targets: targets, from: currentIndex, offset: -1)
-      return
-    }
-    switch event.keyCode {
-    case 53:       // ESC
-      end()
-    case 38, 125:  // j / ↓ → scroll down
-      enqueueScroll(deltaY: -Self.scrollStep)
-    case 40, 126:  // k / ↑ → scroll up
-      enqueueScroll(deltaY: Self.scrollStep)
-    case 2:        // d → half page down
-      enqueueScroll(deltaY: -Self.scrollPage)
-    case 32:       // u → half page up
-      enqueueScroll(deltaY: Self.scrollPage)
-    default:
-      end()
     }
   }
 
@@ -365,6 +348,7 @@ final class NavigationSession {
     overlayWindows.forEach { $0.hide() }
     overlayWindows = []
     overlayState.labeledElements = []
+    overlayState.gridRegion = nil
     overlayState.typedPrefix = ""
     overlayState.revealElementText = false
     overlayState.scrollTargetFrame = nil

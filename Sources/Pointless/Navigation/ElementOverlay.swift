@@ -55,6 +55,7 @@ final class OverlayState: ObservableObject {
   @Published var showScrollHint = false
   @Published var clickHintDismissed = false
   @Published var revealElementText = false
+  @Published var gridRegion: CGRect?
 
   var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
   var textColor = Color.black
@@ -142,6 +143,9 @@ struct OverlayContentView: View {
         if let target = state.scrollTargetFrame, !state.scrollOutlineHidden {
           drawScrollTarget(target, in: &ctx)
         }
+        if let region = state.gridRegion {
+          drawGrid(region, in: &ctx)
+        }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -154,7 +158,7 @@ struct OverlayContentView: View {
   private var hintText: String {
     state.scrollTargetFrame != nil
       ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
-      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ highlight  ·  hold ⌃ cursor  ·  ESC cancel"
+      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ highlight  ·  hold ⌃ cursor  ·  hold ⌥ grid  ·  ESC cancel"
   }
 
   private var hintSize: CGSize {
@@ -267,6 +271,37 @@ struct OverlayContentView: View {
       + Text(String(label.dropFirst(typed.count)))
       .font(font)
       .foregroundColor(state.textColor.opacity(alpha * 0.45))
+  }
+
+  private func drawGrid(_ region: CGRect, in context: inout GraphicsContext) {
+    let rect = CGRect(
+      x: region.minX - screen.frame.minX,
+      y: screen.frame.maxY - region.maxY,
+      width: region.width,
+      height: region.height
+    )
+    context.stroke(
+      Path(roundedRect: rect, cornerRadius: 4),
+      with: .color(.white.opacity(0.9)), lineWidth: 2
+    )
+    context.stroke(
+      Path(roundedRect: rect, cornerRadius: 4),
+      with: .color(.black.opacity(0.6)), lineWidth: 4
+    )
+    for index in 0..<9 {
+      let cell = NavigationSession.gridCell(index, in: region)
+      let cellRect = CGRect(
+        x: cell.minX - screen.frame.minX,
+        y: screen.frame.maxY - cell.maxY,
+        width: cell.width,
+        height: cell.height
+      ).insetBy(dx: 1, dy: 1)
+      context.stroke(Path(cellRect), with: .color(.white.opacity(0.25)), lineWidth: 1)
+      let text = Text(String(LabelGenerator.gridLetters[index]))
+        .font(.system(size: 16, weight: .bold, design: .monospaced))
+        .foregroundColor(.white.opacity(0.85))
+      context.draw(context.resolve(text), at: cellRect.center)
+    }
   }
 
   private func drawScrollTarget(_ frame: CGRect, in context: inout GraphicsContext) {

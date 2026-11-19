@@ -20,6 +20,9 @@ enum LabelGenerator {
     "z", "x", "c", "v", "b", "n", "m"
   ]
 
+  /// Grid cells reuse the strongest label keys so muscle memory transfers.
+  static let gridLetters = Array(priorityKeys.prefix(9))
+
   /// Past this, flat labels need 2 chars anyway — hierarchical costs the same
   /// keystrokes and narrows faster.
   static let flatLabelLimit = 27
