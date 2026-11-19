@@ -62,6 +62,7 @@ final class OverlayState: ObservableObject {
   var badgeFontSize: CGFloat = 11
   var showConnectorLines = true
   var fadeInDuration = 0.08
+  var gridModifierHint = "⌥"
 
   var filteredElements: [LabeledElement] {
     LabelGenerator.filter(labeledElements, prefix: typedPrefix)
@@ -158,7 +159,8 @@ struct OverlayContentView: View {
   private var hintText: String {
     state.scrollTargetFrame != nil
       ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
-      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ highlight  ·  hold ⌃ cursor  ·  hold ⌥ grid  ·  ESC cancel"
+      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ highlight  ·  " +
+        "hold ⌃ cursor  ·  hold \(state.gridModifierHint) grid  ·  ESC cancel"
   }
 
   private var hintSize: CGSize {

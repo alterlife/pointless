@@ -7,15 +7,8 @@ extension NavigationSession {
   static let gridMaxLevel = 4
 
   func handleGridKey(_ event: NSEvent) -> Bool {
-    guard event.modifierFlags.contains(.option) else { return false }
-    if gridRegions.isEmpty {
-      let screen = NSScreen.screens.first {
-        NSMouseInRect(NSEvent.mouseLocation, $0.frame, false)
-      } ?? NSScreen.main
-      guard let screen else { return false }
-      gridRegions = [screen.frame]
-      overlayState.gridRegion = screen.frame
-    }
+    guard event.modifierFlags.contains(config.gridModifier) else { return false }
+    startGrid()
     guard let char = event.charactersIgnoringModifiers?.lowercased().first,
           let index = LabelGenerator.gridLetters.firstIndex(of: char),
           let region = gridRegions.last else { return false }
@@ -27,6 +20,18 @@ extension NavigationSession {
       overlayState.gridRegion = cell
     }
     return true
+  }
+
+  /// Shows the level-0 grid over the screen under the cursor. Called when
+  /// the grid modifier goes down and again defensively on the first key.
+  func startGrid() {
+    guard gridRegions.isEmpty else { return }
+    let screen = NSScreen.screens.first {
+      NSMouseInRect(NSEvent.mouseLocation, $0.frame, false)
+    } ?? NSScreen.main
+    guard let screen else { return }
+    gridRegions = [screen.frame]
+    overlayState.gridRegion = screen.frame
   }
 
   func gridBackspace() {

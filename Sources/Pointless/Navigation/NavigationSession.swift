@@ -48,6 +48,7 @@ final class NavigationSession {
     let labelStrategy: LabelGenerator.LabelStrategy
     let scrollNext: ParsedShortcut
     let scrollPrev: ParsedShortcut
+    let gridModifier: NSEvent.ModifierFlags
   }
 
   var mode: Mode = .scanning
@@ -200,7 +201,9 @@ final class NavigationSession {
 
   func handleFlagsChanged(_ event: NSEvent) {
     overlayState.revealElementText = event.modifierFlags.contains(.command)
-    if !event.modifierFlags.contains(.option) {
+    if event.modifierFlags.contains(config.gridModifier) {
+      if case .click = mode { startGrid() }
+    } else {
       clearGrid()
     }
   }
@@ -213,7 +216,7 @@ final class NavigationSession {
     case 53:  // ESC
       end()
     case 51:  // Backspace
-      if event.modifierFlags.contains(.option), !gridRegions.isEmpty {
+      if event.modifierFlags.contains(config.gridModifier), !gridRegions.isEmpty {
         gridBackspace()
       } else {
         updatePrefix(String(prefix.dropLast()))

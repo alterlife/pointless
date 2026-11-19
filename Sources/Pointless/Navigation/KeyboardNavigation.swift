@@ -37,6 +37,8 @@ final class KeyboardNavigation: NSObject, ObservableObject {
   @Published var fadeInDuration = 0.08
   @Published var scrollSpeed = 1.0
   @Published var labelStrategy = "Homerow Keys"
+  @Published var gridModifierChoice = "Option"
+  private var gridModifierFlags: NSEvent.ModifierFlags = .option
 
   private var activationHotkey = ParsedShortcut(modifiers: [.command, .shift], keyCode: 49)  // Space
   private var scrollNextHotkey = ParsedShortcut(modifiers: [.command, .shift], keyCode: 38)  // J
@@ -68,6 +70,19 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     .hotkey(key: "scrollNextHotkey", label: "Scroll / Next Area", defaultValue: "⌘⇧J"),
     .hotkey(key: "scrollPrevHotkey", label: "Previous Scroll Area", defaultValue: "⌘⇧K"),
     .slider(key: "scrollSpeed", label: "Scroll Speed", range: 0.25...4, defaultValue: 1, step: 0.25),
+    .section(label: "Pointer Mode", description: "Hold a modifier during a session for pointer controls"),
+    .choice(
+      key: "gridModifier", label: "Grid Modifier",
+      options: [
+        (title: "Option",
+         detail: "Hold ⌥ — the default; never conflicts with label typing."),
+        (title: "Command",
+         detail: "Hold ⌘ — replaces the hold-to-highlight gesture while the grid is up."),
+        (title: "Globe",
+         detail: "Hold 🌐 (fn) — leaves ⌥ and ⌘ free for their usual roles.")
+      ],
+      defaultValue: "Option"
+    ),
     .section(label: "Overlay Style", description: "Customize the letter hints on screen elements"),
     .choice(
       key: "labelStrategy", label: "Shortcut Hints",
@@ -105,6 +120,11 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     if let lines = values["showLines"] as? Bool { showConnectorLines = lines }
     if let fade = values["fadeIn"] as? Double { fadeInDuration = fade }
     if let strategy = values["labelStrategy"] as? String { labelStrategy = strategy }
+    if let modifier = values["gridModifier"] as? String {
+      gridModifierChoice = modifier
+      gridModifierFlags = Self.modifierFlags(for: modifier)
+      overlayState.gridModifierHint = Self.modifierSymbol(for: modifier)
+    }
     applyScrollSettings(values)
     if let shortcut = values["activationHotkey"] as? String {
       shortcutDisplay = shortcut
@@ -113,6 +133,22 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     applyAppearanceToOverlay()
     reinstallMonitors()
     saveSettings(values)
+  }
+
+  private static func modifierFlags(for choice: String) -> NSEvent.ModifierFlags {
+    switch choice {
+    case "Command": return .command
+    case "Globe": return .function
+    default: return .option
+    }
+  }
+
+  private static func modifierSymbol(for choice: String) -> String {
+    switch choice {
+    case "Command": return "⌘"
+    case "Globe": return "🌐"
+    default: return "⌥"
+    }
   }
 
   private func applyScrollSettings(_ values: [String: Any]) {
@@ -222,7 +258,8 @@ final class KeyboardNavigation: NSObject, ObservableObject {
         labelStrategy: labelStrategy == "Element Text"
           ? .useClickableElementText : .useHomeRowKeys,
         scrollNext: scrollNextHotkey,
-        scrollPrev: scrollPrevHotkey
+        scrollPrev: scrollPrevHotkey,
+        gridModifier: gridModifierFlags
       ),
       onScanCompleted: { [weak self] count in self?.lastScanCount = count },
       onJump: { [weak self] in self?.sessionJumpCount += 1 },
@@ -313,7 +350,9 @@ final class KeyboardNavigation: NSObject, ObservableObject {
       appSwitchObserver = nil
     }
   }
+}
 
+extension KeyboardNavigation {
   // MARK: - Widgets
 
   func menuBarWidgets() -> [MenuBarWidget] {
