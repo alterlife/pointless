@@ -8,10 +8,8 @@ func cgPoint(fromAppKit point: CGPoint) -> CGPoint {
   return CGPoint(x: point.x, y: primaryHeight - point.y)
 }
 
-/// Hold-⌃ cursor mode: label completion warps the cursor instead of
-/// clicking. Space clicks, Return right-clicks, Tab arms a drag that
-/// the next label completion drops on. Timings follow Scoot's
-/// Mouse.swift — apps need the gaps between down/up events.
+// Click/drag timings follow Scoot's Mouse.swift — apps need the gaps
+// between down/up events.
 extension NavigationSession {
   func handleCursorKey(_ event: NSEvent) -> Bool {
     guard event.modifierFlags.contains(.control) else { return false }

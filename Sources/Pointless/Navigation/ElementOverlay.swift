@@ -282,14 +282,10 @@ struct OverlayContentView: View {
       width: region.width,
       height: region.height
     )
-    context.stroke(
-      Path(roundedRect: rect, cornerRadius: 4),
-      with: .color(.white.opacity(0.9)), lineWidth: 2
-    )
-    context.stroke(
-      Path(roundedRect: rect, cornerRadius: 4),
-      with: .color(.black.opacity(0.6)), lineWidth: 4
-    )
+    let border = Path(roundedRect: rect, cornerRadius: 4)
+    // Wide dark stroke under a narrow light one stays visible on any background.
+    context.stroke(border, with: .color(.black.opacity(0.7)), lineWidth: 5)
+    context.stroke(border, with: .color(.white.opacity(0.9)), lineWidth: 2)
     for index in 0..<9 {
       let cell = NavigationSession.gridCell(index, in: region)
       let cellRect = CGRect(
@@ -298,12 +294,23 @@ struct OverlayContentView: View {
         width: cell.width,
         height: cell.height
       ).insetBy(dx: 1, dy: 1)
-      context.stroke(Path(cellRect), with: .color(.white.opacity(0.25)), lineWidth: 1)
-      let text = Text(String(LabelGenerator.gridLetters[index]))
-        .font(.system(size: 16, weight: .bold, design: .monospaced))
-        .foregroundColor(.white.opacity(0.85))
-      context.draw(context.resolve(text), at: cellRect.center)
+      let edges = Path(cellRect)
+      context.stroke(edges, with: .color(.black.opacity(0.55)), lineWidth: 2.5)
+      context.stroke(edges, with: .color(.white.opacity(0.6)), lineWidth: 1)
+      drawGridLetter(index, at: cellRect.center, in: &context)
     }
+  }
+
+  /// Dark offsets behind the glyph act as an outline — Canvas text can't stroke.
+  private func drawGridLetter(_ index: Int, at center: CGPoint, in context: inout GraphicsContext) {
+    let letter = Text(String(LabelGenerator.gridLetters[index]))
+      .font(.system(size: 18, weight: .bold, design: .monospaced))
+    for offset in [CGPoint(x: -1.5, y: 0), CGPoint(x: 1.5, y: 0),
+                   CGPoint(x: 0, y: -1.5), CGPoint(x: 0, y: 1.5)] {
+      context.draw(letter.foregroundColor(.black.opacity(0.85)),
+                   at: CGPoint(x: center.x + offset.x, y: center.y + offset.y))
+    }
+    context.draw(letter.foregroundColor(.white), at: center)
   }
 
   private func drawScrollTarget(_ frame: CGRect, in context: inout GraphicsContext) {

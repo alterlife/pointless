@@ -1,8 +1,5 @@
 import AppKit
 
-/// Hold-⌥ grid mode: the screen under the cursor splits into a 3×3
-/// lettered grid; each letter press zooms one level, four presses
-/// resolve a point and warp the cursor there. ⌫ zooms back out.
 extension NavigationSession {
   static let gridMaxLevel = 4
 
@@ -22,8 +19,6 @@ extension NavigationSession {
     return true
   }
 
-  /// Shows the level-0 grid over the screen under the cursor. Called when
-  /// the grid modifier goes down and again defensively on the first key.
   func startGrid() {
     guard gridRegions.isEmpty else { return }
     let screen = NSScreen.screens.first {
