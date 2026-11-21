@@ -211,22 +211,27 @@ final class GridModeTests: XCTestCase {
 
     session.handleKey(tabEvent)
     XCTAssertEqual(state.gridBreadcrumb, "[ · · · · ]")
+    XCTAssertEqual(state.gridPathPrefix, "")
     XCTAssertEqual(session.gridPath, [])
 
     session.handleKey(uKey)
     XCTAssertEqual(state.gridBreadcrumb, "[ u · · · ]")
+    XCTAssertEqual(state.gridPathPrefix, "u")
     XCTAssertEqual(session.gridPath, ["u"])
 
     session.handleKey(jKey)
     XCTAssertEqual(state.gridBreadcrumb, "[ u j · · ]")
+    XCTAssertEqual(state.gridPathPrefix, "uj")
     XCTAssertEqual(session.gridPath, ["u", "j"])
 
     session.handleKey(backspace)
     XCTAssertEqual(state.gridBreadcrumb, "[ u · · · ]")
+    XCTAssertEqual(state.gridPathPrefix, "u")
     XCTAssertEqual(session.gridPath, ["u"])
 
     session.handleKey(tabEvent)
     XCTAssertEqual(state.gridBreadcrumb, "")
+    XCTAssertEqual(state.gridPathPrefix, "")
     XCTAssertEqual(session.gridPath, [])
 
     session.end()

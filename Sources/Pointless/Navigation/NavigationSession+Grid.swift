@@ -33,6 +33,7 @@ extension NavigationSession {
     let cell = Self.gridCell(index, in: region)
     gridPath.append(char)
     overlayState.gridBreadcrumb = Self.formatBreadcrumb(path: gridPath, maxLevel: config.gridMaxLevel)
+    overlayState.gridPathPrefix = String(gridPath)
     if gridRegions.count >= config.gridMaxLevel {
       if config.gridAutoClick {
         resolveGridClick(cell, rightClick: false)
@@ -58,6 +59,7 @@ extension NavigationSession {
     gridPath = []
     overlayState.gridRegion = screen.frame
     overlayState.gridBreadcrumb = Self.formatBreadcrumb(path: gridPath, maxLevel: config.gridMaxLevel)
+    overlayState.gridPathPrefix = ""
     updatePrefix("")
     showBadges()
   }
@@ -71,6 +73,7 @@ extension NavigationSession {
     if !gridPath.isEmpty { gridPath.removeLast() }
     overlayState.gridRegion = gridRegions.last
     overlayState.gridBreadcrumb = Self.formatBreadcrumb(path: gridPath, maxLevel: config.gridMaxLevel)
+    overlayState.gridPathPrefix = String(gridPath)
   }
 
   func clearGrid() {
@@ -78,6 +81,7 @@ extension NavigationSession {
     gridPath.removeAll()
     overlayState.gridRegion = nil
     overlayState.gridBreadcrumb = ""
+    overlayState.gridPathPrefix = ""
     showBadges()
   }
 

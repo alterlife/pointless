@@ -1,96 +1,6 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Empty-scan hint
-
-@MainActor
-func showEmptyHint(_ text: String = "No interactive elements found") {
-  let win = NSWindow(
-    contentRect: NSRect(x: 0, y: 0, width: 260, height: 36),
-    styleMask: .borderless,
-    backing: .buffered,
-    defer: false
-  )
-  win.backgroundColor = .clear
-  win.isOpaque = false
-  win.hasShadow = false
-  win.level = .popUpMenu
-  win.ignoresMouseEvents = true
-  win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-
-  let label = NSHostingView(rootView:
-    Text(text)
-      .font(.system(size: 12, weight: .medium, design: .rounded))
-      .foregroundColor(.white)
-      .padding(.horizontal, 14)
-      .padding(.vertical, 6)
-      .background(Capsule().fill(Color.black.opacity(0.7)))
-  )
-  win.contentView = label
-  win.center()
-  win.makeKeyAndOrderFront(nil)
-
-  DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-    NSAnimationContext.runAnimationGroup { ctx in
-      ctx.duration = 0.3
-      win.animator().alphaValue = 0
-    } completionHandler: {
-      win.orderOut(nil)
-    }
-  }
-}
-
-// MARK: - Spatial address toast
-
-@MainActor
-func showSpatialAddressToast(_ address: String, at point: CGPoint) {
-  let width: CGFloat = 72 + CGFloat(address.count) * 8
-  let height: CGFloat = 28
-  let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) } ?? NSScreen.main
-  let bounds = screen?.frame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
-  let origin = NSPoint(
-    x: max(bounds.minX + 8, min(point.x - width / 2, bounds.maxX - width - 8)),
-    y: max(bounds.minY + 8, min(point.y + 16, bounds.maxY - height - 8))
-  )
-  let win = NSWindow(
-    contentRect: NSRect(origin: origin, size: CGSize(width: width, height: height)),
-    styleMask: .borderless,
-    backing: .buffered,
-    defer: false
-  )
-  win.backgroundColor = .clear
-  win.isOpaque = false
-  win.hasShadow = false
-  win.level = .popUpMenu
-  win.ignoresMouseEvents = true
-  win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-
-  let view = NSHostingView(rootView:
-    HStack(spacing: 4) {
-      Text("📍")
-        .font(.system(size: 10))
-      Text(address)
-        .font(.system(size: 12, weight: .bold, design: .monospaced))
-        .foregroundColor(.white)
-    }
-    .padding(.horizontal, 10)
-    .padding(.vertical, 4)
-    .background(Capsule().fill(Color.black.opacity(0.8)))
-    .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
-  )
-  win.contentView = view
-  win.makeKeyAndOrderFront(nil)
-
-  DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-    NSAnimationContext.runAnimationGroup { ctx in
-      ctx.duration = 0.25
-      win.animator().alphaValue = 0
-    } completionHandler: {
-      win.orderOut(nil)
-    }
-  }
-}
-
 // MARK: - Badge alpha
 
 func badgeAlpha(label: String, typedPrefix: String) -> Double {
@@ -108,6 +18,7 @@ final class OverlayState: ObservableObject {
   @Published var revealElementText = false
   @Published var gridRegion: CGRect?
   @Published var gridBreadcrumb: String = ""
+  @Published var gridPathPrefix: String = ""
 
   var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
   var textColor = Color.black
@@ -116,6 +27,7 @@ final class OverlayState: ObservableObject {
   var fadeInDuration = 0.08
   var gridSwitchShortcutHint = "Tab"
   var gridLetters: [Character] = LabelGenerator.rightHandGridLetters
+  var gridMaxLevel: Int = 4
 
   var filteredElements: [LabeledElement] {
     LabelGenerator.filter(labeledElements, prefix: typedPrefix)
@@ -240,12 +152,24 @@ struct OverlayContentView: View {
   }
 
   private var escHint: some View {
-    Text(hintText)
-      .font(.system(size: 13, weight: .semibold, design: .rounded))
-      .foregroundColor(.white)
-      .padding(.horizontal, 16)
-      .padding(.vertical, 8)
-      .background(Capsule().fill(Color.black.opacity(0.8)))
+    Group {
+      if state.gridRegion != nil && !state.gridBreadcrumb.isEmpty {
+        Text(state.gridBreadcrumb)
+          .font(.system(size: 13, weight: .bold, design: .monospaced))
+          .foregroundColor(state.badgeColor)
+          + Text("  ·  Space click  ·  Return right-click  ·  ⌫ back  ·  "
+                 + "\(state.gridSwitchShortcutHint) labels  ·  ESC cancel")
+          .font(.system(size: 13, weight: .semibold, design: .rounded))
+          .foregroundColor(.white)
+      } else {
+        Text(hintText)
+          .font(.system(size: 13, weight: .semibold, design: .rounded))
+          .foregroundColor(.white)
+      }
+    }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 8)
+    .background(Capsule().fill(Color.black.opacity(0.8)))
   }
 
   private func drawElement(
@@ -343,36 +267,73 @@ struct OverlayContentView: View {
       width: region.width,
       height: region.height
     )
-    let border = Path(roundedRect: rect, cornerRadius: 4)
-    // Wide dark stroke under a narrow light one stays visible on any background.
-    context.stroke(border, with: .color(.black.opacity(0.7)), lineWidth: 5)
-    context.stroke(border, with: .color(.white.opacity(0.9)), lineWidth: 2)
-    for index in 0..<9 {
-      let cell = NavigationSession.gridCell(index, in: region)
+    let border = Path(roundedRect: rect, cornerRadius: 6)
+    context.stroke(border, with: .color(.black.opacity(0.4)), lineWidth: 3)
+    context.stroke(border, with: .color(state.badgeColor), lineWidth: 1.5)
+
+    let prefix = state.gridPathPrefix
+    let canSubdivide = (prefix.count + 2 <= state.gridMaxLevel)
+    for qIdx in 0..<min(9, state.gridLetters.count) {
+      let cell = NavigationSession.gridCell(qIdx, in: region)
       let cellRect = CGRect(
         x: cell.minX - screen.frame.minX,
         y: screen.frame.maxY - cell.maxY,
         width: cell.width,
         height: cell.height
       ).insetBy(dx: 1, dy: 1)
-      let edges = Path(cellRect)
-      context.stroke(edges, with: .color(.black.opacity(0.55)), lineWidth: 2.5)
-      context.stroke(edges, with: .color(.white.opacity(0.6)), lineWidth: 1)
-      drawGridLetter(index, at: cellRect.center, in: &context)
+      let qChar = state.gridLetters[qIdx]
+
+      let cellPath = Path(cellRect)
+      context.stroke(cellPath, with: .color(.black.opacity(0.35)), lineWidth: 1.5)
+      context.stroke(cellPath, with: .color(state.badgeColor.opacity(0.5)), lineWidth: 0.75)
+
+      if canSubdivide && cell.width >= 120 && cell.height >= 70 {
+        for sIdx in 0..<min(9, state.gridLetters.count) {
+          let subCell = NavigationSession.gridCell(sIdx, in: cell)
+          let subRect = CGRect(
+            x: subCell.minX - screen.frame.minX,
+            y: screen.frame.maxY - subCell.maxY,
+            width: subCell.width,
+            height: subCell.height
+          )
+          context.stroke(Path(subRect), with: .color(.black.opacity(0.18)), lineWidth: 0.75)
+          let sChar = state.gridLetters[sIdx]
+          let label = "\(prefix)\(qChar)\(sChar)"
+          drawGridTag(label: label, prefixCount: prefix.count, center: subRect.center, in: &context)
+        }
+      } else {
+        let label = "\(prefix)\(qChar)"
+        drawGridTag(label: label, prefixCount: prefix.count, center: cellRect.center, in: &context)
+      }
     }
   }
 
-  /// Dark offsets behind the glyph act as an outline — Canvas text can't stroke.
-  private func drawGridLetter(_ index: Int, at center: CGPoint, in context: inout GraphicsContext) {
-    guard index < state.gridLetters.count else { return }
-    let letter = Text(String(state.gridLetters[index]))
-      .font(.system(size: 18, weight: .bold, design: .monospaced))
-    for offset in [CGPoint(x: -1.5, y: 0), CGPoint(x: 1.5, y: 0),
-                   CGPoint(x: 0, y: -1.5), CGPoint(x: 0, y: 1.5)] {
-      context.draw(letter.foregroundColor(.black.opacity(0.85)),
-                   at: CGPoint(x: center.x + offset.x, y: center.y + offset.y))
+  private func drawGridTag(
+    label: String,
+    prefixCount: Int,
+    center: CGPoint,
+    in context: inout GraphicsContext
+  ) {
+    let size = measureBadge(label: label, context: context)
+    let rect = CGRect(center: center, size: size)
+    let path = Path(roundedRect: rect, cornerRadius: 4)
+    context.fill(path, with: .color(state.badgeColor))
+    context.stroke(path, with: .color(state.textColor.opacity(0.35)), lineWidth: 1)
+    let font = Font.system(size: state.badgeFontSize, weight: .bold, design: .monospaced)
+    let text: Text
+    if prefixCount > 0 && prefixCount < label.count {
+      text = Text(String(label.prefix(prefixCount)))
+        .font(font)
+        .foregroundColor(state.textColor.opacity(0.4))
+        + Text(String(label.dropFirst(prefixCount)))
+        .font(font)
+        .foregroundColor(state.textColor)
+    } else {
+      text = Text(label)
+        .font(font)
+        .foregroundColor(state.textColor)
     }
-    context.draw(letter.foregroundColor(.white), at: center)
+    context.draw(text, at: rect.center)
   }
 
   private func drawScrollTarget(_ frame: CGRect, in context: inout GraphicsContext) {

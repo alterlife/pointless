@@ -363,6 +363,7 @@ final class NavigationSession {
     overlayState.labeledElements = []
     overlayState.gridRegion = nil
     overlayState.gridBreadcrumb = ""
+    overlayState.gridPathPrefix = ""
     overlayState.typedPrefix = ""
     overlayState.revealElementText = false
     overlayState.scrollTargetFrame = nil
