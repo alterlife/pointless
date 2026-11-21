@@ -20,10 +20,10 @@ class CPUPlugin: NSObject, ObservableObject, Plugin {
   @Published var colorMode: String = "dynamic"
   @Published var customColor: String = "#007AFF"
 
-  var totalUsage: Double = 0.0
-  var coreUsages: [Double] = []
-  var history: [Double] = []
-  var coreHistories: [[Double]] = []
+  @Published var totalUsage: Double = 0.0
+  @Published var coreUsages: [Double] = []
+  @Published var history: [Double] = []
+  @Published var coreHistories: [[Double]] = []
   let maxHistorySize = 30
 
   var previousCPUInfo: [Int32] = []

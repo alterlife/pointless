@@ -51,7 +51,7 @@ Press <kbd>Tab</kbd> during navigation to switch into Zone Mode. Pointless overl
 </p>
 
 ### 3. Final Zoom Level
-On the final zoom level, Zone Mode displays offset badges and anchor dots so the click target remains visible.
+On the final zoom level, Zone Mode displays badges outside the grid perimeter connected to cell anchor dots, keeping all click targets uncovered.
 
 <p align="center">
   <img src="docs/images/zone-mode-final.png" width="850" alt="Pointless Zone Mode Final Level" />

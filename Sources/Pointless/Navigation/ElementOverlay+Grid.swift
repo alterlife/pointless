@@ -81,7 +81,14 @@ extension OverlayContentView {
       context.stroke(cellPath, with: .color(state.badgeColor.opacity(0.5)), lineWidth: 0.75)
     }
 
-    // Labelled points using the canonical placeBadges placement engine
+    let gridRect = CGRect(
+      x: region.minX - screen.frame.minX,
+      y: screen.frame.maxY - region.maxY,
+      width: region.width,
+      height: region.height
+    )
+
+    // Labelled points placed outside the grid region
     let anchors: [CGPoint] = (0..<count).map { qIdx in
       let cell = NavigationSession.gridCell(qIdx, in: region)
       return CGPoint(
@@ -91,7 +98,8 @@ extension OverlayContentView {
     }
     let labels: [String] = (0..<count).map { String(state.gridLetters[$0]) }
     let badgeSizes = labels.map { measureBadge(label: $0, context: context) }
-    let badgeRects = placeBadges(
+    let badgeRects = placeGridBadges(
+      gridRect: gridRect,
       anchors: anchors,
       badgeSizes: badgeSizes,
       viewSize: screen.frame.size,

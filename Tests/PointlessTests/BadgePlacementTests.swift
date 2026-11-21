@@ -1,6 +1,6 @@
-import XCTest
-@testable import PointlessCore
 import CoreGraphics
+@testable import PointlessCore
+import XCTest
 
 final class BadgePlacementTests: XCTestCase {
   private let viewSize = CGSize(width: 500, height: 500)
@@ -145,5 +145,107 @@ final class BadgePlacementTests: XCTestCase {
     XCTAssertEqual(badgeAlpha(label: "sa", typedPrefix: ""), 1.0)
     XCTAssertEqual(badgeAlpha(label: "sa", typedPrefix: "s"), 1.0)
     XCTAssertEqual(badgeAlpha(label: "sa", typedPrefix: "a"), 0.2)
+  }
+
+  // MARK: placeGridBadges
+
+  func testPlaceGridBadgesPlacesOutsideGridRegion() {
+    let gridRect = CGRect(x: 500, y: 400, width: 64, height: 40)
+    let cellW = gridRect.width / 3
+    let cellH = gridRect.height / 3
+    let anchors: [CGPoint] = (0..<9).map { idx in
+      let col = CGFloat(idx % 3)
+      let row = CGFloat(idx / 3)
+      return CGPoint(x: gridRect.minX + (col + 0.5) * cellW, y: gridRect.minY + (row + 0.5) * cellH)
+    }
+    let sizes = [CGSize](repeating: CGSize(width: 18, height: 18), count: 9)
+    let badges = placeGridBadges(
+      gridRect: gridRect,
+      anchors: anchors,
+      badgeSizes: sizes,
+      viewSize: CGSize(width: 1728, height: 1117)
+    )
+
+    XCTAssertEqual(badges.count, 9)
+    for (idx, badge) in badges.enumerated() {
+      XCTAssertFalse(gridRect.intersects(badge), "Badge \(idx) should not intersect gridRect")
+    }
+  }
+
+  func testPlaceGridBadgesAvoidsCollisionsBetweenBadges() {
+    let gridRect = CGRect(x: 300, y: 300, width: 90, height: 60)
+    let cellW = gridRect.width / 3
+    let cellH = gridRect.height / 3
+    let anchors: [CGPoint] = (0..<9).map { idx in
+      let col = CGFloat(idx % 3)
+      let row = CGFloat(idx / 3)
+      return CGPoint(x: gridRect.minX + (col + 0.5) * cellW, y: gridRect.minY + (row + 0.5) * cellH)
+    }
+    let sizes = [CGSize](repeating: CGSize(width: 20, height: 18), count: 9)
+    let badges = placeGridBadges(
+      gridRect: gridRect,
+      anchors: anchors,
+      badgeSizes: sizes,
+      viewSize: CGSize(width: 1728, height: 1117)
+    )
+
+    for firstIndex in 0..<badges.count {
+      for secondIndex in (firstIndex + 1)..<badges.count {
+        XCTAssertFalse(
+          badges[firstIndex].intersects(badges[secondIndex]),
+          "Badge \(firstIndex) and \(secondIndex) should not collide"
+        )
+      }
+    }
+  }
+
+  func testPlaceGridBadgesNearScreenEdge() {
+    let gridRect = CGRect(x: 4, y: 4, width: 64, height: 40)
+    let cellW = gridRect.width / 3
+    let cellH = gridRect.height / 3
+    let anchors: [CGPoint] = (0..<9).map { idx in
+      let col = CGFloat(idx % 3)
+      let row = CGFloat(idx / 3)
+      return CGPoint(x: gridRect.minX + (col + 0.5) * cellW, y: gridRect.minY + (row + 0.5) * cellH)
+    }
+    let sizes = [CGSize](repeating: CGSize(width: 18, height: 18), count: 9)
+    let badges = placeGridBadges(
+      gridRect: gridRect,
+      anchors: anchors,
+      badgeSizes: sizes,
+      viewSize: CGSize(width: 1728, height: 1117)
+    )
+
+    for (idx, badge) in badges.enumerated() {
+      XCTAssertGreaterThanOrEqual(badge.minX, 4, "Badge \(idx) should stay on screen (minX)")
+      XCTAssertGreaterThanOrEqual(badge.minY, 4, "Badge \(idx) should stay on screen (minY)")
+    }
+  }
+
+  func testPlaceGridBadgesCenterCellDoesNotMeldWithCardinalLines() {
+    let gridRect = CGRect(x: 500, y: 400, width: 64, height: 40)
+    let cellW = gridRect.width / 3
+    let cellH = gridRect.height / 3
+    let anchors: [CGPoint] = (0..<9).map { idx in
+      let col = CGFloat(idx % 3)
+      let row = CGFloat(idx / 3)
+      return CGPoint(x: gridRect.minX + (col + 0.5) * cellW, y: gridRect.minY + (row + 0.5) * cellH)
+    }
+    let sizes = [CGSize](repeating: CGSize(width: 18, height: 18), count: 9)
+    let badges = placeGridBadges(
+      gridRect: gridRect,
+      anchors: anchors,
+      badgeSizes: sizes,
+      viewSize: CGSize(width: 1728, height: 1117)
+    )
+
+    let centerBadge = badges[4]
+    // Center badge must not share exact midX with cell 1 or 7 (cardinal vertical lines)
+    XCTAssertGreaterThan(abs(centerBadge.center.x - anchors[1].x), 2.0)
+    XCTAssertGreaterThan(abs(centerBadge.center.x - anchors[7].x), 2.0)
+
+    // Center badge must not share exact midY with cell 3 or 5 (cardinal horizontal lines)
+    XCTAssertGreaterThan(abs(centerBadge.center.y - anchors[3].y), 2.0)
+    XCTAssertGreaterThan(abs(centerBadge.center.y - anchors[5].y), 2.0)
   }
 }

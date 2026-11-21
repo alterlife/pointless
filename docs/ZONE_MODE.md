@@ -45,9 +45,9 @@ Throughout the zoom sequence, an unobtrusive floating HUD tracks your navigation
 ### 4. Labelled Point Approach on Final Zoom
 When zooming into small screen areas, standard bounding box borders or centered badges often cover the very button, icon, or text input you want to click.
 
-On the final zoom level, Zone Mode switches to offset badges (`placeBadges`):
+On the final zoom level, Zone Mode switches to offset perimeter badges (`placeGridBadges`):
 - An anchor dot marks the center of each of the 9 candidate cells.
-- Badges are offset adjacent to the anchor dot and connected with a line, keeping the target point visible.
+- Badges are placed around the exterior perimeter of the grid and connected with lines, keeping all 9 target points and the entire clicked surface uncovered.
 
 <p align="center">
   <img src="images/zone-mode-final.png" width="800" alt="Zone Mode Final Zoom" />
