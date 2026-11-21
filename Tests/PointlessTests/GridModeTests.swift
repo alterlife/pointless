@@ -39,11 +39,19 @@ final class GridModeTests: XCTestCase {
     XCTAssertEqual(cell.minY, screen.minY)
   }
 
-  func testGridLettersAreNineUniquePriorityKeys() {
-    XCTAssertEqual(LabelGenerator.gridLetters.count, 9)
-    XCTAssertEqual(Set(LabelGenerator.gridLetters).count, 9)
-    XCTAssertTrue(LabelGenerator.gridLetters.allSatisfy {
+  func testGridLettersClustersHaveNineUniqueKeys() {
+    let clusters = [
+      LabelGenerator.rightHandGridLetters,
+      LabelGenerator.leftHandGridLetters,
+      LabelGenerator.classicGridLetters
+    ]
+    for cluster in clusters {
+      XCTAssertEqual(cluster.count, 9)
+      XCTAssertEqual(Set(cluster).count, 9)
+    }
+    XCTAssertTrue(LabelGenerator.classicGridLetters.allSatisfy {
       LabelGenerator.priorityKeys.contains($0)
     })
+    XCTAssertEqual(LabelGenerator.gridLetters, LabelGenerator.rightHandGridLetters)
   }
 }

@@ -63,6 +63,7 @@ final class OverlayState: ObservableObject {
   var showConnectorLines = true
   var fadeInDuration = 0.08
   var gridModifierHint = "⌥"
+  var gridLetters: [Character] = LabelGenerator.rightHandGridLetters
 
   var filteredElements: [LabeledElement] {
     LabelGenerator.filter(labeledElements, prefix: typedPrefix)
@@ -150,17 +151,21 @@ struct OverlayContentView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-      if let hint {
+      if hint != nil {
         escHint
       }
     }
   }
 
   private var hintText: String {
-    state.scrollTargetFrame != nil
-      ? "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
-      : "type a letter to jump  ·  ⌫ back  ·  hold ⌘ highlight  ·  " +
-        "hold ⌃ cursor  ·  hold \(state.gridModifierHint) grid  ·  ESC cancel"
+    if state.gridRegion != nil {
+      return "Space click  ·  Return right-click  ·  ⌫ back  ·  ESC cancel"
+    }
+    if state.scrollTargetFrame != nil {
+      return "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
+    }
+    return "type a letter to jump  ·  ⌫ back  ·  hold ⌘ highlight  ·  " +
+           "hold ⌃ cursor  ·  hold \(state.gridModifierHint) grid  ·  ESC cancel"
   }
 
   private var hintSize: CGSize {
@@ -303,7 +308,8 @@ struct OverlayContentView: View {
 
   /// Dark offsets behind the glyph act as an outline — Canvas text can't stroke.
   private func drawGridLetter(_ index: Int, at center: CGPoint, in context: inout GraphicsContext) {
-    let letter = Text(String(LabelGenerator.gridLetters[index]))
+    guard index < state.gridLetters.count else { return }
+    let letter = Text(String(state.gridLetters[index]))
       .font(.system(size: 18, weight: .bold, design: .monospaced))
     for offset in [CGPoint(x: -1.5, y: 0), CGPoint(x: 1.5, y: 0),
                    CGPoint(x: 0, y: -1.5), CGPoint(x: 0, y: 1.5)] {

@@ -49,6 +49,9 @@ final class NavigationSession {
     let scrollNext: ParsedShortcut
     let scrollPrev: ParsedShortcut
     let gridModifier: NSEvent.ModifierFlags
+    let gridLetters: [Character]
+    let gridMaxLevel: Int
+    let gridAutoClick: Bool
   }
 
   var mode: Mode = .scanning
@@ -56,7 +59,7 @@ final class NavigationSession {
   let overlayState: OverlayState
   let config: Config
   private let onScanCompleted: (Int) -> Void
-  private let onJump: () -> Void
+  let onJump: () -> Void
   private let onEnded: () -> Void
 
   private let discovery = ElementDiscovery()
@@ -294,6 +297,14 @@ final class NavigationSession {
     usleep(10_000)
     CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
             mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+  }
+
+  static func postRightClick(at point: CGPoint) {
+    CGEvent(mouseEventSource: nil, mouseType: .rightMouseDown,
+            mouseCursorPosition: point, mouseButton: .right)?.post(tap: .cghidEventTap)
+    usleep(10_000)
+    CGEvent(mouseEventSource: nil, mouseType: .rightMouseUp,
+            mouseCursorPosition: point, mouseButton: .right)?.post(tap: .cghidEventTap)
   }
 
   // MARK: - Overlay windows
