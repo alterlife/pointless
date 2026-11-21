@@ -39,12 +39,7 @@ extension NavigationSession {
   }
 
   private func rightClickAtCursor() {
-    let point = currentCursorPoint()
-    CGEvent(mouseEventSource: nil, mouseType: .rightMouseDown,
-            mouseCursorPosition: point, mouseButton: .right)?.post(tap: .cghidEventTap)
-    usleep(10_000)
-    CGEvent(mouseEventSource: nil, mouseType: .rightMouseUp,
-            mouseCursorPosition: point, mouseButton: .right)?.post(tap: .cghidEventTap)
+    Self.postRightClick(at: currentCursorPoint())
   }
 
   private func currentCursorPoint() -> CGPoint {

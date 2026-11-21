@@ -20,7 +20,10 @@ enum LabelGenerator {
     "z", "x", "c", "v", "b", "n", "m"
   ]
 
-  static let gridLetters = Array(priorityKeys.prefix(9))
+  static let rightHandGridLetters: [Character] = ["u", "i", "o", "j", "k", "l", "m", ",", "."]
+  static let leftHandGridLetters: [Character] = ["q", "w", "e", "a", "s", "d", "z", "x", "c"]
+  static let classicGridLetters: [Character] = Array(priorityKeys.prefix(9))
+  static let gridLetters = rightHandGridLetters
 
   /// Past this, flat labels need 2 chars anyway — hierarchical costs the same
   /// keystrokes and narrows faster.
