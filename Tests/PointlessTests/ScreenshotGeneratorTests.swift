@@ -6,6 +6,11 @@ import SwiftUI
 final class ScreenshotGeneratorTests: XCTestCase {
   @MainActor
   func testRenderScreenshots() throws {
+    try XCTSkipUnless(
+      ProcessInfo.processInfo.environment["GENERATE_SCREENSHOTS"] != nil,
+      "Set GENERATE_SCREENSHOTS=1 to regenerate docs images"
+    )
+
     let outputDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
       .appendingPathComponent("docs")
       .appendingPathComponent("images")

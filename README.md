@@ -7,11 +7,11 @@
 <h3 align="center">Cursor-Free macOS Navigation</h3>
 
 <p align="center">
-  Navigate, click, scroll, and zoom across any macOS application without ever touching a mouse or trackpad.
+  Navigate, click, scroll, and zoom across any macOS application without touching a mouse or trackpad.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-macOS%2014.0%2B-blue?style=flat-square" alt="Platform macOS 14+" />
+  <img src="https://img.shields.io/badge/platform-macOS%2015.0%2B-blue?style=flat-square" alt="Platform macOS 15+" />
   <img src="https://img.shields.io/badge/Swift-6.0-orange?style=flat-square&logo=swift" alt="Swift 6.0" />
   <img src="https://img.shields.io/badge/SwiftLint-0%20violations-brightgreen?style=flat-square" alt="SwiftLint" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License MIT" />
@@ -21,9 +21,11 @@
 
 ## Overview
 
-**Pointless** is a native macOS application designed for rapid, keyboard-driven navigation. The name reflects its philosophy: *pointer-less*. Instead of reaching for a mouse or trackpad, Pointless lets you operate any macOS interface entirely through targeted keyboard commands.
+**Pointless** is a native macOS application designed for rapid, keyboard-driven navigation. The name reflects its philosophy: *pointer-less*. 
 
-It operates in three distinct, seamless modes:
+Instead of reaching for a mouse or trackpad, Pointless lets you operate any macOS interface entirely through targeted keyboard commands.
+
+It operates in three modes:
 1. **Label Mode (Element Navigation)**: Scans active accessibility trees and generates clean, non-overlapping two-letter badges over every interactive control.
 2. **Zone Mode (Spatial Grid & Lookahead Zoom)**: Subdivides the display into a recursive 3×3 grid with two-letter lookahead discoverability, typeahead chording, and unobscured click targeting.
 3. **Scroll Mode**: Outlines scrollable content areas and drives smooth, momentum-buffered vertical scrolling via `j`/`k` and `d`/`u`.
@@ -156,7 +158,7 @@ Configure activation shortcuts, grid key clusters, zoom depth, label coloring, a
 
 ## Requirements & Permissions
 
-- **Operating System**: macOS 14.0 (Sonoma) or newer.
+- **Operating System**: macOS 15.0 (Sequoia) or newer.
 - **Permissions**:
   1. **Accessibility (`AXUIElement`)**: Required to inspect window hierarchies, locate interactive controls, and dispatch actions.
   2. **Input Monitoring (`CGEventTap`)**: Required to intercept keyboard input during an active navigation session without stealing window focus.
@@ -200,9 +202,9 @@ swiftlint
 
 ## Documentation
 
-- [Zone Mode Deep Dive](file:///Users/jj/Alterlife/pointless/docs/ZONE_MODE.md): Detailed guide on the spatial grid, typeahead bursting, lookahead mechanics, and labelled points.
-- [Architecture Guide](file:///Users/jj/Alterlife/pointless/docs/ARCHITECTURE.md): Comprehensive breakdown of the AX pipeline, discovery passes, rendering engine, and plugin lifecycle.
-- [Improvement Plan](file:///Users/jj/Alterlife/pointless/IMPROVEMENTS.md): Future roadmap for label stability, diagnostics, and performance.
+- [Zone Mode Deep Dive](docs/ZONE_MODE.md): Detailed guide on the spatial grid, typeahead bursting, lookahead mechanics, and labelled points.
+- [Architecture Guide](docs/ARCHITECTURE.md): Comprehensive breakdown of the AX pipeline, discovery passes, rendering engine, and plugin lifecycle.
+- [Improvement Plan](IMPROVEMENTS.md): Future roadmap for label stability, diagnostics, and performance.
 
 ---
 
