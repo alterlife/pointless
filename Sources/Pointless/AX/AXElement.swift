@@ -26,6 +26,7 @@ enum AXRoleName {
   static let webArea = "AXWebArea"
   static let browser = "AXBrowser"
   static let application = "AXApplication"
+  static let window = "AXWindow"
   static let opaqueProviderGroup = "AXOpaqueProviderGroup"
   static let group = "AXGroup"
 }
@@ -39,6 +40,7 @@ private enum AXAttrName {
   static let parent = "AXParent"
   static let focusedWindow = "AXFocusedWindow"
   static let mainWindow = "AXMainWindow"
+  static let windows = "AXWindows"
   static let focusedUIElement = "AXFocusedUIElement"
   static let enhancedUserInterface = "AXEnhancedUserInterface"
   static let manualAccessibility = "AXManualAccessibility"
@@ -113,6 +115,10 @@ struct AXElement: AXNode {
 
   var focusedUIElement: (any AXNode)? {
     elementAttribute(AXAttrName.focusedUIElement)
+  }
+
+  var windows: [any AXNode] {
+    Self.axElements(from: attributeValue(AXAttrName.windows))
   }
 
   /// Children via AXChildren, falling back to the alternative attributes some
