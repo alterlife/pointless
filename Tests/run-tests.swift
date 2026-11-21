@@ -1176,8 +1176,11 @@ func testColorFromHex(_ hex: String) -> TestRGBColor? {
     var sanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
     sanitized = sanitized.replacingOccurrences(of: "#", with: "")
 
+    guard sanitized.count == 6 else { return nil }
+
     var rgb: UInt64 = 0
-    guard Scanner(string: sanitized).scanHexInt64(&rgb) else { return nil }
+    let scanner = Scanner(string: sanitized)
+    guard scanner.scanHexInt64(&rgb), scanner.isAtEnd else { return nil }
 
     let red   = Double((rgb & 0xFF0000) >> 16) / 255.0
     let green = Double((rgb & 0x00FF00) >> 8)  / 255.0
@@ -1186,9 +1189,9 @@ func testColorFromHex(_ hex: String) -> TestRGBColor? {
 }
 
 func testColorToHex(red: Double, green: Double, blue: Double) -> String {
-    let r = Int(red * 255.0)
-    let g = Int(green * 255.0)
-    let b = Int(blue * 255.0)
+    let r = max(0, min(255, Int((red * 255.0).rounded())))
+    let g = max(0, min(255, Int((green * 255.0).rounded())))
+    let b = max(0, min(255, Int((blue * 255.0).rounded())))
     return String(format: "#%02X%02X%02X", r, g, b)
 }
 
@@ -1272,9 +1275,24 @@ testSuite("Hex Color Parsing Tests") {
         verify(color == nil, "Invalid hex should return nil")
     }
 
+    runTest("short hex returns nil") {
+        verify(testColorFromHex("#FFF") == nil, "3-char hex should return nil")
+        verify(testColorFromHex("#12345") == nil, "5-char hex should return nil")
+    }
+
+    runTest("hex with trailing non-hex returns nil") {
+        verify(testColorFromHex("007AGH") == nil, "Hex with trailing non-hex chars should return nil")
+    }
+
     runTest("toHex roundtrip for red") {
         let hex = testColorToHex(red: 1.0, green: 0.0, blue: 0.0)
         assertEqual(hex, "#FF0000")
+    }
+
+    runTest("toHex for grayscale values") {
+        assertEqual(testColorToHex(red: 0.0, green: 0.0, blue: 0.0), "#000000")
+        assertEqual(testColorToHex(red: 1.0, green: 1.0, blue: 1.0), "#FFFFFF")
+        assertEqual(testColorToHex(red: 0.5, green: 0.5, blue: 0.5), "#808080")
     }
 
     runTest("toHex roundtrip for arbitrary color") {
