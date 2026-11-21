@@ -31,6 +31,8 @@ extension NavigationSession {
     guard let char = event.charactersIgnoringModifiers?.lowercased().first,
           let index = config.gridLetters.firstIndex(of: char) else { return false }
     let cell = Self.gridCell(index, in: region)
+    gridPath.append(char)
+    overlayState.gridBreadcrumb = Self.formatBreadcrumb(path: gridPath, maxLevel: config.gridMaxLevel)
     if gridRegions.count >= config.gridMaxLevel {
       if config.gridAutoClick {
         resolveGridClick(cell, rightClick: false)
@@ -53,7 +55,9 @@ extension NavigationSession {
     } ?? NSScreen.main
     guard let screen else { return }
     gridRegions = [screen.frame]
+    gridPath = []
     overlayState.gridRegion = screen.frame
+    overlayState.gridBreadcrumb = Self.formatBreadcrumb(path: gridPath, maxLevel: config.gridMaxLevel)
     updatePrefix("")
     showBadges()
   }
@@ -64,22 +68,29 @@ extension NavigationSession {
       return
     }
     gridRegions.removeLast()
+    if !gridPath.isEmpty { gridPath.removeLast() }
     overlayState.gridRegion = gridRegions.last
+    overlayState.gridBreadcrumb = Self.formatBreadcrumb(path: gridPath, maxLevel: config.gridMaxLevel)
   }
 
   func clearGrid() {
     gridRegions.removeAll()
+    gridPath.removeAll()
     overlayState.gridRegion = nil
+    overlayState.gridBreadcrumb = ""
     showBadges()
   }
 
   private func resolveGridClick(_ cell: CGRect, rightClick: Bool) {
-    let clickPoint = cgPoint(fromAppKit: CGPoint(x: cell.midX, y: cell.midY))
+    let address = String(gridPath)
+    let center = CGPoint(x: cell.midX, y: cell.midY)
+    let clickPoint = cgPoint(fromAppKit: center)
     CGWarpMouseCursorPosition(clickPoint)
     CGAssociateMouseAndMouseCursorPosition(1)
     clearGrid()
     onJump()
     end()
+    showSpatialAddressToast(address.isEmpty ? "center" : address, at: center)
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
       if rightClick {
         Self.postRightClick(at: clickPoint)
@@ -106,5 +117,17 @@ extension NavigationSession {
       width: cellWidth,
       height: cellHeight
     )
+  }
+
+  nonisolated static func formatBreadcrumb(path: [Character], maxLevel: Int) -> String {
+    var slots: [String] = []
+    for index in 0..<maxLevel {
+      if index < path.count {
+        slots.append(String(path[index]))
+      } else {
+        slots.append("·")
+      }
+    }
+    return "[ " + slots.joined(separator: " ") + " ]"
   }
 }

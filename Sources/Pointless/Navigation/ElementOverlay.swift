@@ -40,6 +40,57 @@ func showEmptyHint(_ text: String = "No interactive elements found") {
   }
 }
 
+// MARK: - Spatial address toast
+
+@MainActor
+func showSpatialAddressToast(_ address: String, at point: CGPoint) {
+  let width: CGFloat = 72 + CGFloat(address.count) * 8
+  let height: CGFloat = 28
+  let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) } ?? NSScreen.main
+  let bounds = screen?.frame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+  let origin = NSPoint(
+    x: max(bounds.minX + 8, min(point.x - width / 2, bounds.maxX - width - 8)),
+    y: max(bounds.minY + 8, min(point.y + 16, bounds.maxY - height - 8))
+  )
+  let win = NSWindow(
+    contentRect: NSRect(origin: origin, size: CGSize(width: width, height: height)),
+    styleMask: .borderless,
+    backing: .buffered,
+    defer: false
+  )
+  win.backgroundColor = .clear
+  win.isOpaque = false
+  win.hasShadow = false
+  win.level = .popUpMenu
+  win.ignoresMouseEvents = true
+  win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+  let view = NSHostingView(rootView:
+    HStack(spacing: 4) {
+      Text("📍")
+        .font(.system(size: 10))
+      Text(address)
+        .font(.system(size: 12, weight: .bold, design: .monospaced))
+        .foregroundColor(.white)
+    }
+    .padding(.horizontal, 10)
+    .padding(.vertical, 4)
+    .background(Capsule().fill(Color.black.opacity(0.8)))
+    .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
+  )
+  win.contentView = view
+  win.makeKeyAndOrderFront(nil)
+
+  DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+    NSAnimationContext.runAnimationGroup { ctx in
+      ctx.duration = 0.25
+      win.animator().alphaValue = 0
+    } completionHandler: {
+      win.orderOut(nil)
+    }
+  }
+}
+
 // MARK: - Badge alpha
 
 func badgeAlpha(label: String, typedPrefix: String) -> Double {
@@ -56,6 +107,7 @@ final class OverlayState: ObservableObject {
   @Published var clickHintDismissed = false
   @Published var revealElementText = false
   @Published var gridRegion: CGRect?
+  @Published var gridBreadcrumb: String = ""
 
   var badgeColor = Color(red: 0.95, green: 0.75, blue: 0.1)
   var textColor = Color.black
@@ -160,7 +212,9 @@ struct OverlayContentView: View {
 
   private var hintText: String {
     if state.gridRegion != nil {
-      return "Space click  ·  Return right-click  ·  ⌫ back  ·  \(state.gridSwitchShortcutHint) labels  ·  ESC cancel"
+      let breadcrumb = state.gridBreadcrumb.isEmpty ? "" : "\(state.gridBreadcrumb)  ·  "
+      return "\(breadcrumb)Space click  ·  Return right-click  ·  ⌫ back  ·  " +
+             "\(state.gridSwitchShortcutHint) labels  ·  ESC cancel"
     }
     if state.scrollTargetFrame != nil {
       return "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
