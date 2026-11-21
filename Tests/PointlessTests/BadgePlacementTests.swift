@@ -146,4 +146,61 @@ final class BadgePlacementTests: XCTestCase {
     XCTAssertEqual(badgeAlpha(label: "sa", typedPrefix: "s"), 1.0)
     XCTAssertEqual(badgeAlpha(label: "sa", typedPrefix: "a"), 0.2)
   }
+
+  // MARK: placeGridBadges
+
+  func testPlaceGridBadgesPlacesOutsideGridRegion() {
+    let gridRect = CGRect(x: 500, y: 400, width: 64, height: 40)
+    let cellW = gridRect.width / 3
+    let cellH = gridRect.height / 3
+    let anchors: [CGPoint] = (0..<9).map { idx in
+      let col = CGFloat(idx % 3)
+      let row = CGFloat(idx / 3)
+      return CGPoint(x: gridRect.minX + (col + 0.5) * cellW, y: gridRect.minY + (row + 0.5) * cellH)
+    }
+    let sizes = [CGSize](repeating: CGSize(width: 18, height: 18), count: 9)
+    let badges = placeGridBadges(gridRect: gridRect, anchors: anchors, badgeSizes: sizes, viewSize: CGSize(width: 1728, height: 1117))
+
+    XCTAssertEqual(badges.count, 9)
+    for (idx, badge) in badges.enumerated() {
+      XCTAssertFalse(gridRect.intersects(badge), "Badge \(idx) should not intersect gridRect")
+    }
+  }
+
+  func testPlaceGridBadgesAvoidsCollisionsBetweenBadges() {
+    let gridRect = CGRect(x: 300, y: 300, width: 90, height: 60)
+    let cellW = gridRect.width / 3
+    let cellH = gridRect.height / 3
+    let anchors: [CGPoint] = (0..<9).map { idx in
+      let col = CGFloat(idx % 3)
+      let row = CGFloat(idx / 3)
+      return CGPoint(x: gridRect.minX + (col + 0.5) * cellW, y: gridRect.minY + (row + 0.5) * cellH)
+    }
+    let sizes = [CGSize](repeating: CGSize(width: 20, height: 18), count: 9)
+    let badges = placeGridBadges(gridRect: gridRect, anchors: anchors, badgeSizes: sizes, viewSize: CGSize(width: 1728, height: 1117))
+
+    for i in 0..<badges.count {
+      for j in (i + 1)..<badges.count {
+        XCTAssertFalse(badges[i].intersects(badges[j]), "Badge \(i) and \(j) should not collide")
+      }
+    }
+  }
+
+  func testPlaceGridBadgesNearScreenEdge() {
+    let gridRect = CGRect(x: 4, y: 4, width: 64, height: 40)
+    let cellW = gridRect.width / 3
+    let cellH = gridRect.height / 3
+    let anchors: [CGPoint] = (0..<9).map { idx in
+      let col = CGFloat(idx % 3)
+      let row = CGFloat(idx / 3)
+      return CGPoint(x: gridRect.minX + (col + 0.5) * cellW, y: gridRect.minY + (row + 0.5) * cellH)
+    }
+    let sizes = [CGSize](repeating: CGSize(width: 18, height: 18), count: 9)
+    let badges = placeGridBadges(gridRect: gridRect, anchors: anchors, badgeSizes: sizes, viewSize: CGSize(width: 1728, height: 1117))
+
+    for (idx, badge) in badges.enumerated() {
+      XCTAssertGreaterThanOrEqual(badge.minX, 4, "Badge \(idx) should stay on screen (minX)")
+      XCTAssertGreaterThanOrEqual(badge.minY, 4, "Badge \(idx) should stay on screen (minY)")
+    }
+  }
 }
