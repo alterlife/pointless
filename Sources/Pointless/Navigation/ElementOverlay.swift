@@ -271,8 +271,9 @@ struct OverlayContentView: View {
     context.stroke(border, with: .color(.black.opacity(0.4)), lineWidth: 3)
     context.stroke(border, with: .color(state.badgeColor), lineWidth: 1.5)
 
-    let prefix = state.gridPathPrefix
-    let canSubdivide = (prefix.count + 2 <= state.gridMaxLevel)
+    let isUpperLevel = state.gridPathPrefix.isEmpty
+    let canSubdivide = isUpperLevel && (state.gridMaxLevel >= 2)
+
     for qIdx in 0..<min(9, state.gridLetters.count) {
       let cell = NavigationSession.gridCell(qIdx, in: region)
       let cellRect = CGRect(
@@ -298,41 +299,33 @@ struct OverlayContentView: View {
           )
           context.stroke(Path(subRect), with: .color(.black.opacity(0.18)), lineWidth: 0.75)
           let sChar = state.gridLetters[sIdx]
-          let label = "\(prefix)\(qChar)\(sChar)"
-          drawGridTag(label: label, prefixCount: prefix.count, center: subRect.center, in: &context)
+          let label = "\(qChar)\(sChar)"
+          drawGridTag(label: label, center: subRect.center, in: &context)
         }
       } else {
-        let label = "\(prefix)\(qChar)"
-        drawGridTag(label: label, prefixCount: prefix.count, center: cellRect.center, in: &context)
+        let label = String(qChar)
+        drawGridTag(label: label, center: cellRect.center, maxHeight: cellRect.height, in: &context)
       }
     }
   }
 
   private func drawGridTag(
     label: String,
-    prefixCount: Int,
     center: CGPoint,
+    maxHeight: CGFloat? = nil,
     in context: inout GraphicsContext
   ) {
-    let size = measureBadge(label: label, context: context)
+    let baseFontSize = state.badgeFontSize
+    let fontSize = maxHeight.map { min(baseFontSize, max(8, $0 * 0.5)) } ?? baseFontSize
+    let font = Font.system(size: fontSize, weight: .bold, design: .monospaced)
+    let text = Text(label).font(font).foregroundColor(state.textColor)
+    let resolved = context.resolve(text)
+    let measured = resolved.measure(in: CGSize(width: 100, height: 50))
+    let size = CGSize(width: measured.width + 8, height: measured.height + 4)
     let rect = CGRect(center: center, size: size)
     let path = Path(roundedRect: rect, cornerRadius: 4)
     context.fill(path, with: .color(state.badgeColor))
     context.stroke(path, with: .color(state.textColor.opacity(0.35)), lineWidth: 1)
-    let font = Font.system(size: state.badgeFontSize, weight: .bold, design: .monospaced)
-    let text: Text
-    if prefixCount > 0 && prefixCount < label.count {
-      text = Text(String(label.prefix(prefixCount)))
-        .font(font)
-        .foregroundColor(state.textColor.opacity(0.4))
-        + Text(String(label.dropFirst(prefixCount)))
-        .font(font)
-        .foregroundColor(state.textColor)
-    } else {
-      text = Text(label)
-        .font(font)
-        .foregroundColor(state.textColor)
-    }
     context.draw(text, at: rect.center)
   }
 
