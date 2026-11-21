@@ -48,8 +48,8 @@ final class ShortcutCaptureView: NSView {
     let modifiers = event.modifierFlags.intersection(
       [.command, .shift, .option, .control]
     )
-    // Require at least one modifier for a valid shortcut
-    guard !modifiers.isEmpty else { return }
+    // Require at least one modifier, or allow standalone Tab
+    guard !modifiers.isEmpty || event.keyCode == 48 else { return }
 
     let display = Self.modifierSymbols(modifiers) + Self.keyName(from: event)
     onShortcutCaptured?(display)

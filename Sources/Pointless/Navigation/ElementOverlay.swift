@@ -62,7 +62,7 @@ final class OverlayState: ObservableObject {
   var badgeFontSize: CGFloat = 11
   var showConnectorLines = true
   var fadeInDuration = 0.08
-  var gridModifierHint = "⌥"
+  var gridSwitchShortcutHint = "Tab"
   var gridLetters: [Character] = LabelGenerator.rightHandGridLetters
 
   var filteredElements: [LabeledElement] {
@@ -122,31 +122,32 @@ struct OverlayContentView: View {
     let hint = hintVisible && NSScreen.main === screen ? hintFrame() : nil
     return ZStack {
       Canvas { ctx, size in
-        let onScreen = state.labeledElements.filter {
-          badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame
-        }
-        let anchors = onScreen.map {
-          anchorPoint(screenFrame: $0.element.screenFrame, screenRect: screen.frame)
-        }
-        let badgeSizes = onScreen.map {
-          measureBadge(label: $0.label, context: ctx)
-        }
-        let badgeRects = placeBadges(
-          anchors: anchors, badgeSizes: badgeSizes, viewSize: size,
-          topInset: screen.safeAreaInsets.top,
-          reservedRects: hint.map { [$0.insetBy(dx: -4, dy: -4)] } ?? []
-        )
-        for labeled in onScreen where shouldHighlight(labeled) {
-          drawHighlight(frame: labeled.element.screenFrame, in: &ctx)
-        }
-        for (index, labeled) in onScreen.enumerated() {
-          drawElement(labeled, badgeRect: badgeRects[index], anchor: anchors[index], in: &ctx)
-        }
-        if let target = state.scrollTargetFrame, !state.scrollOutlineHidden {
-          drawScrollTarget(target, in: &ctx)
-        }
         if let region = state.gridRegion {
           drawGrid(region, in: &ctx)
+        } else {
+          let onScreen = state.labeledElements.filter {
+            badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame
+          }
+          let anchors = onScreen.map {
+            anchorPoint(screenFrame: $0.element.screenFrame, screenRect: screen.frame)
+          }
+          let badgeSizes = onScreen.map {
+            measureBadge(label: $0.label, context: ctx)
+          }
+          let badgeRects = placeBadges(
+            anchors: anchors, badgeSizes: badgeSizes, viewSize: size,
+            topInset: screen.safeAreaInsets.top,
+            reservedRects: hint.map { [$0.insetBy(dx: -4, dy: -4)] } ?? []
+          )
+          for labeled in onScreen where shouldHighlight(labeled) {
+            drawHighlight(frame: labeled.element.screenFrame, in: &ctx)
+          }
+          for (index, labeled) in onScreen.enumerated() {
+            drawElement(labeled, badgeRect: badgeRects[index], anchor: anchors[index], in: &ctx)
+          }
+          if let target = state.scrollTargetFrame, !state.scrollOutlineHidden {
+            drawScrollTarget(target, in: &ctx)
+          }
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -159,13 +160,13 @@ struct OverlayContentView: View {
 
   private var hintText: String {
     if state.gridRegion != nil {
-      return "Space click  ·  Return right-click  ·  ⌫ back  ·  ESC cancel"
+      return "Space click  ·  Return right-click  ·  ⌫ back  ·  \(state.gridSwitchShortcutHint) labels  ·  ESC cancel"
     }
     if state.scrollTargetFrame != nil {
       return "j/k scroll  ·  d/u half page  ·  ⌘⇧J next  ·  ⌘⇧K prev  ·  ESC exit"
     }
     return "type a letter to jump  ·  ⌫ back  ·  hold ⌘ highlight  ·  " +
-           "hold ⌃ cursor  ·  hold \(state.gridModifierHint) grid  ·  ESC cancel"
+           "hold ⌃ cursor  ·  \(state.gridSwitchShortcutHint) zone  ·  ESC cancel"
   }
 
   private var hintSize: CGSize {
@@ -281,6 +282,7 @@ struct OverlayContentView: View {
   }
 
   private func drawGrid(_ region: CGRect, in context: inout GraphicsContext) {
+    guard screen.frame.intersects(region) else { return }
     let rect = CGRect(
       x: region.minX - screen.frame.minX,
       y: screen.frame.maxY - region.maxY,

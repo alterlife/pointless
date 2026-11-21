@@ -48,7 +48,7 @@ final class NavigationSession {
     let labelStrategy: LabelGenerator.LabelStrategy
     let scrollNext: ParsedShortcut
     let scrollPrev: ParsedShortcut
-    let gridModifier: NSEvent.ModifierFlags
+    let gridSwitchShortcut: ParsedShortcut
     let gridLetters: [Character]
     let gridMaxLevel: Int
     let gridAutoClick: Bool
@@ -120,6 +120,7 @@ final class NavigationSession {
       }
       self.applySnapshot(elements)
       self.mode = .click(typedSoFar: "")
+      if !self.gridRegions.isEmpty { return }
       if !self.bufferedKeyEvents.isEmpty {
         self.replayBufferedKeys()
         if self.ended { return }
@@ -142,7 +143,9 @@ final class NavigationSession {
   private func showProgress(_ elements: [NavigationTarget]) {
     guard !ended, !elements.isEmpty else { return }
     applySnapshot(elements)
-    showBadges()
+    if gridRegions.isEmpty {
+      showBadges()
+    }
   }
 
   private func applySnapshot(_ elements: [NavigationTarget]) {
@@ -154,7 +157,7 @@ final class NavigationSession {
     overlayState.typedPrefix = bufferedPrefix
   }
 
-  private func showBadges() {
+  func showBadges() {
     guard !badgesShown else { return }
     badgesShown = true
     overlayWindows.forEach { $0.show(fadeDuration: config.fadeInDuration) }
@@ -211,6 +214,14 @@ final class NavigationSession {
   }
 
   private func handleScanningKey(_ event: NSEvent) {
+    if !gridRegions.isEmpty {
+      handleZoneKey(event)
+      return
+    }
+    if eventMatchesHotkey(event, shortcut: config.gridSwitchShortcut) {
+      startGrid()
+      return
+    }
     switch event.keyCode {
     case 53:  // ESC
       end()
@@ -220,10 +231,8 @@ final class NavigationSession {
         updateBufferedPrefix()
       }
     default:
-      if handleGridKey(event) { return }
       guard let char = event.charactersIgnoringModifiers?.lowercased().first,
-            LabelGenerator.priorityKeys.contains(char) ||
-            config.gridLetters.contains(char) else { return }
+            LabelGenerator.priorityKeys.contains(char) else { return }
       bufferedKeyEvents.append(event)
       updateBufferedPrefix()
     }
@@ -250,28 +259,26 @@ final class NavigationSession {
 
   func handleFlagsChanged(_ event: NSEvent) {
     overlayState.revealElementText = event.modifierFlags.contains(.command)
-    if event.modifierFlags.contains(config.gridModifier) {
-      if case .scrolling = mode { } else { startGrid() }
-    } else {
-      clearGrid()
-    }
   }
 
   var isDragArmed = false
   var gridRegions: [CGRect] = []
 
   private func handleClickKey(_ event: NSEvent, prefix: String) {
+    if !gridRegions.isEmpty {
+      handleZoneKey(event)
+      return
+    }
+    if eventMatchesHotkey(event, shortcut: config.gridSwitchShortcut) {
+      startGrid()
+      return
+    }
     switch event.keyCode {
     case 53:  // ESC
       end()
     case 51:  // Backspace
-      if event.modifierFlags.contains(config.gridModifier), !gridRegions.isEmpty {
-        gridBackspace()
-      } else {
-        updatePrefix(String(prefix.dropLast()))
-      }
+      updatePrefix(String(prefix.dropLast()))
     default:
-      if handleGridKey(event) { return }
       if handleCursorKey(event) { return }
       let controlHeld = event.modifierFlags.contains(.control)
       guard let char = event.charactersIgnoringModifiers?.lowercased().first,

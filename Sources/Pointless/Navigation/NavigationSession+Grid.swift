@@ -1,9 +1,22 @@
 import AppKit
 
 extension NavigationSession {
+  func handleZoneKey(_ event: NSEvent) {
+    if eventMatchesHotkey(event, shortcut: config.gridSwitchShortcut) {
+      clearGrid()
+      return
+    }
+    switch event.keyCode {
+    case 53:  // ESC
+      end()
+    case 51:  // Backspace
+      gridBackspace()
+    default:
+      _ = handleGridKey(event)
+    }
+  }
+
   func handleGridKey(_ event: NSEvent) -> Bool {
-    guard event.modifierFlags.contains(config.gridModifier) || !gridRegions.isEmpty else { return false }
-    startGrid()
     guard let region = gridRegions.last else { return false }
 
     if event.keyCode == 49 {  // Space → left-click current cell
@@ -41,6 +54,8 @@ extension NavigationSession {
     guard let screen else { return }
     gridRegions = [screen.frame]
     overlayState.gridRegion = screen.frame
+    updatePrefix("")
+    showBadges()
   }
 
   func gridBackspace() {
@@ -55,6 +70,7 @@ extension NavigationSession {
   func clearGrid() {
     gridRegions.removeAll()
     overlayState.gridRegion = nil
+    showBadges()
   }
 
   private func resolveGridClick(_ cell: CGRect, rightClick: Bool) {
