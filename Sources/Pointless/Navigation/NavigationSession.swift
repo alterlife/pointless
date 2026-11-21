@@ -10,22 +10,46 @@ private func navigationSessionEventCallback(
   event: CGEvent?,
   userInfo: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
-  guard let event else { return nil }
-  guard let userInfo else { return Unmanaged.passUnretained(event) }
+  guard let userInfo else {
+    return event.map { Unmanaged.passUnretained($0) }
+  }
   let session = Unmanaged<NavigationSession>.fromOpaque(userInfo).takeUnretainedValue()
 
+  if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+    if Thread.isMainThread {
+      MainActor.assumeIsolated { session.reEnableTap() }
+    } else {
+      DispatchQueue.main.async { session.reEnableTap() }
+    }
+    return event.map { Unmanaged.passUnretained($0) }
+  }
+
+  guard let event else { return nil }
+
   if type == .leftMouseDown || type == .rightMouseDown {
-    Task { @MainActor in session.end() }
+    if Thread.isMainThread {
+      MainActor.assumeIsolated { session.end() }
+    } else {
+      DispatchQueue.main.async { session.end() }
+    }
     return Unmanaged.passUnretained(event)
   }
 
   if type == .keyDown, let nsEvent = NSEvent(cgEvent: event) {
-    Task { @MainActor in session.handleKey(nsEvent) }
+    if Thread.isMainThread {
+      MainActor.assumeIsolated { session.handleKey(nsEvent) }
+    } else {
+      DispatchQueue.main.async { session.handleKey(nsEvent) }
+    }
     return nil
   }
 
   if type == .flagsChanged, let nsEvent = NSEvent(cgEvent: event) {
-    Task { @MainActor in session.handleFlagsChanged(nsEvent) }
+    if Thread.isMainThread {
+      MainActor.assumeIsolated { session.handleFlagsChanged(nsEvent) }
+    } else {
+      DispatchQueue.main.async { session.handleFlagsChanged(nsEvent) }
+    }
     return Unmanaged.passUnretained(event)
   }
 
@@ -62,8 +86,8 @@ final class NavigationSession {
   let onJump: () -> Void
   private let onEnded: () -> Void
 
-  private let discovery = ElementDiscovery()
-  private var overlayWindows: [ElementOverlayWindow] = []
+  let discovery = ElementDiscovery()
+  var overlayWindows: [ElementOverlayWindow] = []
   private var labeledElements: [LabeledElement] = []
   private var badgesShown = false
   var scrollHintWorkItem: DispatchWorkItem?
@@ -76,7 +100,7 @@ final class NavigationSession {
   static let clickHintKey = "navigation.clickHintDismissed"
   private static let clickHintDuration: Double = 5
   private var eventTap: CFMachPort?
-  private var ended = false
+  var ended = false
 
   init(
     overlayState: OverlayState,
@@ -163,46 +187,12 @@ final class NavigationSession {
     overlayWindows.forEach { $0.show(fadeDuration: config.fadeInDuration) }
   }
 
-  // MARK: - Scroll mode
-
-  func beginScroll() {
-    mode = .scanning
-    installEventTap()
-    discovery.scan(mode: .scrollable) { [weak self] elements in
-      guard let self, !self.ended else { return }
-      let screenBounds = NSScreen.screens.reduce(CGRect.null) { $0.union($1.frame) }
-      let viable = elements.filter { elem in
-        let frame = elem.screenFrame
-        return frame.width >= 50 && frame.height >= 50 && screenBounds.intersects(frame)
-      }
-      guard !viable.isEmpty else {
-        Logger.warning("No scrollable elements found in focused window", logger: Logger.pluginLifecycle)
-        self.end()
-        showEmptyHint("No scrollable areas found")
-        return
-      }
-      let byPosition = viable.sortedByPosition()
-      let withScrollEvidence = byPosition.filter { $0.element.hasScrollIndicators }
-      let withoutScrollEvidence = byPosition.filter { !$0.element.hasScrollIndicators }
-      let sorted = withScrollEvidence + withoutScrollEvidence
-      let mousePos = NSEvent.mouseLocation
-      let startIndex = sorted.firstIndex { $0.screenFrame.contains(mousePos) } ?? 0
-      self.rebuildOverlayWindows()
-      if sorted.count > 1 {
-        self.warpCursor(to: sorted[startIndex])
-      }
-      self.overlayState.scrollTargetFrame = sorted[startIndex].screenFrame
-      self.mode = .scrolling(targets: sorted, currentIndex: startIndex)
-      self.overlayWindows.forEach { $0.show(fadeDuration: self.config.fadeInDuration) }
-      self.scheduleScrollHint()
-    }
-  }
-
   // MARK: - Key handling
 
   private var bufferedKeyEvents: [NSEvent] = []
 
   func handleKey(_ event: NSEvent) {
+    guard !ended else { return }
     switch mode {
     case .click(let prefix):
       handleClickKey(event, prefix: prefix)
@@ -307,7 +297,7 @@ final class NavigationSession {
 
   // MARK: - Overlay windows
 
-  private func rebuildOverlayWindows() {
+  func rebuildOverlayWindows() {
     overlayWindows.forEach { $0.hide() }
     let screens = NSScreen.screens
     let screenFrames = screens.map(\.frame)
@@ -318,7 +308,7 @@ final class NavigationSession {
 
   // MARK: - Event tap
 
-  private func installEventTap() {
+  func installEventTap() {
     let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
                           | (1 << CGEventType.flagsChanged.rawValue)
                           | (1 << CGEventType.leftMouseDown.rawValue)
@@ -340,6 +330,11 @@ final class NavigationSession {
     if let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) {
       CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
     }
+    CGEvent.tapEnable(tap: tap, enable: true)
+  }
+
+  func reEnableTap() {
+    guard let tap = eventTap else { return }
     CGEvent.tapEnable(tap: tap, enable: true)
   }
 

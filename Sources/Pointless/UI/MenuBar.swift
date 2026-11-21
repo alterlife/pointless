@@ -59,7 +59,14 @@ class MenuBar {
       // Force layout to get proper size
       hostingView.layoutSubtreeIfNeeded()
       let intrinsicSize = hostingView.intrinsicContentSize
-      let viewHeight = intrinsicSize.height > 0 ? intrinsicSize.height : 100
+      let viewHeight: CGFloat
+      if intrinsicSize.height > 0 {
+        viewHeight = intrinsicSize.height
+      } else if hostingView.fittingSize.height > 0 {
+        viewHeight = hostingView.fittingSize.height
+      } else {
+        viewHeight = 100
+      }
       hostingView.frame = NSRect(x: 0, y: 0, width: 360, height: viewHeight)
 
       menuItem.view = hostingView

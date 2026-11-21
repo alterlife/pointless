@@ -28,7 +28,7 @@ func showEmptyHint(_ text: String = "No interactive elements found") {
   )
   win.contentView = label
   win.center()
-  win.makeKeyAndOrderFront(nil)
+  win.orderFrontRegardless()
 
   DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
     NSAnimationContext.runAnimationGroup { ctx in
@@ -79,7 +79,7 @@ func showSpatialAddressToast(_ address: String, at point: CGPoint) {
     .overlay(Capsule().stroke(Color.black.opacity(0.3), lineWidth: 1))
   )
   win.contentView = view
-  win.makeKeyAndOrderFront(nil)
+  win.orderFrontRegardless()
 
   DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
     NSAnimationContext.runAnimationGroup { ctx in

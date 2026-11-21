@@ -125,11 +125,10 @@ struct AXElement: AXNode {
   /// frameworks (Firefox, Mullvad) populate instead.
   var children: [any AXNode] {
     for attr in AXAttrName.childAttrs {
-      // swiftlint:disable:next empty_count
-      guard let arr = attributeValue(attr) as? NSArray, arr.count > 0 else { continue }
-      // CFArray of AXUIElement objects — conditional casts on AXUIElement don't compile,
-      // so bridge via NSArray and rebind each element.
-      return arr.map { AXElement(raw: unsafeBitCast($0 as AnyObject, to: AXUIElement.self)) }
+      let elements = Self.axElements(from: attributeValue(attr))
+      if !elements.isEmpty {
+        return elements
+      }
     }
     return []
   }
@@ -189,7 +188,10 @@ struct AXElement: AXNode {
 
   private static func axElements(from value: AnyObject?) -> [any AXNode] {
     guard let arr = value as? NSArray else { return [] }
-    return arr.map { AXElement(raw: unsafeBitCast($0 as AnyObject, to: AXUIElement.self)) as any AXNode }
+    return arr.compactMap { obj in
+      guard CFGetTypeID(obj as CFTypeRef) == AXUIElementGetTypeID() else { return nil }
+      return AXElement(raw: unsafeBitCast(obj as AnyObject, to: AXUIElement.self)) as any AXNode
+    }
   }
 
   private static func nsscreenFrame(position: AnyObject?, size: AnyObject?, primaryScreenHeight: CGFloat) -> CGRect? {
@@ -286,9 +288,9 @@ struct AXElement: AXNode {
   }
 
   private func elementAttribute(_ name: String) -> AXElement? {
-    guard let value = attributeValue(name) else { return nil }
-    // AXUIElementCopyAttributeValue guarantees AXUIElement type for element attributes,
-    // but a conditional cast on AXUIElement doesn't compile under SPM — rebind instead.
+    guard let value = attributeValue(name),
+          CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+    // CFGetTypeID verified — rebind is safe here.
     return AXElement(raw: unsafeBitCast(value, to: AXUIElement.self))
   }
 

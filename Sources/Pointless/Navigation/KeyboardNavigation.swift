@@ -69,11 +69,15 @@ final class KeyboardNavigation: NSObject, ObservableObject {
     }
     Logger.info("KeyboardNavigation start — isEnabled=\(isEnabled)", logger: Logger.pluginLifecycle)
     guard isEnabled else { return }
+    if let observer = activationObserver {
+      NotificationCenter.default.removeObserver(observer)
+      activationObserver = nil
+    }
     activationObserver = NotificationCenter.default.addObserver(
       forName: Self.activateNotification, object: nil, queue: .main
     ) { [weak self] _ in
       guard let self else { return }
-      Task { @MainActor in self.handleActivation() }
+      MainActor.assumeIsolated { self.handleActivation() }
     }
     KeyboardOnboardingController.shared.showIfNeeded { [weak self] in
       Logger.info("KeyboardNavigation permissions granted", logger: Logger.pluginLifecycle)

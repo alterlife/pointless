@@ -1,6 +1,40 @@
 import AppKit
+import OSLog
 
 extension NavigationSession {
+  func beginScroll() {
+    mode = .scanning
+    installEventTap()
+    discovery.scan(mode: .scrollable) { [weak self] elements in
+      guard let self, !self.ended else { return }
+      let screenBounds = NSScreen.screens.reduce(CGRect.null) { $0.union($1.frame) }
+      let viable = elements.filter { elem in
+        let frame = elem.screenFrame
+        return frame.width >= 50 && frame.height >= 50 && screenBounds.intersects(frame)
+      }
+      guard !viable.isEmpty else {
+        Logger.warning("No scrollable elements found in focused window", logger: Logger.pluginLifecycle)
+        self.end()
+        showEmptyHint("No scrollable areas found")
+        return
+      }
+      let byPosition = viable.sortedByPosition()
+      let withScrollEvidence = byPosition.filter { $0.element.hasScrollIndicators }
+      let withoutScrollEvidence = byPosition.filter { !$0.element.hasScrollIndicators }
+      let sorted = withScrollEvidence + withoutScrollEvidence
+      let mousePos = NSEvent.mouseLocation
+      let startIndex = sorted.firstIndex { $0.screenFrame.contains(mousePos) } ?? 0
+      self.rebuildOverlayWindows()
+      if sorted.count > 1 {
+        self.warpCursor(to: sorted[startIndex])
+      }
+      self.overlayState.scrollTargetFrame = sorted[startIndex].screenFrame
+      self.mode = .scrolling(targets: sorted, currentIndex: startIndex)
+      self.overlayWindows.forEach { $0.show(fadeDuration: self.config.fadeInDuration) }
+      self.scheduleScrollHint()
+    }
+  }
+
   func handleScrollKey(_ event: NSEvent, targets: [NavigationTarget], currentIndex: Int) {
     scheduleScrollHint()
     if eventMatchesHotkey(event, keyCode: config.scrollNext.keyCode, modifiers: config.scrollNext.modifiers) {
