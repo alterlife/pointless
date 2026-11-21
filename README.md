@@ -1,7 +1,7 @@
 # Pointless
 
 <p align="center">
-  <img src="Packaging/Pointless.icns" width="128" height="128" alt="Pointless Logo" />
+  <img src="docs/images/icon.png" width="128" height="128" alt="Pointless Logo" />
 </p>
 
 <h3 align="center">Cursor-Free macOS Navigation</h3>
