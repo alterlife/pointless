@@ -37,11 +37,11 @@ final class KeyboardNavigation: NSObject, ObservableObject {
   @Published var fadeInDuration = 0.08
   @Published var scrollSpeed = 1.0
   @Published var labelStrategy = "Homerow Keys"
-  @Published var gridModifierChoice = "Option"
+  @Published var gridSwitchShortcutDisplay = "Tab"
   @Published var gridKeyClusterChoice = "Right Hand"
   @Published var gridAutoClick = true
   @Published var gridMaxLevelsChoice = "4 Levels"
-  var gridModifierFlags: NSEvent.ModifierFlags = .option
+  var gridSwitchShortcut = ParsedShortcut(modifiers: [], keyCode: 48)  // Tab
   var gridLetters: [Character] = LabelGenerator.rightHandGridLetters
   var gridMaxLevel: Int = 4
 
@@ -140,7 +140,7 @@ final class KeyboardNavigation: NSObject, ObservableObject {
           ? .useClickableElementText : .useHomeRowKeys,
         scrollNext: scrollNextHotkey,
         scrollPrev: scrollPrevHotkey,
-        gridModifier: gridModifierFlags,
+        gridSwitchShortcut: gridSwitchShortcut,
         gridLetters: gridLetters,
         gridMaxLevel: gridMaxLevel,
         gridAutoClick: gridAutoClick
