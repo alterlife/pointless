@@ -87,7 +87,7 @@ struct OverlayContentView: View {
     return ZStack {
       Canvas { ctx, size in
         if let region = state.gridRegion {
-          drawGrid(region, in: &ctx)
+          drawGrid(region, hintFrame: hint, in: &ctx)
         } else {
           let onScreen = state.labeledElements.filter {
             badgeScreen(for: $0.element.screenFrame, among: allScreenFrames) == screen.frame
@@ -204,7 +204,7 @@ struct OverlayContentView: View {
     )
   }
 
-  private func measureBadge(label: String, context: GraphicsContext) -> CGSize {
+  func measureBadge(label: String, context: GraphicsContext) -> CGSize {
     let text = Text(label)
       .font(.system(size: state.badgeFontSize, weight: .bold, design: .monospaced))
     let resolved = context.resolve(text)
@@ -212,7 +212,7 @@ struct OverlayContentView: View {
     return CGSize(width: measured.width + 8, height: measured.height + 4)
   }
 
-  private func drawConnector(
+  func drawConnector(
     anchor: CGPoint,
     center: CGPoint,
     alpha: Double,
@@ -225,12 +225,12 @@ struct OverlayContentView: View {
     context.stroke(path, with: .color(state.badgeColor.opacity(alpha * 0.6)), lineWidth: 1.5)
   }
 
-  private func drawDot(at anchor: CGPoint, color: Color, context: inout GraphicsContext) {
+  func drawDot(at anchor: CGPoint, color: Color, context: inout GraphicsContext) {
     let dotRect = CGRect(center: anchor, size: CGSize(width: 6, height: 6))
     context.fill(Path(ellipseIn: dotRect), with: .color(color))
   }
 
-  private func drawBadge(
+  func drawBadge(
     rect: CGRect,
     color: Color,
     label: String,
@@ -243,7 +243,7 @@ struct OverlayContentView: View {
     context.draw(badgeText(label: label, alpha: alpha), at: rect.center)
   }
 
-  private func badgeText(label: String, alpha: Double) -> Text {
+  func badgeText(label: String, alpha: Double) -> Text {
     let font = Font.system(size: state.badgeFontSize, weight: .bold, design: .monospaced)
     let typed = state.typedPrefix
     guard !typed.isEmpty, label.hasPrefix(typed), typed.count < label.count else {

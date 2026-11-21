@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Zone Grid Drawing
 
 extension OverlayContentView {
-  func drawGrid(_ region: CGRect, in context: inout GraphicsContext) {
+  func drawGrid(_ region: CGRect, hintFrame: CGRect?, in context: inout GraphicsContext) {
     guard screen.frame.intersects(region) else { return }
     let rect = CGRect(
       x: region.minX - screen.frame.minX,
@@ -19,6 +19,11 @@ extension OverlayContentView {
     let isUpperLevel = state.gridPathPrefix.isEmpty
     let canSubdivide = isUpperLevel && (state.gridMaxLevel >= 2)
     let isFinalLevel = (state.gridPathPrefix.count + 1 >= state.gridMaxLevel)
+
+    if isFinalLevel {
+      drawFinalLevelGrid(region, hintFrame: hintFrame, in: &context)
+      return
+    }
 
     for qIdx in 0..<min(9, state.gridLetters.count) {
       let cell = NavigationSession.gridCell(qIdx, in: region)
@@ -48,8 +53,6 @@ extension OverlayContentView {
           let label = "\(qChar)\(sChar)"
           drawGridTag(label: label, center: subRect.center, in: &context)
         }
-      } else if isFinalLevel {
-        drawFinalLevelCell(qIdx: qIdx, qChar: qChar, cellRect: cellRect, in: &context)
       } else {
         let label = String(qChar)
         drawGridTag(label: label, center: cellRect.center, maxHeight: cellRect.height, in: &context)
@@ -57,66 +60,53 @@ extension OverlayContentView {
     }
   }
 
-  private func drawFinalLevelCell(
-    qIdx: Int,
-    qChar: Character,
-    cellRect: CGRect,
+  private func drawFinalLevelGrid(
+    _ region: CGRect,
+    hintFrame: CGRect?,
     in context: inout GraphicsContext
   ) {
-    let label = String(qChar)
-    let anchor = cellRect.center
-    let badgeSize = measureGridTag(label: label, maxHeight: cellRect.height, context: context)
-    let badgeCenter = finalLevelBadgeCenter(for: qIdx, in: cellRect, badgeSize: badgeSize)
+    let count = min(9, state.gridLetters.count)
 
-    if state.showConnectorLines {
-      var connector = Path()
-      connector.move(to: anchor)
-      connector.addLine(to: badgeCenter)
-      context.stroke(connector, with: .color(state.badgeColor.opacity(0.7)), lineWidth: 1.2)
+    // Spatial cell dividers
+    for qIdx in 0..<count {
+      let cell = NavigationSession.gridCell(qIdx, in: region)
+      let cellRect = CGRect(
+        x: cell.minX - screen.frame.minX,
+        y: screen.frame.maxY - cell.maxY,
+        width: cell.width,
+        height: cell.height
+      ).insetBy(dx: 1, dy: 1)
+      let cellPath = Path(cellRect)
+      context.stroke(cellPath, with: .color(.black.opacity(0.35)), lineWidth: 1.5)
+      context.stroke(cellPath, with: .color(state.badgeColor.opacity(0.5)), lineWidth: 0.75)
     }
 
-    let dotRect = CGRect(center: anchor, size: CGSize(width: 5, height: 5))
-    context.fill(Path(ellipseIn: dotRect), with: .color(state.badgeColor))
-    context.stroke(Path(ellipseIn: dotRect), with: .color(.black.opacity(0.6)), lineWidth: 0.75)
-
-    drawGridTag(label: label, center: badgeCenter, maxHeight: cellRect.height, in: &context)
-  }
-
-  private func finalLevelBadgeCenter(for qIdx: Int, in cellRect: CGRect, badgeSize: CGSize) -> CGPoint {
-    let col = qIdx % 3
-    let row = qIdx / 3
-
-    let badgeX: CGFloat
-    switch col {
-    case 0:
-      badgeX = cellRect.minX + badgeSize.width / 2 + 2
-    case 2:
-      badgeX = cellRect.maxX - badgeSize.width / 2 - 2
-    default:
-      badgeX = (row == 1) ? (cellRect.minX + badgeSize.width / 2 + 2) : cellRect.midX
+    // Labelled points using the canonical placeBadges placement engine
+    let anchors: [CGPoint] = (0..<count).map { qIdx in
+      let cell = NavigationSession.gridCell(qIdx, in: region)
+      return CGPoint(
+        x: cell.midX - screen.frame.minX,
+        y: screen.frame.maxY - cell.midY
+      )
     }
+    let labels: [String] = (0..<count).map { String(state.gridLetters[$0]) }
+    let badgeSizes = labels.map { measureBadge(label: $0, context: context) }
+    let badgeRects = placeBadges(
+      anchors: anchors,
+      badgeSizes: badgeSizes,
+      viewSize: screen.frame.size,
+      topInset: 0,
+      reservedRects: hintFrame.map { [$0] } ?? []
+    )
 
-    let badgeY: CGFloat
-    switch row {
-    case 0:
-      badgeY = cellRect.minY + badgeSize.height / 2 + 2
-    case 2:
-      badgeY = cellRect.maxY - badgeSize.height / 2 - 2
-    default:
-      badgeY = cellRect.minY + badgeSize.height / 2 + 2
+    for index in 0..<count {
+      let anchor = anchors[index]
+      let badgeRect = badgeRects[index]
+      let label = labels[index]
+      drawConnector(anchor: anchor, center: badgeRect.center, alpha: 1.0, context: &context)
+      drawDot(at: anchor, color: state.badgeColor, context: &context)
+      drawBadge(rect: badgeRect, color: state.badgeColor, label: label, alpha: 1.0, context: &context)
     }
-
-    return CGPoint(x: badgeX, y: badgeY)
-  }
-
-  private func measureGridTag(label: String, maxHeight: CGFloat?, context: GraphicsContext) -> CGSize {
-    let baseFontSize = state.badgeFontSize
-    let fontSize = maxHeight.map { min(baseFontSize, max(8, $0 * 0.5)) } ?? baseFontSize
-    let font = Font.system(size: fontSize, weight: .bold, design: .monospaced)
-    let text = Text(label).font(font)
-    let resolved = context.resolve(text)
-    let measured = resolved.measure(in: CGSize(width: 100, height: 50))
-    return CGSize(width: measured.width + 8, height: measured.height + 4)
   }
 
   private func drawGridTag(
@@ -125,14 +115,12 @@ extension OverlayContentView {
     maxHeight: CGFloat? = nil,
     in context: inout GraphicsContext
   ) {
-    let size = measureGridTag(label: label, maxHeight: maxHeight, context: context)
+    let size = measureBadge(label: label, context: context)
     let rect = CGRect(center: center, size: size)
     let path = Path(roundedRect: rect, cornerRadius: 4)
     context.fill(path, with: .color(state.badgeColor))
     context.stroke(path, with: .color(state.textColor.opacity(0.35)), lineWidth: 1)
-    let baseFontSize = state.badgeFontSize
-    let fontSize = maxHeight.map { min(baseFontSize, max(8, $0 * 0.5)) } ?? baseFontSize
-    let font = Font.system(size: fontSize, weight: .bold, design: .monospaced)
+    let font = Font.system(size: state.badgeFontSize, weight: .bold, design: .monospaced)
     let text = Text(label).font(font).foregroundColor(state.textColor)
     context.draw(text, at: rect.center)
   }
