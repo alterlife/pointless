@@ -73,7 +73,7 @@ final class NavigationSession {
   var pendingScroll: Int32 = 0
   var scrollGestureActive = false
 
-  private static let clickHintKey = "navigation.clickHintDismissed"
+  static let clickHintKey = "navigation.clickHintDismissed"
   private static let clickHintDuration: Double = 5
   private var eventTap: CFMachPort?
   private var ended = false
@@ -97,6 +97,8 @@ final class NavigationSession {
   func beginClick() {
     rebuildOverlayWindows()
     badgesShown = false
+    mode = .scanning
+    installEventTap()
     overlayState.clickHintDismissed = UserDefaults.standard.bool(forKey: Self.clickHintKey)
     clickHintWorkItem?.cancel()
     if !overlayState.clickHintDismissed {
@@ -117,9 +119,12 @@ final class NavigationSession {
         return
       }
       self.applySnapshot(elements)
-      self.showBadges()
       self.mode = .click(typedSoFar: "")
-      self.installEventTap()
+      if !self.bufferedKeyEvents.isEmpty {
+        self.replayBufferedKeys()
+        if self.ended { return }
+      }
+      self.showBadges()
       Logger.debug(
         "Labels: \(self.labeledElements.count) elements",
         logger: Logger.pluginLifecycle
@@ -146,7 +151,7 @@ final class NavigationSession {
     )
     labeledElements = labeled
     overlayState.labeledElements = labeled
-    overlayState.typedPrefix = ""
+    overlayState.typedPrefix = bufferedPrefix
   }
 
   private func showBadges() {
@@ -158,6 +163,8 @@ final class NavigationSession {
   // MARK: - Scroll mode
 
   func beginScroll() {
+    mode = .scanning
+    installEventTap()
     discovery.scan(mode: .scrollable) { [weak self] elements in
       guard let self, !self.ended else { return }
       let screenBounds = NSScreen.screens.reduce(CGRect.null) { $0.union($1.frame) }
@@ -184,12 +191,13 @@ final class NavigationSession {
       self.overlayState.scrollTargetFrame = sorted[startIndex].screenFrame
       self.mode = .scrolling(targets: sorted, currentIndex: startIndex)
       self.overlayWindows.forEach { $0.show(fadeDuration: self.config.fadeInDuration) }
-      self.installEventTap()
       self.scheduleScrollHint()
     }
   }
 
   // MARK: - Key handling
+
+  private var bufferedKeyEvents: [NSEvent] = []
 
   func handleKey(_ event: NSEvent) {
     switch mode {
@@ -198,14 +206,52 @@ final class NavigationSession {
     case .scrolling(let targets, let currentIndex):
       handleScrollKey(event, targets: targets, currentIndex: currentIndex)
     case .scanning:
-      break
+      handleScanningKey(event)
+    }
+  }
+
+  private func handleScanningKey(_ event: NSEvent) {
+    switch event.keyCode {
+    case 53:  // ESC
+      end()
+    case 51:  // Backspace
+      if !bufferedKeyEvents.isEmpty {
+        bufferedKeyEvents.removeLast()
+        updateBufferedPrefix()
+      }
+    default:
+      if handleGridKey(event) { return }
+      guard let char = event.charactersIgnoringModifiers?.lowercased().first,
+            LabelGenerator.priorityKeys.contains(char) ||
+            config.gridLetters.contains(char) else { return }
+      bufferedKeyEvents.append(event)
+      updateBufferedPrefix()
+    }
+  }
+
+  private func updateBufferedPrefix() {
+    overlayState.typedPrefix = bufferedPrefix
+  }
+
+  private var bufferedPrefix: String {
+    bufferedKeyEvents.compactMap {
+      $0.charactersIgnoringModifiers?.lowercased().first
+    }.map(String.init).joined()
+  }
+
+  private func replayBufferedKeys() {
+    let events = bufferedKeyEvents
+    bufferedKeyEvents = []
+    for event in events {
+      guard !ended else { break }
+      handleKey(event)
     }
   }
 
   func handleFlagsChanged(_ event: NSEvent) {
     overlayState.revealElementText = event.modifierFlags.contains(.command)
     if event.modifierFlags.contains(config.gridModifier) {
-      if case .click = mode { startGrid() }
+      if case .scrolling = mode { } else { startGrid() }
     } else {
       clearGrid()
     }
@@ -249,62 +295,6 @@ final class NavigationSession {
     mode = .click(typedSoFar: prefix)
     overlayState.typedPrefix = prefix
     overlayState.clickHintDismissed = true
-  }
-
-  // MARK: - Element activation
-
-  private func activate(_ labeled: LabeledElement) {
-    UserDefaults.standard.set(true, forKey: Self.clickHintKey)
-    let element = labeled.element.element
-    let center = labeled.element.screenFrame.center
-    let clickPoint = cgPoint(fromAppKit: center)
-    onJump()
-    end()
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-      self.warpCursor(to: labeled.element)
-      // AXPress beats a synthetic click — some apps ignore clicks at frame centers.
-      if element.performPress() { return }
-      Self.postClick(at: Self.unobscuredClickPoint(for: labeled.element) ?? clickPoint)
-    }
-  }
-
-  private static func unobscuredClickPoint(for discovered: NavigationTarget) -> CGPoint? {
-    guard let app = AXElement.frontmostApplication() else { return nil }
-    let frame = discovered.screenFrame
-    let candidates: [(CGFloat, CGFloat)] = [
-      (0.5, 0.5), (0.5, 0.3), (0.5, 0.7), (0.3, 0.5), (0.7, 0.5),
-      (0.3, 0.3), (0.7, 0.3), (0.3, 0.7), (0.7, 0.7)
-    ]
-    var centerPoint: CGPoint?
-    for (xFraction, yFraction) in candidates {
-      // AX hit-test and CGEvent both take top-left-origin global coords.
-      let point = cgPoint(fromAppKit: CGPoint(
-        x: frame.minX + frame.width * xFraction,
-        y: frame.minY + frame.height * yFraction
-      ))
-      if centerPoint == nil { centerPoint = point }
-      guard let hit = app.elementAt(axX: point.x, axY: point.y) else { continue }
-      if hit.isSameElement(as: discovered.element) || hit.isDescendant(of: discovered.element) {
-        return point
-      }
-    }
-    return centerPoint
-  }
-
-  static func postClick(at point: CGPoint) {
-    CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
-            mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
-    usleep(10_000)
-    CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
-            mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
-  }
-
-  static func postRightClick(at point: CGPoint) {
-    CGEvent(mouseEventSource: nil, mouseType: .rightMouseDown,
-            mouseCursorPosition: point, mouseButton: .right)?.post(tap: .cghidEventTap)
-    usleep(10_000)
-    CGEvent(mouseEventSource: nil, mouseType: .rightMouseUp,
-            mouseCursorPosition: point, mouseButton: .right)?.post(tap: .cghidEventTap)
   }
 
   // MARK: - Overlay windows
@@ -357,6 +347,7 @@ final class NavigationSession {
   func end() {
     guard !ended else { return }
     ended = true
+    bufferedKeyEvents = []
     discovery.cancel()
     removeEventTap()
     overlayWindows.forEach { $0.hide() }
