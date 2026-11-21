@@ -28,7 +28,7 @@ final class DiscoveryState {
   var visitedCount = 0
   var roleCount: [String: Int] = [:]
 
-  var discoveredCount: Int { results.count + pressFallbackCandidates.count }
+  var discoveredCount: Int { results.count }
   var pressableRatio: Double {
     fallbackEligibleCount > 0 ? Double(pressableCount) / Double(fallbackEligibleCount) : 0
   }
@@ -139,7 +139,7 @@ struct ElementTreeWalker {
     discovered.text = node.text ?? ""
     if roleMatched {
       state.results.append(discovered)
-    } else {
+    } else if state.pressFallbackCandidates.count < Self.maxElements {
       state.pressFallbackCandidates.append(discovered)
     }
   }

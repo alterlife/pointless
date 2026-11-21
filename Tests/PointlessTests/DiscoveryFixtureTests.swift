@@ -248,6 +248,49 @@ final class DiscoveryFixtureTests: XCTestCase {
     XCTAssertTrue(state.results.allSatisfy { $0.role == "AXButton" })
   }
 
+  func testFocusedElementFallbackFindsWebAreaAboveScrollArea() {
+    let brokenWindow = FixtureAXNode(role: "AXWindow", frame: windowFrame)
+    let webArea = FixtureAXNode(role: "AXWebArea", frame: windowFrame)
+    let feedScrollArea = FixtureAXNode(role: "AXScrollArea", frame: CGRect(x: 0, y: 0, width: 600, height: 800))
+    let focusedButton = FixtureAXNode(role: "AXButton", frame: CGRect(x: 10, y: 10, width: 80, height: 30))
+    feedScrollArea.add(focusedButton)
+
+    let rightPanel = FixtureAXNode(role: "AXGroup", frame: CGRect(x: 600, y: 0, width: 400, height: 800))
+    let rightPanelButton = FixtureAXNode(role: "AXButton", frame: CGRect(x: 610, y: 10, width: 80, height: 30))
+    rightPanel.add(rightPanelButton)
+
+    webArea.add(feedScrollArea)
+    webArea.add(rightPanel)
+    brokenWindow.add(webArea)
+
+    let app = FixtureAXNode(role: "AXApplication")
+    app.focusedUIElement = focusedButton
+
+    let ctx = context(app: app, window: brokenWindow)
+    let state = DiscoveryState()
+    let fallback = FocusedElementFallbackPass()
+    XCTAssertTrue(fallback.shouldRun(state: state, context: ctx))
+    fallback.run(state: state, context: ctx)
+
+    XCTAssertEqual(state.results.count, 2)
+    XCTAssertTrue(state.results.contains { $0.element.isSameElement(as: focusedButton) })
+    XCTAssertTrue(state.results.contains { $0.element.isSameElement(as: rightPanelButton) })
+  }
+
+  func testPressCandidatesDoNotStarveRoleMatchedDiscoveries() {
+    let window = FixtureAXNode(role: "AXWindow", frame: windowFrame)
+    for i in 0..<500 {
+      let group = FixtureAXNode(role: "AXGroup", frame: CGRect(x: 10, y: 10 + i * 2, width: 100, height: 2))
+      group.supportsPress = true
+      window.add(group)
+    }
+    let rightPanelButton = FixtureAXNode(role: "AXButton", frame: CGRect(x: 800, y: 50, width: 100, height: 30))
+    window.add(rightPanelButton)
+
+    let (state, _) = scan(window: window)
+    XCTAssertTrue(state.results.contains { $0.element.isSameElement(as: rightPanelButton) })
+  }
+
   func testFocusedElementFallbackSkipsWhenWindowIsHealthy() {
     let window = FixtureAXNode(role: "AXWindow", frame: windowFrame)
     for i in 0..<6 { window.add(button(CGRect(x: 10, y: 10 + i * 40, width: 80, height: 30))) }
