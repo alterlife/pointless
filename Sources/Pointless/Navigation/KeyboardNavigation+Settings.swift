@@ -120,6 +120,7 @@ extension KeyboardNavigation {
     if let levels = values["gridMaxLevels"] as? String {
       gridMaxLevelsChoice = levels
       gridMaxLevel = levels.hasPrefix("3") ? 3 : 4
+      overlayState.gridMaxLevel = gridMaxLevel
     }
   }
 

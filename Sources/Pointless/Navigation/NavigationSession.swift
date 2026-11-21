@@ -263,6 +263,7 @@ final class NavigationSession {
 
   var isDragArmed = false
   var gridRegions: [CGRect] = []
+  var gridPath: [Character] = []
 
   private func handleClickKey(_ event: NSEvent, prefix: String) {
     if !gridRegions.isEmpty {
@@ -361,6 +362,8 @@ final class NavigationSession {
     overlayWindows = []
     overlayState.labeledElements = []
     overlayState.gridRegion = nil
+    overlayState.gridBreadcrumb = ""
+    overlayState.gridPathPrefix = ""
     overlayState.typedPrefix = ""
     overlayState.revealElementText = false
     overlayState.scrollTargetFrame = nil

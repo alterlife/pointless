@@ -152,4 +152,88 @@ final class GridModeTests: XCTestCase {
 
     session.end()
   }
+
+  func testGridBreadcrumbFormatting() {
+    XCTAssertEqual(NavigationSession.formatBreadcrumb(path: [], maxLevel: 4), "[ · · · · ]")
+    XCTAssertEqual(NavigationSession.formatBreadcrumb(path: ["u"], maxLevel: 4), "[ u · · · ]")
+    XCTAssertEqual(NavigationSession.formatBreadcrumb(path: ["u", "j"], maxLevel: 4), "[ u j · · ]")
+    XCTAssertEqual(NavigationSession.formatBreadcrumb(path: ["u", "j", "k"], maxLevel: 4), "[ u j k · ]")
+    XCTAssertEqual(NavigationSession.formatBreadcrumb(path: ["u", "j", "k", "l"], maxLevel: 4), "[ u j k l ]")
+
+    XCTAssertEqual(NavigationSession.formatBreadcrumb(path: [], maxLevel: 3), "[ · · · ]")
+    XCTAssertEqual(NavigationSession.formatBreadcrumb(path: ["i"], maxLevel: 3), "[ i · · ]")
+    XCTAssertEqual(NavigationSession.formatBreadcrumb(path: ["i", "k"], maxLevel: 3), "[ i k · ]")
+    XCTAssertEqual(NavigationSession.formatBreadcrumb(path: ["i", "k", "m"], maxLevel: 3), "[ i k m ]")
+  }
+
+  @MainActor
+  func testGridBreadcrumbSessionTracking() {
+    let state = OverlayState()
+    let config = NavigationSession.Config(
+      fadeInDuration: 0,
+      scrollSpeed: 1,
+      labelStrategy: .useHomeRowKeys,
+      scrollNext: ParsedShortcut(modifiers: [], keyCode: 38),
+      scrollPrev: ParsedShortcut(modifiers: [], keyCode: 40),
+      gridSwitchShortcut: ParsedShortcut(modifiers: [], keyCode: 48),
+      gridLetters: LabelGenerator.rightHandGridLetters,
+      gridMaxLevel: 4,
+      gridAutoClick: false
+    )
+    let session = NavigationSession(
+      overlayState: state,
+      config: config,
+      onScanCompleted: { _ in },
+      onJump: {},
+      onEnded: {}
+    )
+
+    let tabEvent = NSEvent.keyEvent(
+      with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+      windowNumber: 0, context: nil, characters: "\t", charactersIgnoringModifiers: "\t",
+      isARepeat: false, keyCode: 48
+    )!
+    let uKey = NSEvent.keyEvent(
+      with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+      windowNumber: 0, context: nil, characters: "u", charactersIgnoringModifiers: "u",
+      isARepeat: false, keyCode: 32
+    )!
+    let jKey = NSEvent.keyEvent(
+      with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+      windowNumber: 0, context: nil, characters: "j", charactersIgnoringModifiers: "j",
+      isARepeat: false, keyCode: 38
+    )!
+    let backspace = NSEvent.keyEvent(
+      with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+      windowNumber: 0, context: nil, characters: "\u{7F}", charactersIgnoringModifiers: "\u{7F}",
+      isARepeat: false, keyCode: 51
+    )!
+
+    session.handleKey(tabEvent)
+    XCTAssertEqual(state.gridBreadcrumb, "[ · · · · ]")
+    XCTAssertEqual(state.gridPathPrefix, "")
+    XCTAssertEqual(session.gridPath, [])
+
+    session.handleKey(uKey)
+    XCTAssertEqual(state.gridBreadcrumb, "[ u · · · ]")
+    XCTAssertEqual(state.gridPathPrefix, "u")
+    XCTAssertEqual(session.gridPath, ["u"])
+
+    session.handleKey(jKey)
+    XCTAssertEqual(state.gridBreadcrumb, "[ u j · · ]")
+    XCTAssertEqual(state.gridPathPrefix, "uj")
+    XCTAssertEqual(session.gridPath, ["u", "j"])
+
+    session.handleKey(backspace)
+    XCTAssertEqual(state.gridBreadcrumb, "[ u · · · ]")
+    XCTAssertEqual(state.gridPathPrefix, "u")
+    XCTAssertEqual(session.gridPath, ["u"])
+
+    session.handleKey(tabEvent)
+    XCTAssertEqual(state.gridBreadcrumb, "")
+    XCTAssertEqual(state.gridPathPrefix, "")
+    XCTAssertEqual(session.gridPath, [])
+
+    session.end()
+  }
 }
