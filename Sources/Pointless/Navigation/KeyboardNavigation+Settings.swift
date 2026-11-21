@@ -17,19 +17,8 @@ extension KeyboardNavigation {
     .hotkey(key: "scrollNextHotkey", label: "Scroll / Next Area", defaultValue: "⌘⇧J"),
     .hotkey(key: "scrollPrevHotkey", label: "Previous Scroll Area", defaultValue: "⌘⇧K"),
     .slider(key: "scrollSpeed", label: "Scroll Speed", range: 0.25...4, defaultValue: 1, step: 0.25),
-    .section(label: "Pointer Mode", description: "Hold a modifier during a session for pointer controls"),
-    .choice(
-      key: "gridModifier", label: "Grid Modifier",
-      options: [
-        (title: "Option",
-         detail: "Hold ⌥ — the default; never conflicts with label typing."),
-        (title: "Command",
-         detail: "Hold ⌘ — replaces the hold-to-highlight gesture while the grid is up."),
-        (title: "Globe",
-         detail: "Hold 🌐 (fn) — leaves ⌥ and ⌘ free for their usual roles.")
-      ],
-      defaultValue: "Option"
-    ),
+    .section(label: "Zone Mode", description: "Cursor-free 3×3 grid navigation anywhere on screen"),
+    .hotkey(key: "gridSwitchHotkey", label: "Switch Zone / Label Mode", defaultValue: "Tab"),
     .choice(
       key: "gridKeyCluster", label: "Grid Keys",
       options: [
@@ -111,10 +100,14 @@ extension KeyboardNavigation {
   }
 
   private func applyGridSettings(_ values: [String: Any]) {
-    if let modifier = values["gridModifier"] as? String {
-      gridModifierChoice = modifier
-      gridModifierFlags = Self.modifierFlags(for: modifier)
-      overlayState.gridModifierHint = Self.modifierSymbol(for: modifier)
+    if let shortcut = values["gridSwitchHotkey"] as? String {
+      gridSwitchShortcutDisplay = shortcut
+      gridSwitchShortcut = parseShortcutString(shortcut)
+      overlayState.gridSwitchShortcutHint = shortcut
+    } else {
+      gridSwitchShortcutDisplay = "Tab"
+      gridSwitchShortcut = parseShortcutString("Tab")
+      overlayState.gridSwitchShortcutHint = "Tab"
     }
     if let cluster = values["gridKeyCluster"] as? String {
       gridKeyClusterChoice = cluster
@@ -127,22 +120,6 @@ extension KeyboardNavigation {
     if let levels = values["gridMaxLevels"] as? String {
       gridMaxLevelsChoice = levels
       gridMaxLevel = levels.hasPrefix("3") ? 3 : 4
-    }
-  }
-
-  private static func modifierFlags(for choice: String) -> NSEvent.ModifierFlags {
-    switch choice {
-    case "Command": return .command
-    case "Globe": return .function
-    default: return .option
-    }
-  }
-
-  private static func modifierSymbol(for choice: String) -> String {
-    switch choice {
-    case "Command": return "⌘"
-    case "Globe": return "🌐"
-    default: return "⌥"
     }
   }
 
