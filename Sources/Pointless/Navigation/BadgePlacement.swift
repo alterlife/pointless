@@ -218,14 +218,15 @@ private func centerGridBadgeCandidates(
   let gridRect = context.gridRect
   let margin = context.margin
   return [
-    CGPoint(x: gridRect.midX - badgeSize.width / 2, y: gridRect.minY - (badgeSize.height + margin) * 2),
-    CGPoint(x: gridRect.midX - badgeSize.width / 2, y: gridRect.maxY + margin * 2 + badgeSize.height),
-    CGPoint(x: gridRect.maxX + margin * 2 + badgeSize.width, y: anchor.y - badgeSize.height / 2),
-    CGPoint(x: gridRect.minX - (badgeSize.width + margin) * 2, y: anchor.y - badgeSize.height / 2),
-    CGPoint(x: gridRect.minX - badgeSize.width - margin, y: gridRect.minY - (badgeSize.height + margin) * 2),
-    CGPoint(x: gridRect.maxX + margin, y: gridRect.maxY + margin * 2 + badgeSize.height),
-    CGPoint(x: gridRect.maxX + margin, y: gridRect.maxY + margin),
-    CGPoint(x: gridRect.maxX + margin * 2 + badgeSize.width, y: gridRect.maxY + margin)
+    // Off-axis positions: angled away from cardinal (1, 3, 5, 7) and diagonal lines so lines never meld
+    CGPoint(x: gridRect.midX + badgeSize.width / 2 + 4, y: gridRect.minY - (badgeSize.height + margin) * 2),
+    CGPoint(x: gridRect.midX - badgeSize.width * 1.5 - 4, y: gridRect.minY - (badgeSize.height + margin) * 2),
+    CGPoint(x: gridRect.midX + badgeSize.width / 2 + 4, y: gridRect.maxY + margin * 2 + badgeSize.height),
+    CGPoint(x: gridRect.midX - badgeSize.width * 1.5 - 4, y: gridRect.maxY + margin * 2 + badgeSize.height),
+    CGPoint(x: gridRect.maxX + margin * 2 + badgeSize.width, y: anchor.y - badgeSize.height - 4),
+    CGPoint(x: gridRect.maxX + margin * 2 + badgeSize.width, y: anchor.y + 4),
+    CGPoint(x: gridRect.minX - (badgeSize.width + margin) * 2, y: anchor.y - badgeSize.height - 4),
+    CGPoint(x: gridRect.minX - (badgeSize.width + margin) * 2, y: anchor.y + 4)
   ]
 }
 
