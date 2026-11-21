@@ -14,29 +14,25 @@ While **Label Mode** works exceptionally well for applications that expose stand
 - Video players, media timelines, and interactive streaming windows.
 - Custom game GUIs and legacy cross-platform UI frameworks.
 
-**Zone Mode** provides zero-dependency spatial navigation across every pixel of your displays. It divides the screen into a 3×3 recursive spatial grid that lets you drill down to any target with rapid keystrokes.
+**Zone Mode** operates on screen coordinates without relying on accessibility data. It divides the screen into a 3×3 recursive spatial grid to drill down to any target with keystrokes.
 
 ---
 
 ## Key Features
 
-### 1. Two-Letter Lookahead Discoverability
-A common problem with hierarchical grid tools is that sub-levels are hidden until a region is selected. Users have to guess where sub-regions lie or hesitate before committing to a keystroke.
+### 1. Two-Letter Lookahead
+Each quadrant (e.g., cell `k`) displays:
+- A primary key for the quadrant (`K`).
+- Nine lookahead hints for the sub-quadrants inside it (`ku`, `ki`, `ko`, `kj`, `kk`, `kl`, `km`, `k,`, `k.`).
 
-Zone Mode solves this with **2-Letter Lookahead**:
-- In each top-level quadrant (e.g., cell `k`), Pointless displays:
-  - A prominent primary badge for the quadrant (`K`).
-  - Nine smaller lookahead hints for the sub-quadrants inside it (`ku`, `ki`, `ko`, `kj`, `kk`, `kl`, `km`, `k,`, `k.`).
-- You can immediately see the address of any sub-region before pressing a single key.
+This shows where the next keystroke leads without having to zoom in first.
 
 <p align="center">
   <img src="images/zone-mode-lookahead.png" width="800" alt="Lookahead Detail" />
 </p>
 
-### 2. Typeahead Chording & Instant Bursting
-Because lookahead addresses are visible immediately, you don't have to wait for UI transitions:
-- Pressing two keys rapidly (such as <kbd>k</kbd><kbd>k</kbd> or <kbd>u</kbd><kbd>u</kbd>) immediately zooms directly to the corresponding sub-region.
-- Keys pressed during intermediate rendering passes are buffered and replayed synchronously.
+### 2. Typeahead
+Keys can be typed quickly in sequence (e.g. <kbd>k</kbd><kbd>k</kbd> or <kbd>u</kbd><kbd>u</kbd>) to zoom directly into a sub-region without waiting for intermediate rendering.
 
 ### 3. Breadcrumb HUD
 Throughout the zoom sequence, an unobtrusive floating HUD tracks your navigation address:
@@ -49,10 +45,9 @@ Throughout the zoom sequence, an unobtrusive floating HUD tracks your navigation
 ### 4. Labelled Point Approach on Final Zoom
 When zooming into small screen areas, standard bounding box borders or centered badges often cover the very button, icon, or text input you want to click.
 
-On the final zoom level, Zone Mode switches to Pointless's **labelled point** engine (`placeBadges`):
-- A prominent anchor dot marks the exact center of each of the 9 candidate cells.
-- Badges are offset into the clearest adjacent direction and connected to their anchor dot via high-contrast lines.
-- **The target click surface remains 100% uncovered and visible.**
+On the final zoom level, Zone Mode switches to offset badges (`placeBadges`):
+- An anchor dot marks the center of each of the 9 candidate cells.
+- Badges are offset adjacent to the anchor dot and connected with a line, keeping the target point visible.
 
 <p align="center">
   <img src="images/zone-mode-final.png" width="800" alt="Zone Mode Final Zoom" />

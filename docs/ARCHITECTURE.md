@@ -38,7 +38,7 @@ Sources/Pointless/
 │   ├── NavigationSession+Scrolling.swift# Inertial scrolling state & drain
 │   ├── ElementOverlay.swift      # Borderless fullscreen overlay windows
 │   ├── ElementOverlay+Grid.swift # Zone Mode grid and lookahead canvas rendering
-│   ├── BadgePlacement.swift      # Collision-free badge layout engine
+│   ├── BadgePlacement.swift      # Badge layout and collision avoidance
 │   ├── LabelGenerator.swift      # Pure prefix-free hint label generation
 │   ├── ShortcutParsing.swift     # Hotkey string parsing
 │   └── Discovery/                # Multi-pass element discovery pipeline
@@ -143,21 +143,13 @@ flowchart TD
 
 ---
 
-## 5. Collision-Free Badge Placement Engine
+## 5. Badge Placement Engine
 
-Once targets are discovered, `BadgePlacement.swift` calculates optimal on-screen badge coordinates:
+Once targets are discovered, `BadgePlacement.swift` calculates on-screen badge coordinates:
 
-1. **Anchor Point Selection**: Computes the visual center of the control's bounding box.
-2. **8-Candidate Placement Check**:
-   Evaluates 8 candidate offsets around the anchor in order of preference:
-   - Top-Left, Top-Right, Bottom-Left, Bottom-Right, Top-Center, Bottom-Center, Left-Center, Right-Center.
-3. **Overlap Testing**:
-   Each candidate position is checked against:
-   - The element's own anchor dot.
-   - Screen boundaries (with top inset for the macOS notch and menu bar).
-   - All previously placed badges.
-4. **Connector Line Rendering**:
-   When a badge is placed at an offset, a high-contrast line connects the badge to its anchor dot, ensuring unambiguous targeting even in dense layouts.
+1. **Anchor Point Selection**: Anchors left (with inset) for portrait and square controls, or center for landscape controls.
+2. **Candidate Placement**: Evaluates up to 8 offset positions around the anchor to reduce overlap with other badges, anchors, or screen edges. If all candidates collide, it falls back to the position with the lowest collision count.
+3. **Connector Line**: Connects offset badges to their anchor point with a line.
 
 ---
 

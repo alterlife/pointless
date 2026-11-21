@@ -384,6 +384,19 @@ class MyPlugin: NSObject, ObservableObject, Plugin {
 
 SwiftLint is enforced (see `.swiftlint.yml`).
 
+## Documentation Guidance
+
+1. **Be Honest and Grounded**
+   - Never oversell or make hyperbolic claims.
+   - Accurately describe algorithmic behavior and limitations.
+
+2. **Don't Say Things You Don't Have To**
+   - Avoid marketing buzzwords, self-congratulatory adjectives, and redundant implementation details.
+   - Docs do not need to sell the product or drown the reader in detail — keep explanations direct, clean, and factual.
+
+3. **Reader-First Perspective**
+   - Focus on what the reader or contributor needs to know that cannot be easily deduced from reading the code:
+
 ## Design Documents
 
 - `IMPROVEMENTS.md`: Improvement plan — UX, code cleanliness, maintenance proposals

@@ -7,7 +7,7 @@
 <h3 align="center">Cursor-Free macOS Navigation</h3>
 
 <p align="center">
-  Navigate, click, scroll, and zoom across any macOS application without touching a mouse or trackpad.
+  Keyboard-driven navigation for macOS.
 </p>
 
 <p align="center">
@@ -26,9 +26,9 @@
 Instead of reaching for a mouse or trackpad, Pointless lets you operate any macOS interface entirely through targeted keyboard commands.
 
 It operates in three modes:
-1. **Label Mode (Element Navigation)**: Scans active accessibility trees and generates clean, non-overlapping two-letter badges over every interactive control.
-2. **Zone Mode (Spatial Grid & Lookahead Zoom)**: Subdivides the display into a recursive 3×3 grid with two-letter lookahead discoverability, typeahead chording, and unobscured click targeting.
-3. **Scroll Mode**: Outlines scrollable content areas and drives smooth, momentum-buffered vertical scrolling via `j`/`k` and `d`/`u`.
+1. **Label Mode**: Scans accessibility trees and places lettered badges near interactive controls.
+2. **Zone Mode**: Subdivides the screen into a recursive 3×3 grid for surfaces that lack accessibility trees (e.g. web canvases, video players, games, remote desktops).
+3. **Scroll Mode**: Identifies scrollable areas and scrolls via `j`/`k` or `d`/`u`.
 
 Pointless is built in pure Swift using native AppKit, SwiftUI, CoreGraphics event taps, and the macOS Accessibility (`AXUIElement`) APIs.
 
@@ -36,29 +36,29 @@ Pointless is built in pure Swift using native AppKit, SwiftUI, CoreGraphics even
 
 ## Visual Tour
 
-### 1. Label Mode — Native Control Targeting
-Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Space</kbd> to analyze the screen and generate collision-free target badges linked to clickable controls with anchor dots and connector lines.
+### 1. Label Mode
+Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Space</kbd> to scan the screen and overlay letter badges on clickable controls.
 
 <p align="center">
   <img src="docs/images/label-mode.png" width="850" alt="Pointless Label Mode" />
 </p>
 
-### 2. Zone Mode — 3×3 Spatial Grid with 2-Letter Lookahead
-Press <kbd>Tab</kbd> during navigation to switch into Zone Mode. Pointless overlays a 3×3 spatial grid where each quadrant displays nested two-letter lookahead hints showing exactly where your next keypress leads.
+### 2. Zone Mode
+Press <kbd>Tab</kbd> during navigation to switch into Zone Mode. Pointless overlays a 3×3 grid with lookahead hints showing the next sub-regions.
 
 <p align="center">
   <img src="docs/images/zone-mode-lookahead.png" width="850" alt="Pointless Zone Mode Lookahead" />
 </p>
 
-### 3. Final Zoom Level — Uncovered Click Targets
-On the final zoom level, Zone Mode automatically converts from bounding boxes to offset badges and anchor dots using the canonical badge placement engine. Your target click surface is never obscured by badges.
+### 3. Final Zoom Level
+On the final zoom level, Zone Mode displays offset badges and anchor dots so the click target remains visible.
 
 <p align="center">
   <img src="docs/images/zone-mode-final.png" width="850" alt="Pointless Zone Mode Final Level" />
 </p>
 
-### 4. Comprehensive Settings
-Configure activation shortcuts, grid key clusters, zoom depth, label coloring, and status widgets directly from the native macOS Settings window.
+### 4. Settings
+Configure shortcuts, grid layout, zoom depth, colors, and menu bar widgets in Settings.
 
 <p align="center">
   <img src="docs/images/settings.png" width="700" alt="Pointless Settings Window" />
@@ -68,51 +68,40 @@ Configure activation shortcuts, grid key clusters, zoom depth, label coloring, a
 
 ## Features
 
-### 🎯 Label Mode (Interactive Elements)
-- **Deep Accessibility Tree Traversal**: Multi-pass discovery scans standard buttons, links, inputs, popups, and tab bars.
-- **App-Specific Fallbacks**: Custom passes handle complex web areas (Safari Start Page hit-testing) and broken window hierarchies (Firefox content roots).
-- **Collision-Free Badge Placement**: Evaluates eight candidate placement offsets around anchor points to avoid obscuring controls and colliding with neighboring badges.
-- **Smart Label Generation**:
-  - Automatically provisions single-character labels when target counts are low.
-  - Generates prefix-safe uniform two-letter hints for dense screens.
-  - Option to derive mnemonics directly from control text (e.g., "Save" → `s`).
-- **Cursor Warping & Context Modifiers**:
-  - Hold <kbd>⌃</kbd> while typing a hint to warp the mouse cursor to the element without triggering an immediate click.
-  - Press <kbd>⌃</kbd><kbd>Tab</kbd> to arm drag mode, then type the destination hint to execute a precision drag-and-drop.
-  - Press <kbd>⌃</kbd><kbd>Space</kbd> or <kbd>⌃</kbd><kbd>Return</kbd> for instant left or right click at current cursor coordinates.
-  - Hold <kbd>⌘</kbd> to reveal the full underlying element name and role.
+### Label Mode
+- **Accessibility tree discovery**: Searches for buttons, links, inputs, and controls, with fallbacks for browser-specific trees (e.g. Safari hit-testing, Firefox content roots).
+- **Badge placement**: Evaluates up to 8 offset positions around each anchor point to reduce overlap and keep controls visible.
+- **Adaptive label lengths**: Assigns single-character labels when target count is low (≤ 27), scaling to 2 or 3 characters as target count grows. An optional setting derives hints from control text.
+- **Interaction & Modifiers**:
+  - Typing a label clicks the control immediately (prefers AX action, falls back to synthetic click; no Enter required).
+  - Hold <kbd>⌃</kbd> while typing to move the cursor to the target without clicking.
+  - <kbd>⌃</kbd><kbd>Tab</kbd> sets up drag-and-drop from the cursor to a target label.
+  - Hold <kbd>⌘</kbd> to inspect element titles and roles.
+  - Press <kbd>Esc</kbd> to cancel at any time.
 
-### 🌐 Zone Mode (Spatial Grid & Rapid Zoom)
-- **Zero-Dependency Navigation**: Works on canvas elements, video players, games, remote desktop viewers, maps, and unexposed AX trees.
-- **Ergonomic Key Clusters**:
-  - **Right Hand** (*Default*): `u i o` / `j k l` / `m , .`
-  - **Left Hand**: `q w e` / `a s d` / `z x c`
-  - **Classic Home Row**: `a s d` / `f j k` / `l g h`
-- **2-Letter Lookahead Discoverability**: Every cell displays its primary key alongside all nine nested sub-quadrant addresses, removing guesswork.
-- **Typeahead Chording**: Burst through hierarchies instantly—type `kk` or `ee` rapidly to jump straight into deep sub-quadrants.
-- **Breadcrumb HUD**: Live indicator (`[ k · · · ]` → `[ k k · · ]`) visualizes your navigation depth.
-- **Labelled Point Landing**: Automatically converts from cell borders to offset badges and anchor dots on the deepest level so you can see exactly what you are clicking.
-- **Instant Actions**:
-  - Press <kbd>Space</kbd> to left-click the center of the current zone immediately.
-  - Press <kbd>Return</kbd> to right-click the center of the current zone immediately.
-  - Press <kbd>Backspace</kbd> to zoom out one level.
-  - Press <kbd>Tab</kbd> to toggle back to Label Mode at any time.
+### Zone Mode
+- **Coordinate targeting**: Operates on screen coordinates, useful where accessibility trees are missing (e.g. web canvases, games, remote desktop).
+- **3×3 subdivision**: Narrows down to a target with key clusters (Right-hand default: `u i o` / `j k l` / `m , .`, Left-hand, or Home row).
+- **Lookahead hints**: Shows next-step keys for nested sub-regions. Rapid typing zooms directly without waiting for animations.
+- **Actions**:
+  - <kbd>Space</kbd>: Left-click center of current zone.
+  - <kbd>Return</kbd>: Right-click center of current zone.
+  - <kbd>Backspace</kbd>: Step back up one zoom level.
+  - <kbd>Tab</kbd>: Switch back to Label Mode.
 
-### 📜 Scroll Mode
-- **Automatic Scroll Target Discovery**: Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>J</kbd> or <kbd>⌘</kbd><kbd>⇧</kbd><kbd>K</kbd> to identify active scroll panes and cycle between them.
-- **Buffered Inertial Scrolling**:
-  - <kbd>j</kbd> or <kbd>↓</kbd>: Scroll down.
-  - <kbd>k</kbd> or <kbd>↑</kbd>: Scroll up.
-  - <kbd>d</kbd>: Half-page jump down.
-  - <kbd>u</kbd>: Half-page jump up.
-- **Momentum Drain Timer**: Queued distance drains smoothly across 120Hz display refresh cycles to avoid jerky stepped scrolling.
-- **Configurable Scroll Speed**: Fine-tune scroll multiplier from 0.25× to 4.0×.
+### Scroll Mode
+- **Scroll area targeting**: <kbd>⌘</kbd><kbd>⇧</kbd><kbd>J</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>K</kbd> finds and cycles active scroll panes.
+- **Keyboard scrolling**:
+  - <kbd>j</kbd> / <kbd>↓</kbd>: Scroll down.
+  - <kbd>k</kbd> / <kbd>↑</kbd>: Scroll up.
+  - <kbd>d</kbd> / <kbd>u</kbd>: Half-page down / up.
+- Configurable scroll multiplier (0.25× to 4.0×).
 
-### 🔌 Extensible Plugin Architecture
-- **Non-Intrusive**: Optional monitoring widgets ship disabled by default so the core application stays focused on navigation.
-- **Built-in CPU Monitor**: Real-time multi-core usage graphs and menu bar readouts.
-- **Lifecycle Automation**: Background timers automatically suspend on display sleep and resume upon wake.
-- **External Bundle Support**: Load third-party plugins dynamically from `~/Library/Application Support/Pointless/Plugins/`.
+### Optional Plugins
+- Optional monitoring widgets ship disabled by default.
+- Built-in CPU monitor widget for the menu bar.
+- Background timers pause during display sleep.
+- Supports external plugin bundles in `~/Library/Application Support/Pointless/Plugins/`.
 
 ---
 
