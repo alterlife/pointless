@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release version tag (e.g. v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-release:
+    name: Verify & Publish Release
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag format and release branch
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag_name }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+              echo "Error: Releases triggered via workflow_dispatch must run on main." >&2
+              exit 1
+            fi
+            TAG="${INPUT_TAG}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Tag '$TAG' must follow semantic versioning (e.g. v0.1.0)." >&2
+            exit 1
+          fi
+          echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Lint (strict)
+        run: swiftlint --strict
+
+      - name: Run standalone tests
+        run: swift Tests/run-tests.swift
+
+      - name: Run XCTest suite
+        run: swift test --parallel
+
+      - name: Build Application Bundle
+        run: bash Scripts/make-app.sh "${{ steps.tag.outputs.release_tag }}"
+
+      - name: Build Disk Image and Archive
+        run: bash Scripts/make-dmg.sh "${{ steps.tag.outputs.release_tag }}"
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.release_tag }}"
+          gh release create "$TAG" \
+            build/Pointless.dmg \
+            build/Pointless.zip \
+            build/checksums.txt \
+            --title "Pointless $TAG" \
+            --generate-notes
