@@ -43,13 +43,13 @@ build/Pointless.app/
 ├── Contents/
 │   ├── Info.plist                # Sourced from Packaging/Info.plist
 │   ├── MacOS/
-│   │   └── Pointless             # Compiled release binary (.build/release/Pointless)
+│   │   └── Pointless             # Compiled release binary from $(swift build --show-bin-path)
 │   └── Resources/
 │       └── Pointless.icns        # Sourced from Packaging/Pointless.icns
 ```
 
 ### Bundle Specifications
-- **Executable:** Built with `swift build -c release --arch arm64` (native Apple Silicon).
+- **Executable:** Built with `swift build -c release --arch arm64` (native Apple Silicon). Binary location resolved dynamically via `swift build --show-bin-path`.
 - **Bundle ID:** `com.alterlife.pointless` (defined in `Packaging/Info.plist`).
 - **Accessory App:** `LSUIElement = true` ensures the app docks in the menu bar without appearing in the Dock.
 - **Code Signature:** Ad-hoc signature sealed and verified with:
@@ -65,7 +65,7 @@ build/Pointless.app/
 The disk image is produced by `Scripts/make-dmg.sh` using native macOS tools without third-party dependencies:
 
 1. **Cleanup Trap & Private Mount:**
-   - Registers `trap cleanup EXIT INT TERM` to unmount and remove temporary staging directories on error or interruption.
+   - Registers separated `EXIT`, `INT`, and `TERM` signal traps to unmount and remove temporary staging directories cleanly without double execution.
    - Uses a private temporary mountpoint via `mktemp -d /tmp/pointless-mount.XXXXXX`.
 2. **Staging Directory:**
    - Copies `build/Pointless.app` into staging via `ditto` preserving macOS bundle flags.

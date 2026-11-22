@@ -27,13 +27,15 @@ jobs:
 
       - name: Validate tag format and release branch
         id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag_name }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             if [ "${{ github.ref }}" != "refs/heads/main" ]; then
               echo "Error: Releases triggered via workflow_dispatch must run on main." >&2
               exit 1
             fi
-            TAG="${{ inputs.tag_name }}"
+            TAG="${INPUT_TAG}"
           else
             TAG="${GITHUB_REF_NAME}"
           fi
