@@ -88,7 +88,7 @@ final class ElementDiscovery {
         "in \(Int(Date().timeIntervalSince(passStart) * 1000))ms",
         logger: Logger.pluginLifecycle
       )
-      if let onProgress {
+      if let onProgress, pass.name != "occlusion" {
         let snapshot = Self.deduplicateAndRegroup(state.results, mode: mode)
         Task { @MainActor in onProgress(snapshot) }
       }

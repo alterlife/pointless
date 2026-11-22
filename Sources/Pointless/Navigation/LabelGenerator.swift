@@ -77,8 +77,9 @@ enum LabelGenerator {
     for index in elements.indices where labels[index] == nil {
       labels[index] = pool.next()
     }
-    return zip(elements, labels.compactMap { $0 }).map { elem, lbl in
-      LabeledElement(label: lbl, element: elem)
+    return zip(elements, labels).compactMap { elem, lbl in
+      guard let lbl else { return nil }
+      return LabeledElement(label: lbl, element: elem)
     }
   }
 

@@ -68,17 +68,19 @@ extension NavigationSession {
   static func postClick(at point: CGPoint) {
     CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
             mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
-    usleep(10_000)
-    CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
-            mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+      CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
+              mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+    }
   }
 
   static func postRightClick(at point: CGPoint) {
     CGEvent(mouseEventSource: nil, mouseType: .rightMouseDown,
             mouseCursorPosition: point, mouseButton: .right)?.post(tap: .cghidEventTap)
-    usleep(10_000)
-    CGEvent(mouseEventSource: nil, mouseType: .rightMouseUp,
-            mouseCursorPosition: point, mouseButton: .right)?.post(tap: .cghidEventTap)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+      CGEvent(mouseEventSource: nil, mouseType: .rightMouseUp,
+              mouseCursorPosition: point, mouseButton: .right)?.post(tap: .cghidEventTap)
+    }
   }
 
   static func unobscuredClickPoint(for discovered: NavigationTarget) -> CGPoint? {
@@ -107,11 +109,13 @@ extension NavigationSession {
     let start = currentCursorPoint()
     CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
             mouseCursorPosition: start, mouseButton: .left)?.post(tap: .cghidEventTap)
-    usleep(200_000)
-    CGEvent(mouseEventSource: nil, mouseType: .leftMouseDragged,
-            mouseCursorPosition: end, mouseButton: .left)?.post(tap: .cghidEventTap)
-    usleep(50_000)
-    CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
-            mouseCursorPosition: end, mouseButton: .left)?.post(tap: .cghidEventTap)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+      CGEvent(mouseEventSource: nil, mouseType: .leftMouseDragged,
+              mouseCursorPosition: end, mouseButton: .left)?.post(tap: .cghidEventTap)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
+                mouseCursorPosition: end, mouseButton: .left)?.post(tap: .cghidEventTap)
+      }
+    }
   }
 }

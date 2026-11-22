@@ -200,6 +200,19 @@ final class LabelGeneratorTests: XCTestCase {
     }
   }
 
+  func testFlatLabelElementAlignmentPreserved() {
+    let elems = [
+      textElement("Alpha", x: 10),
+      textElement("", x: 20),
+      textElement("Beta", x: 30)
+    ]
+    let labeled = LabelGenerator.label(elems, strategy: .useClickableElementText)
+    XCTAssertEqual(labeled.count, 3)
+    XCTAssertEqual(labeled[0].element.screenFrame.minX, 10)
+    XCTAssertEqual(labeled[1].element.screenFrame.minX, 20)
+    XCTAssertEqual(labeled[2].element.screenFrame.minX, 30)
+  }
+
   func testExactMatchStillWorks() {
     let labeled = LabelGenerator.label(makeElements(count: 40, groups: 4))
     let first = labeled[0]

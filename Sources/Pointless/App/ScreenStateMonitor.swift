@@ -3,12 +3,28 @@ import OSLog
 
 /// Listens for screen sleep/wake events and pauses or resumes all plugins accordingly.
 @MainActor
-class ScreenStateMonitor {
+final class ScreenStateMonitor {
   static let shared = ScreenStateMonitor()
+
+  private var observers: [NSObjectProtocol] = []
 
   private init() {}
 
+  deinit {
+    for observer in observers {
+      NSWorkspace.shared.notificationCenter.removeObserver(observer)
+    }
+  }
+
+  func stop() {
+    for observer in observers {
+      NSWorkspace.shared.notificationCenter.removeObserver(observer)
+    }
+    observers.removeAll()
+  }
+
   func start() {
+    stop()
     observe(NSWorkspace.screensDidSleepNotification) {
       Logger.info("Screen slept — suspending")
       KeyboardNavigation.shared.suspend()
@@ -22,12 +38,13 @@ class ScreenStateMonitor {
   }
 
   private func observe(_ name: Notification.Name, handler: @escaping @MainActor () -> Void) {
-    NSWorkspace.shared.notificationCenter.addObserver(
+    let token = NSWorkspace.shared.notificationCenter.addObserver(
       forName: name,
       object: nil,
       queue: .main
     ) { _ in
-      Task { @MainActor in handler() }
+      MainActor.assumeIsolated { handler() }
     }
+    observers.append(token)
   }
 }
