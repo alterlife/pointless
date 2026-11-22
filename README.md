@@ -156,6 +156,30 @@ Pointless includes a built-in onboarding window that verifies permission status 
 
 ---
 
+## Installation
+
+### Download Disk Image (.dmg)
+
+1. Download the latest **`Pointless.dmg`** from [Releases](https://github.com/alterlife/pointless/releases).
+2. Open the disk image and drag **Pointless** into your **Applications** folder.
+3. On first launch, macOS Gatekeeper may show a warning because Pointless is ad-hoc signed:
+   - **Right-click `Pointless.app` → Open → Click "Open"**, or
+   - Run in Terminal:
+     ```bash
+     xattr -cr /Applications/Pointless.app
+     ```
+4. On launch, follow the onboarding prompt to grant **Accessibility** permission in System Settings.
+
+### Homebrew Cask
+
+```bash
+brew tap alterlife/pointless https://github.com/alterlife/pointless
+brew install --cask pointless
+```
+*Homebrew automatically clears quarantine attributes.*
+
+---
+
 ## Build & Installation
 
 ### Build from Source
@@ -193,6 +217,8 @@ swiftlint
 
 - [Zone Mode Deep Dive](docs/ZONE_MODE.md): Detailed guide on the spatial grid, typeahead bursting, lookahead mechanics, and labelled points.
 - [Architecture Guide](docs/ARCHITECTURE.md): Comprehensive breakdown of the AX pipeline, discovery passes, rendering engine, and plugin lifecycle.
+- [Release Process](docs/RELEASE.md): Step-by-step guide for publishing automated GitHub releases.
+- [Packaging Design](docs/DESIGN_PACKAGING.md): Technical specification for bundle creation, ad-hoc signing, and DMG installer.
 - [Improvement Plan](IMPROVEMENTS.md): Future roadmap for label stability, diagnostics, and performance.
 
 ---

@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Build Application Bundle
+        run: bash Scripts/make-app.sh
+
+      - name: Build Disk Image and Archive
+        run: bash Scripts/make-dmg.sh
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "main" ]; then
+            TAG_NAME="v$(date +'%Y.%m.%d')"
+          fi
+          gh release create "$TAG_NAME" \
+            build/Pointless.dmg \
+            build/Pointless.zip \
+            build/checksums.txt \
+            --title "Pointless $TAG_NAME" \
+            --generate-notes
