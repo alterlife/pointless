@@ -158,19 +158,24 @@ Pointless includes a built-in onboarding window that verifies permission status 
 
 ## Installation
 
+### Homebrew (Recommended)
+
+```bash
+brew tap alterlife/pointless
+brew install --cask pointless
+```
+
 ### Download Disk Image (.dmg)
 
 1. Download the latest **`Pointless.dmg`** from [Releases](https://github.com/alterlife/pointless/releases).
 2. Open the disk image and drag **Pointless** into your **Applications** folder.
-3. On macOS 15+, ad-hoc signed releases require clearing the download quarantine attribute. Either:
+3. If macOS prompts on first launch:
+   - Open **System Settings > Privacy & Security** and click **Open Anyway**, or
    - Run in Terminal:
      ```bash
      xattr -cr /Applications/Pointless.app
      ```
-   - Or open **System Settings > Privacy & Security**, scroll to **Security**, and click **Open Anyway**.
-4. On first launch, follow the onboarding prompt to grant **Accessibility** permission in System Settings.
-
-*(Homebrew Cask support is coming soon).*
+4. Follow the onboarding prompt to grant **Accessibility** permission in System Settings.
 
 ---
 
