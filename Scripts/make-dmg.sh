@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+VERSION="${1:-}"
 APP="build/Pointless.app"
 DMG="build/Pointless.dmg"
 ZIP="build/Pointless.zip"
@@ -10,19 +11,19 @@ CHECKSUMS="build/checksums.txt"
 MOUNT_DIR=$(mktemp -d /tmp/pointless-mount.XXXXXX)
 
 cleanup() {
-  local exit_code=$?
   if [ -d "$MOUNT_DIR" ]; then
     hdiutil detach "$MOUNT_DIR" -force -quiet 2>/dev/null || true
     rmdir "$MOUNT_DIR" 2>/dev/null || true
   fi
   rm -rf "$STAGING"
-  exit "$exit_code"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 if [ ! -d "$APP" ]; then
   echo "Application bundle not found. Building with Scripts/make-app.sh..."
-  bash Scripts/make-app.sh
+  bash Scripts/make-app.sh "$VERSION"
 fi
 
 echo "Verifying code signature of $APP..."
@@ -60,7 +61,7 @@ else
   exit 1
 fi
 
-hdiutil detach "$MOUNT_DIR" -quiet
+hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || { sleep 1; hdiutil detach "$MOUNT_DIR" -force -quiet; }
 
 echo "Generating SHA-256 checksums..."
 (cd build && shasum -a 256 Pointless.dmg Pointless.zip > checksums.txt)

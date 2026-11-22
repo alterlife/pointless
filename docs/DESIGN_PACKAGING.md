@@ -89,7 +89,8 @@ The disk image is produced by `Scripts/make-dmg.sh` using native macOS tools wit
 
 The workflow file `.github/workflows/release.yml` triggers on semantic tag creation (`v*.*.*`) or explicit manual dispatch:
 
-- **Tags:** Validated against `^v[0-9]+\.[0-9]+\.[0-9]+` to reject non-semantic or feature branch tags.
+- **Tags & Branches:** Tags are validated against `^v[0-9]+\.[0-9]+\.[0-9]+$`; manual dispatches are restricted strictly to `main`.
+- **Version Propagation:** Passes release version tag to `make-app.sh` which updates `CFBundleShortVersionString` via `plutil`.
 - **Verification Gates:** Runs `swiftlint --strict`, `swift Tests/run-tests.swift`, and `swift test` prior to compilation.
 - **Full History:** Uses `fetch-depth: 0` so `gh release create --generate-notes` generates accurate changelogs.
 - **Artifacts:** Publishes `Pointless.dmg`, `Pointless.zip`, and `checksums.txt`.
