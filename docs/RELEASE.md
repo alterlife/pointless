@@ -58,9 +58,10 @@ You can build and test release assets locally on macOS using the repository scri
 
 Pointless is distributed with an ad-hoc code signature (`codesign --force --deep --sign -`).
 
-- **Apple Silicon:** Ad-hoc signing satisfies macOS AMFI requirements, allowing native execution on M1/M2/M3/M4 processors.
-- **Gatekeeper:** When downloaded via a browser, macOS attaches the `com.apple.quarantine` attribute. Users can launch the app by right-clicking `Pointless.app` and selecting **Open**, or by running:
+- **Apple Silicon:** Ad-hoc signing satisfies macOS AMFI requirements, allowing native execution on Apple Silicon (arm64).
+- **Gatekeeper:** When downloaded via a browser, macOS attaches the `com.apple.quarantine` attribute. On macOS 15+, users can clear this attribute via:
   ```bash
   xattr -cr /Applications/Pointless.app
   ```
+  Alternatively, open **System Settings > Privacy & Security > Security** and click **Open Anyway**.
 - **Notarization (Future):** When an Apple Developer ID certificate is added to the repository secrets (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`), the workflow can be updated to sign and submit for Apple Notarization via `xcrun notarytool`.

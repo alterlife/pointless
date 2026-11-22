@@ -5,18 +5,51 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release version tag (e.g. v0.1.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build & Publish Release
+  verify-and-release:
+    name: Verify & Publish Release
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag format
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag_name }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "Error: Tag '$TAG' must follow semantic versioning (e.g. v0.1.0)." >&2
+            exit 1
+          fi
+          echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Lint (strict)
+        run: swiftlint --strict
+
+      - name: Run standalone tests
+        run: swift Tests/run-tests.swift
+
+      - name: Run XCTest suite
+        run: swift test --parallel
 
       - name: Build Application Bundle
         run: bash Scripts/make-app.sh
@@ -28,13 +61,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME="${GITHUB_REF_NAME}"
-          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "main" ]; then
-            TAG_NAME="v$(date +'%Y.%m.%d')"
-          fi
-          gh release create "$TAG_NAME" \
+          TAG="${{ steps.tag.outputs.release_tag }}"
+          gh release create "$TAG" \
             build/Pointless.dmg \
             build/Pointless.zip \
             build/checksums.txt \
-            --title "Pointless $TAG_NAME" \
+            --title "Pointless $TAG" \
             --generate-notes
