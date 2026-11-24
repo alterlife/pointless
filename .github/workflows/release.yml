@@ -74,3 +74,25 @@ jobs:
             build/checksums.txt \
             --title "Pointless $TAG" \
             --generate-notes
+
+      - name: Update Homebrew Cask on main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.release_tag }}"
+          VERSION="${TAG#v}"
+          DMG_SHA=$(awk '/Pointless\.dmg/ {print $1}' build/checksums.txt)
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout main
+          git pull origin main
+
+          bash Scripts/update-cask.sh "$VERSION" "$DMG_SHA"
+
+          git add Casks/pointless.rb
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(cask): update pointless to ${VERSION}"
+            git push origin main
+          fi

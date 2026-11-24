@@ -40,7 +40,22 @@ Each release attaches three assets:
 
 ---
 
-## 3. Local Packaging Scripts
+## 3. Homebrew Cask Updates
+
+After publishing the release assets, the release workflow automatically:
+1. Extracts the SHA-256 hash of `Pointless.dmg` from `build/checksums.txt`.
+2. Updates `version` and `sha256` in `Casks/pointless.rb` via `Scripts/update-cask.sh`.
+3. Commits and pushes the update directly to `main`.
+
+To update the cask definition manually:
+
+```bash
+./Scripts/update-cask.sh <version> <dmg_sha256>
+```
+
+---
+
+## 4. Local Packaging Scripts
 
 You can build and test release assets locally on macOS using the repository scripts:
 
@@ -54,7 +69,7 @@ You can build and test release assets locally on macOS using the repository scri
 
 ---
 
-## 4. Code Signing & Gatekeeper Notes
+## 5. Code Signing & Gatekeeper Notes
 
 Pointless is distributed with an ad-hoc code signature (`codesign --force --deep --sign -`).
 
